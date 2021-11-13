@@ -73,8 +73,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         probs = np.zeros(self.D) #np.zeros(len(range(self.xmin, self.xmax)))
 
-        print(self.xmin, self.xmax)
-
         Ksites_tmp = self.Ksites[:]
         occ_vec_tmp = self.occ_vec[:]
         GG_denom = self.G[np.ix_(self.Ksites, self.Ksites)] - np.diag(self.occ_vec[0:len(self.Ksites)])
@@ -162,8 +160,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
             <BLANKLINE>
                    [[0.25, 0.2 ],
                     [0.3 , 0.  ]]])
-
-
         """        
         row_idx = torch.Tensor(bin2pos(samples)).to(torch.long) # tensors used as indices must be long
         assert row_idx.shape[-1] == self.P.shape[-1]

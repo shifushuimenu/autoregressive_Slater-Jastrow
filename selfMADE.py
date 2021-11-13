@@ -211,14 +211,12 @@ class selfMADE(torch.nn.Module):
         """
         samples = torch.as_tensor(samples)
         samples_unfold = occ_numbers_unfold(samples, duplicate_entries=False)
-        pick_pos = occ_numbers_unfold(samples, duplicate_entries=False)        
         # Flatten leading dimensions (This is necessary since there may a batch of samples 
         # for several "connecting states", but forward() accepts only one batch dimension.)   
         samples_unfold_flat = samples_unfold.view(-1, samples_unfold.shape[-1])
-        pick_pos_flat = pick_pos.view(-1, pick_pos.shape[-1])
-
+    
         x_hat = self.forward(samples_unfold_flat)
-        mm = x_hat * pick_pos_flat # Pick only the probabilities at actually sampled positions !
+        mm = x_hat * samples_unfold_flat # Pick only the probabilities at actually sampled positions !
         ones = torch.ones(*mm.shape)        
         log_prob = torch.log(torch.where(mm > 0, mm, ones)).sum(dim=-1)
         # reshape leading dimensions back to original shape (last dim is missing now)
@@ -373,19 +371,22 @@ def fit_data_distribution():
     # Now that we have trained the MADE network, we can start sampling from 
     # it and verify that it has learned the data distribution correctly.
 
-    Nsamples=4080
+    Nsamples=40
     hist = torch.zeros(DATA.dim)
+    model_probs = np.zeros(DATA.dim)
     for i in range(Nsamples):
         sample_unfolded = model.sample_unfolded()        
         s = occ_numbers_collapse(sample_unfolded, Nsites)
         print("s=", s)
         print("amplitude=", model.psi_amplitude(s))
+        model_probs[DATA.bits2int(s.squeeze(dim=0))] = torch.exp(model.log_prob(s)).detach().numpy()
         s = s.squeeze(dim=0)
         hist[DATA.bits2int(s)] += 1
     hist /= Nsamples
 
     ax2.plot(range(len(DATA.probs)), np.array(DATA.probs), 'b-o', label="data dist")
     ax2.plot(range(len(hist)), np.array(hist), 'r--o', label="MADE samples hist")
+    ax2.plot(range(len(model_probs)), np.array(model_probs), 'g--o', label="MADE-predicted probs")
     ax2.legend()
 
     plt.show()
