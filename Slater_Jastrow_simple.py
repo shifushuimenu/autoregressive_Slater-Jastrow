@@ -303,7 +303,7 @@ class SlaterJastrow(nn.Module):
         "first dim of config is batch dimension"
         config = np.array(config)
         assert len(config.shape) == 2 and config.shape[0] == 1
-        return self.Sdet.chainevaluate_amplitude(config[0]) # remove batch dim 
+        return self.Sdet.psi_amplitude(config[0]) # remove batch dim 
 
     def psi_I(self, config_I):
         "input is bitcoded integer"
