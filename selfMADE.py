@@ -43,7 +43,7 @@ class MaskedLinear_unfolded(torch.nn.Linear):
         self.mask = torch.from_numpy(mask_).to(default_dtype_torch) 
         self.weight.data *= self.mask
 
-        self.weight.data[torch.where(self.weight.data == 0.0)].requires_grad = False
+        #self.weight.data[torch.where(self.weight.data == 0.0)].requires_grad = False
         
     def forward(self, x):
         return F.linear(x, self.mask * self.weight, self.bias)        
@@ -270,6 +270,7 @@ class selfMADE(torch.nn.Module):
         
     def cross_entropy(self, sample):
         x_hat = self.forward(sample)
+        assert(x_hat.requires_grad)
         return self._cross_entropy(sample, x_hat)
 
 

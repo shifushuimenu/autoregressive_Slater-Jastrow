@@ -119,6 +119,11 @@ class SlaterJastrow_ansatz(selfMADE):
                 # OneHotCategorical() accepts unnormalized probabilities, still it is better to normalize.
                 norm = torch.sum(probs, dim=-1)
                 probs = probs / norm
+
+                # Checks 
+                assert np.isclose(torch.sum(probs, dim=-1).item(), 1.0)
+                # clamp negative values which are in absolute magnitude below machine precision
+                probs = torch.where(abs(probs) > 1e-15, probs, torch.tensor(0.0))
                 if i==0:
                     assert(np.all(np.isclose(probs.numpy(), cond_prob_fermi)))
 
@@ -142,9 +147,10 @@ class SlaterJastrow_ansatz(selfMADE):
         self.net[-1].Pauli_blocker[1:,:] = 0.0
 
         # check the probability of the generated basis state 
-        log_prob = self.log_prob(occ_numbers_collapse(x_out, self.D))
-        print("sample_unfolded: exp(log_prob)=", torch.exp(log_prob).detach().numpy())
-        print("prob_sample=", prob_sample)
+        # log_prob = self.log_prob(occ_numbers_collapse(x_out, self.D))
+        # print("log_prob.requires_grad=", log_prob.requires_grad)
+        # assert(log_prob.requires_grad)
+
         return x_out, prob_sample
 
 
@@ -155,6 +161,7 @@ class SlaterJastrow_ansatz(selfMADE):
 
             Input:
             ------
+
                 samples: binary array, i.e. 
                     torch.Tensor([[1,0,1,0], [0,0,1,1], [1,1,0,0]])
                     First dimension is batch dimension. 
@@ -198,6 +205,8 @@ class SlaterJastrow_ansatz(selfMADE):
                 norm = torch.sum(x_hat[..., k*self.D:(k+1)*self.D])
                 x_hat[..., k*self.D:(k+1)*self.D] /= norm
 
+        assert(x_hat.requires_grad and not x_hat_F.requires_grad)
+
         mm = x_hat * samples_unfold_flat # Pick only the probabilities at actually sampled positions !
         ones = torch.ones(*mm.shape)
         log_prob = torch.log(torch.where(mm > 0, mm, ones)).sum(dim=-1)
@@ -225,9 +234,9 @@ class SlaterJastrow_ansatz(selfMADE):
             --------
         """
         samples = torch.as_tensor(samples)
-        assert samples.shape[0] == 1 # just one sample per batch
-        amp_abs = np.sqrt(np.exp(self.log_prob(samples).detach().numpy()))
-        amp_sign = np.sign(self.slater_sampler.psi_amplitude(samples))
+        assert len(samples.shape) == 2 and samples.shape[0] == 1 # Convention: just one sample per batch allowed
+        amp_abs = torch.sqrt(torch.exp(self.log_prob(samples)))
+        amp_sign = torch.tensor(np.sign(self.slater_sampler.psi_amplitude(samples)), requires_grad=False)
         return amp_abs * amp_sign
 
     def prob(self, samples):
@@ -289,6 +298,7 @@ class SlaterJastrow_ansatz(selfMADE):
             Example:
             --------
         """
+        # IMPROVE: check for correct particle number 
         samples_I = torch.as_tensor(samples_I)
         assert len(samples_I.shape) >= 1, "Input should be bitcoded integer (with at least one batch dim.)."
         samples = int2bin(samples_I, self.D)
@@ -378,7 +388,7 @@ if __name__ == '__main__':
     N_sites = 6
     (N_sites, eigvecs) = prepare_test_system_zeroT(Nsites=N_sites)
 
-    num_samples = 10000
+    num_samples = 1000
 
     # Aggregation of MADE neural network as Jastrow factor 
     # and Slater determinant sampler. 

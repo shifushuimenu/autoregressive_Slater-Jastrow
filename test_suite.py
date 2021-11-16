@@ -127,8 +127,8 @@ def prepare_test_system_finiteT(Nsites=21, beta=1.0, mu=0.0, potential='paraboli
         Input:
             beta = inverse temperature 
             mu = chemical potential 
-            potential: Type of the external potenial which is either 'parabolic'
-               or 'random-binary. 
+            potential: Type of the external potenial which is either 'parabolic',
+               'random-binary', or 'none'.
         Output:
             Return the one-body density matrix (OBDM)
                 <c_i^{\dagger} c_j> = Tr(e^{-beta H}c_i^{\dagger} c_j)
