@@ -169,7 +169,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         assert row_idx.shape[-1] == self.P.shape[-1]
         # select 2 (3,4,...) rows from a matrix with 2 (3,4,...) columns 
         submat = np.take(self.P, row_idx, axis=-2) # broadcast over leading dimensions of row_idx
-        psi_amplitude = np.linalg.det(submat) / np.sqrt(math.factorial(self.N))
+        psi_amplitude = np.linalg.det(submat)
         return psi_amplitude 
 
 
