@@ -112,7 +112,7 @@ def prepare_test_system_zeroT(Nsites=21, potential='parabolic', PBC=True):
         if (i+1 < Nsites):
             H[i,i+1] = -t_hop
             H[i+1,i] = -t_hop
-    H[0, Nsites-1] = H[Nsites-1, 0] = +t_hop if PBC else 0.0
+    H[0, Nsites-1] = H[Nsites-1, 0] = -t_hop if PBC else 0.0
 
     eigvals, U = linalg.eigh(H)
 

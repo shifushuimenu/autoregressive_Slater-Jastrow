@@ -80,7 +80,7 @@ class Lattice1d(object):
 ###############################
 
         
-def kinetic_term( I, lattice ):
+def kinetic_term( I, lattice, t_hop=1.0 ):
     """
         Parameters:
         -----------
@@ -90,6 +90,8 @@ def kinetic_term( I, lattice ):
             lattice: Lattice object 
                 Provides nearest neighbour matrix which defines the possible 
                 hopping terms. 
+            t_hop: hopping parameter in 
+                 -t_hop \sum_{(i,j) \in bonds} (c_i^{\dagger} c_j + h.c.)
             
         Returns:
         --------
@@ -132,7 +134,7 @@ def kinetic_term( I, lattice ):
             L = np.bitwise_xor(K, M)
             STATE_EXISTS = ((K != 0) & (L != 0) & (L != K))
             I_prime[..., count] = np.where(STATE_EXISTS, I - K + L, False)
-            matrix_elem[..., count] = np.where(STATE_EXISTS, fermion_parity(ns, I, ii, jj), 0)
+            matrix_elem[..., count] = -t_hop * np.where(STATE_EXISTS, fermion_parity(ns, I, ii, jj), 0)
             hop_from_to.append((i,j))
 
     # Set states in `I_prime` which were annihilated by the hopping operator to a valid value (i.e.
@@ -146,7 +148,7 @@ def kinetic_term( I, lattice ):
     return ( hop_from_to, I_prime, matrix_elem )
                
 
-def tVmodel_loc(config, psi_func, psi_loc, V=0.1):
+def tVmodel_loc(config, psi_func, psi_loc, V=10.0):
     '''
     Local energy of periodic 1D t-V model
     
@@ -166,12 +168,13 @@ def tVmodel_loc(config, psi_func, psi_loc, V=0.1):
     lattice = Lattice1d(ns=nsites)
     hop_from_to, connecting_states_I, kin_matrix_elements = kinetic_term([I], lattice)
     connecting_states = int2bin(connecting_states_I, ns=nsites)
+    ## print("connecting_states=", connecting_states)
 
     wl, states = [], []
 
     # nearest neighbour interactions
-    nn_int = np.roll(config,-1) * config
-    wl.append(V * (nn_int).sum(axis=-1).item())
+    nn_int = V * (np.roll(config, shift=-1) * config).sum(axis=-1).item()
+    wl.append(nn_int)
     states.append(config)
 
     for ss, mm in zip(connecting_states[0], kin_matrix_elements[0]):
@@ -179,8 +182,8 @@ def tVmodel_loc(config, psi_func, psi_loc, V=0.1):
         states.append(ss[None,:]) # Note: ansatz.psi requires batch dim
 
     acc = 0.0
-    for wi, config_i, (r,s) in zip(wl, states, hop_from_to):
-        # eng_i = wi * self.psi_ratio(r,s)
+    for wi, config_i in zip(wl, states):
+        ## print("wi=", wi, "config_i=", config_i,  "(psi_func(config_i) / psi_loc) =", (psi_func(config_i) / psi_loc))
         eng_i = wi * (psi_func(config_i) / psi_loc) 
         acc += eng_i
     return acc

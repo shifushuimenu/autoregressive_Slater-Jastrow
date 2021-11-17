@@ -91,6 +91,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         
         # print("probs[:]=", probs[:], "  np.sum(probs[:])=", np.sum(probs[:])) 
         assert np.isclose(np.sum(probs[:]), 1.0) # assert normalization 
+        # clamp negative values which are in absolute magnitude below machine precision
+        probs = np.where(abs(probs) > 1e-15, probs, 0.0)
+
         return probs 
 
     def _sample_k(self, k):

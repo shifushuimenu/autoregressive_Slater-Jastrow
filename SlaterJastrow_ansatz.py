@@ -55,7 +55,7 @@ class SlaterJastrow_ansatz(selfMADE):
         >>> SdetSampler = SlaterDetSampler(eigvecs, N_particles);
         >>> SJA = SlaterJastrow_ansatz(SdetSampler, D=N_sites, num_components=N_particles, net_depth=3);
     """
-    def __init__(self, slater_sampler, deactivate_Slater=False, **kwargs):
+    def __init__(self, slater_sampler, deactivate_Slater=False, deactivate_Jastrow=False, **kwargs):
         self.D = kwargs['D']
         self.num_components = kwargs['num_components']
         self.net_depth = kwargs['net_depth']
@@ -70,6 +70,7 @@ class SlaterJastrow_ansatz(selfMADE):
         super(SlaterJastrow_ansatz, self).__init__(**kwargs)
         self.slater_sampler = slater_sampler
         self.deactivate_Slater = deactivate_Slater
+        self.deactivate_Jastrow = deactivate_Jastrow
         
 
     def sample_unfolded(self, seed=None):
@@ -100,7 +101,11 @@ class SlaterJastrow_ansatz(selfMADE):
             # x_hat_bias is not affected by the Pauli blocker in the Softmax layer 
             # and is overwritten in selfMADE.__init__().            
             for i in range(0, self.num_components):
-                x_hat = self.forward(x_out)
+                if self.deactivate_Jastrow:
+                    x_hat = self.forward(x_out)
+                    x_hat[:, self.D:] = 1.0 # zero-th block is given by cond_prob_fermi(i=0)
+                else:
+                    x_hat = self.forward(x_out)
 
                 cond_prob_fermi = self.slater_sampler.get_cond_prob(k=i)
 
@@ -112,7 +117,7 @@ class SlaterJastrow_ansatz(selfMADE):
                     probs = x_hat[:,i*self.D:(i+1)*self.D]
                 else:
                     if i != 0:
-                        probs = x_hat[:,i*self.D:(i+1)*self.D] * cond_prob_fermi  
+                        probs = x_hat[:,i*self.D:(i+1)*self.D] * cond_prob_fermi
                     else:
                         probs = x_hat[:,i*self.D:(i+1)*self.D]  # cond_prob_fermi(i=0) is already contained as 'bias_zeroth_component' in MADE.
                 # With the factor coming from Slater determinant the probabilities are not normalized.                    
@@ -122,8 +127,9 @@ class SlaterJastrow_ansatz(selfMADE):
 
                 # Checks 
                 assert np.isclose(torch.sum(probs, dim=-1).item(), 1.0)
-                # clamp negative values which are in absolute magnitude below machine precision
-                probs = torch.where(abs(probs) > 1e-15, probs, torch.tensor(0.0))
+                # REMOVE: taken care of in slater_sampler.get_cond_prob()
+                ## clamp negative values which are in absolute magnitude below machine precision
+                #probs = torch.where(abs(probs) > 1e-15, probs, torch.tensor(0.0))
                 if i==0:
                     assert(np.all(np.isclose(probs.numpy(), cond_prob_fermi)))
 
@@ -189,7 +195,11 @@ class SlaterJastrow_ansatz(selfMADE):
         # for several "connecting states", but forward() accepts only one batch dimension.)
         samples_unfold_flat = samples_unfold.view(-1, samples_unfold.shape[-1])
 
-        x_hat_B = self.forward(samples_unfold_flat)
+        if self.deactivate_Jastrow:
+            x_hat_B = self.forward(samples_unfold_flat)
+            x_hat_B[:, self.D:] = 1.0 # zero-th block is given by cond_prob_fermi(i=0), only reset the other blocks
+        else:
+            x_hat_B = self.forward(samples_unfold_flat)
 
         if self.deactivate_Slater:
             x_hat = x_hat_B 
@@ -212,7 +222,8 @@ class SlaterJastrow_ansatz(selfMADE):
         log_prob = torch.log(torch.where(mm > 0, mm, ones)).sum(dim=-1)
         # reshape leading dimensions back to original shape (last dim is missing now)
         return log_prob.view(*samples.shape[:-1])            
-        
+
+
     def psi_amplitude(self, samples):
         """
             Wavefunction amplitude on an occupation number state. 
