@@ -80,39 +80,77 @@ def int2occ_spinful(integer, Nsites):
     return bitstring 
 
 
-def prepare_test_system_zeroT(Nsites=21, potential='parabolic', PBC=True):
+def prepare_test_system_zeroT(Nsites=21, potential='parabolic', PBC=True, HF=True, Nparticles=0, Vnnint=0.0):
     """
         One-dimensional system of free fermions with Nsites sites
         in an external trapping potential.
         Return the matrix of single-particle eigenstates. 
     """
     i0=int(Nsites/2)
-    V = np.zeros(Nsites)
+    V_pot = np.zeros(Nsites)
     t_hop = 1.0
     
     if (potential == 'parabolic'):
         V_max = 1.0*t_hop   # max. value of the trapping potential at the edge of the trap
                         # (in units of the hopping)
-        V_pot = V_max / i0**2
+        V0_pot = V_max / i0**2
         for i in range(Nsites):
-            V[i] = V_pot*(i-i0)**2
+            V_pot[i] = V0_pot*(i-i0)**2
     elif (potential == 'random-binary'):
         absU = 7.2; dtau=0.05
         alphaU = np.arccosh(np.exp(dtau*absU/2.0))
-        V = alphaU * np.random.random_integers(0,1,size=Nsites)
+        V_pot = alphaU * np.random.random_integers(0,1,size=Nsites)
     elif (potential == 'none'):
-        V[:] = 0.0
+        V_pot[:] = 0.0
     else:
         print("Unknown type of external potential")
         exit()
 
     H = np.zeros((Nsites,Nsites), dtype=np.float64)
     for i in range(Nsites):
-        H[i,i] = V[i]
+        H[i,i] = V_pot[i]
         if (i+1 < Nsites):
             H[i,i+1] = -t_hop
             H[i+1,i] = -t_hop
     H[0, Nsites-1] = H[Nsites-1, 0] = -t_hop if PBC else 0.0
+
+    print("H=", H)
+    print("V_pot=", V_pot)
+
+    eigvals, U = linalg.eigh(H)
+    print("initial eigvals=", eigvals)
+    OBDM_initial = Slater2spOBDM(U[:, 0:Nparticles])
+    # BEGIN: Hartree-Fock self-consistency loop 
+    if HF:
+        assert Vnnint!=0.0 and Nparticles!=0
+        
+        converged = False 
+        counter = 0
+        OBDM = np.zeros((Nsites, Nsites))
+        while not converged: 
+            counter += 1 
+            H = np.zeros((Nsites,Nsites), dtype=np.float64)
+            for i in range(Nsites):
+                H[i,i] = V_pot[i] + Vnnint*OBDM[i,i]
+                if (i+1 < Nsites):
+                    H[i,i+1] = -t_hop - Vnnint*OBDM[i+1,i]
+                    H[i+1,i] = -t_hop - Vnnint*OBDM[i,i+1]
+            H[0, Nsites-1] = H[Nsites-1, 0] = (-t_hop - Vnnint*OBDM[0, Nsites-1]) if PBC else 0.0    
+
+            eigvals, U = linalg.eigh(H)
+            print("min(eigvals)=", min(eigvals))
+            print(eigvals[0:5])
+            OBDM_new = Slater2spOBDM(U[:, 0:Nparticles])
+
+            if np.all(np.isclose(OBDM_new, OBDM, rtol=1e-4)) or counter == 1000: 
+                converged = True
+                print("converged:")
+                print("OBDM_initial=", np.diag(OBDM_initial))
+                print("OBDM = ", np.diag(OBDM))
+                print("OBDM_new = ", np.diag(OBDM_new))
+            else:
+                OBDM = OBDM_new
+    # END: HArtree-Fock 
 
     eigvals, U = linalg.eigh(H)
 
@@ -212,9 +250,6 @@ def Slater2spOBDM(sp_states):
             e_i = np.zeros((Ns,1)); e_i[i,0] = 1.0
             P_i_prime = np.hstack((sp_states, e_i))
 
-            print("P_prime_i.T * P_prime_j")
-            print(np.matmul(P_i_prime.T, P_j_prime))
-
             GF[i,j] = np.linalg.det(np.matmul(P_i_prime.T, P_j_prime))
 
     OBDM = np.eye(Ns) - GF.T
@@ -268,7 +303,8 @@ def ratio_Slater(G, r, s):
 
         Input:
         ------
-         G (Nsites x Nsites array) : local OBDM for state alpha:  <\alpha| c_j^{\dagger} c_i |\psi> / <\alpha | \psi>
+         G (Nsites x Nsites array) : local OBDM for state alpha: 
+                G_{ji} =  <\alpha| c_j^{\dagger} c_i |\psi> / <\alpha | \psi>
     """
     G = np.asarray(G)
     R = (1 - G[r,r] - G[s,s] + G[r,s] + G[s,r])

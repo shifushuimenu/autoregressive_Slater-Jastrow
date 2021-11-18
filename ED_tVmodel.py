@@ -7,8 +7,8 @@ from Slater_Jastrow_simple import ( kinetic_term,
 from scipy.special import binom 
 
 
-Np = 2
-Ns = 10
+Np = 5
+Ns = 11
 
 dimH = int(binom(Ns, Np))
 lattice = Lattice1d(ns=Ns)
@@ -26,8 +26,8 @@ for s in range(2**Ns):
 
 assert ii == dimH-1, "ii={}, dimH-1={}".format(ii, dimH-1)
 
-print("basis_dict=", basis_dict)
-print("invbasis_dict=", invbasis_dict)
+#print("basis_dict=", basis_dict)
+#print("invbasis_dict=", invbasis_dict)
 assert(np.all([ invbasis_dict[bin2int(basis_dict[ii]).item()] == ii for ii in range(dimH) ]))
 
 
@@ -41,9 +41,7 @@ V_par = 10.0
 H_kin = np.zeros((dimH, dimH))
 for s1 in range(dimH):
     I1 = bin2int(basis_dict[s1]).item()
-    print("I1=", I1)
     _, I_primes, matrix_elems = kinetic_term([I1], lattice) # kinetic_term() requires batch dim
-    print("I_primes=", I_primes)
     # remove batch dimension
     I_primes = I_primes[0]; matrix_elems = matrix_elems[0]
     # filter non-zero matrix elements 
@@ -63,13 +61,12 @@ for ii in range(dimH):
 
 Hamiltonian_tV = H_kin + H_int
 
-print(Hamiltonian_tV)
-
 vals, vecs = np.linalg.eig(Hamiltonian_tV)
 
 idx = np.argsort(vals)
-print("eigenvalues=", vals[idx])
-print("eigenvectors=", vecs[idx])
+vals = vals[idx]
+vecs = vecs[idx]
+print("ground state energy =", np.min(vals))
 
 
 
