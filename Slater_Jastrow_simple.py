@@ -84,9 +84,8 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
     """
         Parameters:
         -----------
-            I: batch of integers
-               Bitcoded integer representing occupation numbers 
-               of spinless fermions.
+            I: Bitcoded integer representing occupation numbers 
+               of spinless fermions. First dimension is batch dimension.
             lattice: Lattice object 
                 Provides nearest neighbour matrix which defines the possible 
                 hopping terms. 
