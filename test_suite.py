@@ -6,7 +6,7 @@
 
 import numpy as np
 from scipy import linalg
-
+from bitcoding import bin2pos
 
 def occ2int_spinless(occ_vector):
     """
@@ -134,13 +134,13 @@ def prepare_test_system_zeroT(Nsites=21, potential='parabolic', PBC=True, HF=Tru
             H[0, Nsites-1] = H[Nsites-1, 0] = (-t_hop - Vnnint*OBDM[0, Nsites-1]) if PBC else 0.0    
 
             eigvals, U = linalg.eigh(H)
-            #print("min(eigvals)=", min(eigvals))
-            #print(eigvals[0:5])
+            print("min(eigvals)=", min(eigvals))
+            print(eigvals[0:Nparticles+1])
             OBDM_new = Slater2spOBDM(U[:, 0:Nparticles])
 
             if np.all(np.isclose(OBDM_new, OBDM, rtol=1e-4)) or counter == 1000: 
                 converged = True
-                #print("converged:")
+                print("converged:")
                 #print("OBDM_initial=", np.diag(OBDM_initial))
                 #print("OBDM = ", np.diag(OBDM))
                 #print("OBDM_new = ", np.diag(OBDM_new))
@@ -283,24 +283,21 @@ def local_OBDM(alpha, sp_states):
         >>> sp_states = U[:,0:2]
         >>> loc_OBDM = local_OBDM([0,1,1,0], sp_states)
     """
+    # IMPROVE: assert no batch dimension 
+    alpha = np.asarray(alpha)
     assert len(np.nonzero(alpha)[0]) == sp_states.shape[1]
     Nsites = sp_states.shape[0]
-    L_idx = np.nonzero(np.asarray(alpha))[0]  # select these cols from P-matrix 
+    L_idx = bin2pos(alpha) #np.nonzero(alpha)[0]  # select these cols from P-matrix 
     M = np.matmul( sp_states, np.linalg.inv(sp_states[L_idx]) ) 
     GG = np.zeros((Nsites, Nsites))
     GG[:, L_idx] = M[:,:]
     return GG.T
 
 
-def ratio_Slater(G, r, s):
-    """
-        GIVES CORRECT RESULT FOR VALID PAIRS (r,s),
+def ratio_Slater(G, alpha, beta, r, s):
+    """ Efficient calculation of the ratio of the overlaps with a Slater determinant. 
 
-        
-
-        but also gives result for r unocc -> s occ !!! what to do ?
-
-        R =  <\beta | psi > / <\alpha | \psi > 
+            R =  <\beta | psi > / <\alpha | \psi > 
 
         where basis state \beta is obtained from \alpha by moving one particle from 
         (occupied) site r to (unoccupied) site s. 
@@ -308,14 +305,24 @@ def ratio_Slater(G, r, s):
         Note that by construction: 
             R(r, s=r) = 1.0  and   R(r,s) = R(s,r) 
         If both r and s are occupied, then R(r,s) = -1. 
+        If both r and s are unoccupied, then R(r,s) = +1, as it should be.
 
         Input:
         ------
          G (Nsites x Nsites array) : local OBDM for state alpha: 
                 G_{ji} =  <\alpha| c_j^{\dagger} c_i |\psi> / <\alpha | \psi>
     """
+    # IMPROVE: assert that beta is indeed obtained from alpha 
+    alpha = np.asarray(alpha)
+    beta = np.asarray(beta)
     G = np.asarray(G)
-    R = (1 - G[r,r] - G[s,s] + G[r,s] + G[s,r]) 
+    R = 1 - G[r,r] - G[s,s] + G[r,s] + G[s,r]  
+    sign = +1
+    s_ = min(s,r); r_ = max(s,r)
+    for i in range(s_+1, r_):
+        sign *= (-1) if beta[i] == 1 else 1
+
+    return R * sign
 
 
 def _test():

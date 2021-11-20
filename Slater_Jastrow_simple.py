@@ -9,8 +9,13 @@ from utils import *
 from one_hot import occ_numbers_unfold, occ_numbers_collapse
 from bitcoding import *
 
+from test_suite import local_OBDM, ratio_Slater
+
 from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 
+from profilehooks import profile
+
+@profile
 def fermion_parity( n, state_idx, i, j ):
     """
         Starting from the occupation number state encoded by the integer 
@@ -79,7 +84,7 @@ class Lattice1d(object):
         self.neigh[ns-1, 1] = 0
 ###############################
 
-        
+@profile        
 def kinetic_term( I, lattice, t_hop=1.0 ):
     """
         Parameters:
@@ -146,8 +151,8 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
 
     return ( hop_from_to, I_prime, matrix_elem )
                
-
-def tVmodel_loc(config, psi_func, psi_loc, V=10.0):
+@profile
+def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=5.0):
     '''
     Local energy of periodic 1D t-V model
     
@@ -167,26 +172,46 @@ def tVmodel_loc(config, psi_func, psi_loc, V=10.0):
     lattice = Lattice1d(ns=nsites)
     hop_from_to, connecting_states_I, kin_matrix_elements = kinetic_term([I], lattice)
     connecting_states = int2bin(connecting_states_I, ns=nsites)
-    ## print("connecting_states=", connecting_states)
+ 
+    wl, states, from_to = [], [], []
 
-    wl, states = [], []
-
-    # nearest neighbour interactions
+    # diagonal matrix element: nearest neighbour interactions
     nn_int = V * (np.roll(config, shift=-1) * config).sum(axis=-1).item()
     wl.append(nn_int)
     states.append(config)
+    from_to.append((0, 0)) # diagomal matrix element: no hopping => choose r=s=0 by convention
 
-    for ss, mm in zip(connecting_states[0], kin_matrix_elements[0]):
+    for ss, mm, rs_pair in zip(connecting_states[0], kin_matrix_elements[0], hop_from_to):
         wl.append(mm)
         states.append(ss[None,:]) # Note: ansatz.psi requires batch dim
+        from_to.append(rs_pair)
 
     acc = 0.0
-    for wi, config_i in zip(wl, states):
-        ## print("wi=", wi, "config_i=", config_i,  "(psi_func(config_i) / psi_loc) =", (psi_func(config_i) / psi_loc))
-        eng_i = wi * (psi_func(config_i) / psi_loc) 
-        acc += eng_i
+
+    assert len(from_to) == len(states) == len(wl)
+    OBDM_loc = local_OBDM(alpha=config[0], sp_states = ansatz.slater_sampler.P)
+    for wi, config_i, (r,s) in zip(wl, states, from_to):
+        if wi != 0: # there are unphysical connecting states whose matrix elements are set to zero
+            if not (r==0 and s==0):
+                abspsi_conf_i = torch.sqrt(ansatz.prob(config_i)).item()
+                ratio = (abspsi_conf_i / abs(psi_loc)) * np.sign(ratio_Slater(OBDM_loc, alpha=config[0], beta=config_i[0], r=r, s=s))
+            else:
+                ratio = 1.0 # <alpha/psi> / <alpha/psi> = 1
+
+            #eng_i = wi * ratio
+
+            # ==============================================
+            # assert np.isclose( (psi_func(config_i) / psi_loc), ratio )
+            # Alternative approach:
+            # Recalculate wave function aplitude for each connecting state 
+            # without using low-rank update. 
+
+            eng_i = wi * (psi_func(config_i) / psi_loc) 
+            # ==============================================
+            acc += eng_i
     return acc
 
+@profile
 def vmc_measure(local_measure, sample_list, num_bin=50):
     '''
     perform measurements on samples
@@ -260,6 +285,7 @@ class VMCKernel(object):
         self.ansatz = ansatz
         self.energy_loc = energy_loc
 
+    @profile
     def prob(self,config):
         '''
         probability of configuration.
@@ -273,6 +299,7 @@ class VMCKernel(object):
         config = np.array(config)
         return self.ansatz.prob(config)
 
+    @profile
     def local_measure(self, config):
         '''
         get local quantities energy_loc, grad_loc.
@@ -295,85 +322,9 @@ class VMCKernel(object):
         grad_loc = [p.grad.data/psi_loc.item() for p in self.ansatz.parameters()]
 
         # E_{loc}
-        eloc = self.energy_loc(config, lambda x: self.ansatz.psi_amplitude(torch.from_numpy(x)).data, psi_loc.data).item()
+        eloc = self.energy_loc(config, lambda x: self.ansatz.psi_amplitude(torch.from_numpy(x)).data, psi_loc.data, ansatz=self.ansatz).item()
         return eloc, grad_loc
 
-
-# class SlaterJastrow(nn.Module):
-#     '''
-#     Simple Slater-Jastrow ansatz.
-#     '''
-#     def __init__(self, eigfunc, num_particles):
-#         super(SlaterJastrow, self).__init__()
-#         self.eigfunc = torch.Tensor(eigfunc).double()
-#         self.num_particles = num_particles 
-#         self.D = self.eigfunc.shape[0]
-#         assert self.num_particles <= self.D
-#         self.Sdet = SlaterDetSampler_ordered(self.eigfunc, self.num_particles)
-
-#     def psi(self, config):
-#         "first dim of config is batch dimension"
-#         config = np.array(config)
-#         assert len(config.shape) == 2 and config.shape[0] == 1
-#         return self.Sdet.psi_amplitude(config[0]) # remove batch dim 
-
-#     def psi_I(self, config_I):
-#         "input is bitcoded integer"
-#         config = int2bin(config_I, self.D)
-#         return self.psi(config)
-
-#     def prob(self, config):
-#         config = np.array(config)
-#         return abs(self.psi(torch.from_numpy(config)).item())**2 
-
-#     def sample(self, initial_config, num_bath, num_sample):
-#         '''
-#         obtain a set of samples.
-
-#         Args:
-#             initial_config (1darray): initial configuration.
-#             num_bath (int): number of updates to thermalize.
-#             num_sample (int): number of samples.
-
-#         Return:
-#             list: a list of spin configurations.
-#         '''
-#         print_step = np.Inf # steps between two print of accept rate, Inf to disable showing this information.
-
-#         sample, prob_sample = self.Sdet.sample()
-#         initial_config = list(sample)
-
-#         config = initial_config
-#         prob = self.prob([config])
-
-#         n_accepted = 0
-#         sample_list = []
-#         for i in range(num_bath + num_sample):
-#             # generate new config (via direct sampling from Slater determinant)
-#             # and calculate probability ratio
-#             with torch.no_grad():
-#                 sample, prob_sample = self.Sdet.sample()
-#             config_proposed = list(sample)
-#             prob_proposed = self.prob([config_proposed])
-#             print("prob=", prob, "prob_sample=", prob_sample, "prob_proposed=", prob_proposed)
-
-#             # accept/reject a move by Metropolis algorithm 
-#             if np.random.random() < prob_proposed / prob:
-#                 config = config_proposed 
-#                 prob = prob_proposed 
-#                 n_accepted += 1
-
-#             # print statistics 
-#             if i % print_step == print_step - 1:
-#                 print('%-10s Accept rate: %.3f' %
-#                     (i + 1, n_accepted * 1. / print_step))
-#                 n_accepted = 0
-
-#             # add sample 
-#             if i >= num_bath:
-#                 sample_list.append(config_proposed)
-                    
-#         return sample_list
 
 
 if __name__ == "__main__":

@@ -118,7 +118,7 @@ def bin2pos(bin_array):
     # All occupation number states must be in the same particle number sector.
     Np = np.count_nonzero(B0[0,:])
     assert np.all(np.count_nonzero(B0, axis=1) == Np)    
-    dummy = np.vstack([i_.nonzero()[0] for i_ in B0])
+    dummy = np.vstack([i_.nonzero()[0] for i_ in B0])   # i_[::-1] => The bit order is inversed because particle positions are counted from the right.
     pos_array = np.reshape(a=dummy, newshape=bin_array.shape[:-1] + (Np,))
     
     return pos_array   

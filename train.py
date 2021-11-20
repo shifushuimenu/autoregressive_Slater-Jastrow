@@ -11,9 +11,9 @@ torch.manual_seed(seed)
 if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 max_iter = 1000
-Nsites = 11 # 10
+Nsites = 13 # 10
 Nparticles = 5 # 5
-Vint = 10.0
+Vint = 5.0
 
 
 def train(model, learning_rate, num_samples=10, use_cuda=False):
@@ -51,7 +51,7 @@ energy_list, precision_list = [], []
 def _update_curve(energy, precision):
     energy_list.append(energy)
     precision_list.append(precision)
-    if len(energy_list)%500 == 0:
+    if len(energy_list)%999 == 0:
         plt.errorbar(np.arange(1, len(energy_list) + 1), energy_list, yerr=precision_list, capsize=3, label="Slater-Jastrow")
         # dashed line for exact energy
         plt.axhline(E_exact, ls='--', label="exact")
@@ -67,7 +67,7 @@ SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticle
 
 model = VMCKernel(energy_loc=tVmodel_loc, ansatz=SJA)
 
-E_exact = -2.8401236547816406
+E_exact = -5.772442175744711
 
 t0 = time.time()
 for i, (energy, precision) in enumerate(train(model, learning_rate = 0.1, num_samples=100, use_cuda = use_cuda)):

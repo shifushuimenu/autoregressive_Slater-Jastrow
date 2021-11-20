@@ -8,7 +8,7 @@ from scipy.special import binom
 
 
 Np = 5
-Ns = 11
+Ns = 13
 
 dimH = int(binom(Ns, Np))
 lattice = Lattice1d(ns=Ns)
@@ -35,7 +35,7 @@ assert(np.all([ invbasis_dict[bin2int(basis_dict[ii]).item()] == ii for ii in ra
 Hamiltonian_tV = np.zeros((dimH, dimH))
 
 t_par = -1.0
-V_par = 10.0
+V_par = 5.0
 
 # kinetic term
 H_kin = np.zeros((dimH, dimH))
@@ -66,7 +66,9 @@ vals, vecs = np.linalg.eig(Hamiltonian_tV)
 idx = np.argsort(vals)
 vals = vals[idx]
 vecs = vecs[idx]
+print("energies=", vals)
 print("ground state energy =", np.min(vals))
+print("ground state = ", vecs[0])
 
 
 
