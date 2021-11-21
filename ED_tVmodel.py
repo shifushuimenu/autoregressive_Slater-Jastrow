@@ -7,8 +7,8 @@ from Slater_Jastrow_simple import ( kinetic_term,
 from scipy.special import binom 
 
 
-Np = 3 #5
-Ns = 7 # 13
+Np = 2 #5
+Ns = 5 # 13
 
 dimH = int(binom(Ns, Np))
 lattice = Lattice1d(ns=Ns)
@@ -26,16 +26,16 @@ for s in range(2**Ns):
 
 assert ii == dimH-1, "ii={}, dimH-1={}".format(ii, dimH-1)
 
-#print("basis_dict=", basis_dict)
-#print("invbasis_dict=", invbasis_dict)
+print("basis_dict=", basis_dict)
+print("invbasis_dict=", invbasis_dict)
 assert(np.all([ invbasis_dict[bin2int(basis_dict[ii]).item()] == ii for ii in range(dimH) ]))
 
 
 # build the Hamiltonian 
 Hamiltonian_tV = np.zeros((dimH, dimH))
 
-t_par = -1.0
-V_par = 5.0
+t_par = 1.0 # t_par > 0, since kinetic_term() provides already a minus sign 
+V_par = 0.0
 
 # kinetic term
 H_kin = np.zeros((dimH, dimH))
@@ -60,6 +60,8 @@ for ii in range(dimH):
     H_int[ii,ii] = ww
 
 Hamiltonian_tV = H_kin + H_int
+
+print("Hamiltonian=", Hamiltonian_tV)
 
 vals, vecs = np.linalg.eig(Hamiltonian_tV)
 

@@ -32,7 +32,7 @@ def fermion_parity( n, state_idx, i, j ):
             state_idx: int or 1d array_like of ints 
                 bitcoded occupation number state 
             i, j: ints
-                0 <= i < j < n. The particle is assumed to hop from i to j or form j to i,
+                0 <= i < j < n. The particle is assumed to hop from i to j or from j to i,
                 irrespective of whether such a hopping process is possible for the given 
                 occupation number states. 
             
@@ -152,7 +152,7 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
     return ( hop_from_to, I_prime, matrix_elem )
                
 #@profile
-def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=5.0):
+def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=0.0):
     '''
     Local energy of periodic 1D t-V model
     
@@ -325,13 +325,16 @@ class VMCKernel(object):
         eloc = self.energy_loc(config, lambda x: self.ansatz.psi_amplitude(torch.from_numpy(x)).data, psi_loc.data, ansatz=self.ansatz).item()
         return eloc, grad_loc
 
-
+def _test():
+    import doctest 
+    doctest.testmod(verbose=True)
 
 if __name__ == "__main__":
 
     torch.set_default_dtype(default_dtype_torch)
-
     from test_suite import *
+
+    _test()
 
     Nparticles = 2
     Nsites = 5

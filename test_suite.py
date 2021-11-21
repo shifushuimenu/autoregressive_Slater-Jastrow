@@ -118,7 +118,7 @@ def prepare_test_system_zeroT(Nsites=21, potential='parabolic', PBC=True, HF=Tru
     OBDM_initial = Slater2spOBDM(U[:, 0:Nparticles])
     # BEGIN: Hartree-Fock self-consistency loop 
     if HF:
-        assert Vnnint!=0.0 and Nparticles!=0
+        #assert Vnnint!=0 and Nparticles!=0
         
         converged = False 
         counter = 0
