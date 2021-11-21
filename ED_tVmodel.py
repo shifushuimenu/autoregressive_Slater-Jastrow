@@ -7,8 +7,8 @@ from Slater_Jastrow_simple import ( kinetic_term,
 from scipy.special import binom 
 
 
-Np = 5
-Ns = 13
+Np = 3 #5
+Ns = 7 # 13
 
 dimH = int(binom(Ns, Np))
 lattice = Lattice1d(ns=Ns)

@@ -15,7 +15,7 @@ from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 
 from profilehooks import profile
 
-@profile
+#@profile
 def fermion_parity( n, state_idx, i, j ):
     """
         Starting from the occupation number state encoded by the integer 
@@ -84,7 +84,7 @@ class Lattice1d(object):
         self.neigh[ns-1, 1] = 0
 ###############################
 
-@profile        
+#@profile        
 def kinetic_term( I, lattice, t_hop=1.0 ):
     """
         Parameters:
@@ -151,7 +151,7 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
 
     return ( hop_from_to, I_prime, matrix_elem )
                
-@profile
+#@profile
 def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=5.0):
     '''
     Local energy of periodic 1D t-V model
@@ -201,7 +201,7 @@ def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=5.0):
             #eng_i = wi * ratio
 
             # ==============================================
-            # assert np.isclose( (psi_func(config_i) / psi_loc), ratio )
+            assert np.isclose( (psi_func(config_i) / psi_loc), ratio )
             # Alternative approach:
             # Recalculate wave function aplitude for each connecting state 
             # without using low-rank update. 
@@ -211,7 +211,7 @@ def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=5.0):
             acc += eng_i
     return acc
 
-@profile
+#@profile
 def vmc_measure(local_measure, sample_list, num_bin=50):
     '''
     perform measurements on samples
@@ -285,7 +285,7 @@ class VMCKernel(object):
         self.ansatz = ansatz
         self.energy_loc = energy_loc
 
-    @profile
+    #@profile
     def prob(self,config):
         '''
         probability of configuration.
@@ -299,7 +299,7 @@ class VMCKernel(object):
         config = np.array(config)
         return self.ansatz.prob(config)
 
-    @profile
+    #@profile
     def local_measure(self, config):
         '''
         get local quantities energy_loc, grad_loc.

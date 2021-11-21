@@ -1,6 +1,8 @@
 """Routines for bitcoded fermionic occupation number states."""
 # TODO: - Replace numpy routines by torch routines (The default argument is requires_grad=False.)
 #         everywhere and not just in places where a TypeError shows up.
+#       - Bit are ordered frmo left to right. Oringinally, they were ordered from right to left. 
+#         The change has introduced some hacks, which should be eliminated in favour of a cleaner solution.
 
 import torch 
 import numpy as np
@@ -15,14 +17,13 @@ def bin2int(bin_array):
         --------
         >>> s = np.array([[1,0,0,1],[0,0,1,1]])
         >>> bin2int(s)
-        tensor([9, 3])
+        tensor([ 9, 12])
     """
-    bin_array = np.array(bin_array, dtype=np.long)
-    int_ = np.zeros(bin_array.shape[0:-1], dtype=np.long)
+    bin_array = np.array(bin_array[...,::-1], dtype=np.compat.long)   # hack
+    int_ = np.zeros(bin_array.shape[0:-1], dtype=np.compat.long)
     for i in range(bin_array.shape[-1]):
         int_[...] = ( np.left_shift(int_[...], 1) ) | bin_array[..., i]
     return torch.as_tensor(int_, device=default_torch_device)
-
 
 def int2bin(I, ns):
     """
@@ -44,20 +45,21 @@ def int2bin(I, ns):
         --------
         >>> ns=4; I=[[10, 3],[3, 10]]
         >>> int2bin(I, ns)
-        array([[[1, 0, 1, 0],
-                [0, 0, 1, 1]],
+        array([[[0, 1, 0, 1],
+                [1, 1, 0, 0]],
         <BLANKLINE>
-               [[0, 0, 1, 1],
-                [1, 0, 1, 0]]])
+               [[1, 1, 0, 0],
+                [0, 1, 0, 1]]])
 
     """
     # Hack. Is this fast enough ? 
-    I = np.array(I, dtype=np.long)
-    bin_array = np.zeros(I.shape + (ns,), dtype=np.long)
+    I = np.array(I, dtype=np.compat.long)
+    bin_array = np.zeros(I.shape + (ns,), dtype=np.compat.long)
     scan = np.ones_like(I)
     for i in range(ns):
         bin_array[..., ns-i-1] = np.bitwise_and(I[...], np.left_shift(scan[...], i)) // np.left_shift(scan[...], i)
-    return bin_array
+    bin_array = bin_array[..., ::-1] # hack
+    return np.array(bin_array)  # np.array() is necessary to avoid np-array with negative strides  
 
 
 def int2pos(I, ns):
@@ -76,19 +78,19 @@ def int2pos(I, ns):
         
         Example:
         --------
-        >>> I = np.array([[3,12,5],[5,6,6]], dtype=np.long)
+        >>> I = np.array([[3,12,5],[5,6,6]], dtype=np.compat.long)
         >>> int2pos(I, 5)
-        array([[[3, 4],
-                [1, 2],
-                [2, 4]],
-        <BLANKLINE>
-               [[2, 4],
+        array([[[0, 1],
                 [2, 3],
-                [2, 3]]])
+                [0, 2]],
+        <BLANKLINE>
+               [[0, 2],
+                [1, 2],
+                [1, 2]]])
 
 
     """
-    I = np.array(I, dtype=np.long)
+    I = np.array(I, dtype=np.compat.long)
     bin_array = int2bin(I, ns)
     return bin2pos(bin_array)
      
@@ -97,7 +99,7 @@ def bin2pos(bin_array):
     """
         Convert binary array of occupation numbers into array of 
         particle positions. Particle positions are counted from the 
-        right.
+        left.
         
         Example: (broadcast over arbitrary large number of leading dimensions)
         --------
@@ -113,12 +115,12 @@ def bin2pos(bin_array):
 
 
     """    
-    bin_array = np.array(bin_array, dtype=np.long)
+    bin_array = np.array(bin_array, dtype=np.compat.long)
     B0 = bin_array.reshape(-1, bin_array.shape[-1])
     # All occupation number states must be in the same particle number sector.
     Np = np.count_nonzero(B0[0,:])
     assert np.all(np.count_nonzero(B0, axis=1) == Np)    
-    dummy = np.vstack([i_.nonzero()[0] for i_ in B0])   # i_[::-1] => The bit order is inversed because particle positions are counted from the right.
+    dummy = np.vstack([i_.nonzero()[0] for i_ in B0])   
     pos_array = np.reshape(a=dummy, newshape=bin_array.shape[:-1] + (Np,))
     
     return pos_array   

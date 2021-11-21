@@ -285,9 +285,9 @@ def local_OBDM(alpha, sp_states):
     """
     # IMPROVE: assert no batch dimension 
     alpha = np.asarray(alpha)
-    assert len(np.nonzero(alpha)[0]) == sp_states.shape[1]
+    assert len(np.nonzero(alpha)[0]) == sp_states.shape[1] # IMPROVE: replace np.nonzero()  by bin2pos()
     Nsites = sp_states.shape[0]
-    L_idx = bin2pos(alpha) #np.nonzero(alpha)[0]  # select these cols from P-matrix 
+    L_idx = bin2pos(alpha)  # select these cols from P-matrix 
     M = np.matmul( sp_states, np.linalg.inv(sp_states[L_idx]) ) 
     GG = np.zeros((Nsites, Nsites))
     GG[:, L_idx] = M[:,:]
