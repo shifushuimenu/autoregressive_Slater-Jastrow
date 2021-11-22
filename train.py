@@ -10,6 +10,7 @@ seed = 10086
 torch.manual_seed(seed)
 if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
+
 max_iter = 1000
 Nsites = 7 # 13 # 10
 Nparticles = 3 #5 # 5
