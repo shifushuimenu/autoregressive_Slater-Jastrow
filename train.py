@@ -11,10 +11,10 @@ torch.manual_seed(seed)
 if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 
-max_iter = 1000
+max_iter = 500
 Nsites = 7 # 13 # 10
 Nparticles = 3 #5 # 5
-Vint = 5.0
+Vint = 3.0
 
 
 def train(model, learning_rate, num_samples=10, use_cuda=False):
@@ -71,7 +71,7 @@ SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticle
 
 model = VMCKernel(energy_loc=tVmodel_loc, ansatz=SJA)
 
-E_exact = -2.9774135797163597
+E_exact = -3.3478904193465335
 
 t0 = time.time()
 for i, (energy, precision) in enumerate(train(model, learning_rate = 0.1, num_samples=100, use_cuda = use_cuda)):

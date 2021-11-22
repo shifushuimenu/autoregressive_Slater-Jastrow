@@ -24,7 +24,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         as columns, the first `Nparticles` columns are chosen to form the 
         Slater determinant.
     """
-    def __init__(self, single_particle_eigfunc, Nparticles):
+    def __init__(self, single_particle_eigfunc, Nparticles, naive=False):
         super(SlaterDetSampler_ordered, self).__init__()
         self.epsilon = 1e-5
         self.N = Nparticles         
@@ -33,6 +33,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         assert(self.N<=self.D)  
         # P-matrix representation of Slater determinant, (D x N)-matrix
         self.P = self.eigfunc[:,0:self.N]
+
+        self.naive_update = naive
 
         # U is the key matrix representing the Slater determinant for sampling purposes.
         # Its principal minors are the probabilities of certain particle configurations. 
@@ -58,7 +60,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # helper variables for low-rank update
 
 
-    def get_cond_prob(self, k, naive=True):
+    def get_cond_prob(self, k):
         r""" Conditional probability for the position x of the k-th particle.
 
              The support x \in [xmin, xmax-1] of the distribution changes with `k`.
@@ -80,7 +82,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
             GG_num = self.G[np.ix_(Ksites_tmp, Ksites_tmp)] - np.diag(occ_vec_tmp[0:i_k+1])
             occ_vec_tmp[i_k] = 0  # reset for next loop
         
-            if naive:
+            if self.naive_update:
                 probs[i_k] = - np.linalg.det(GG_num) / np.linalg.det(GG_denom)
             else: # use block determinant formula
                 Ksites_old = self.Ksites
@@ -92,10 +94,14 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                     NN = occ_vec_add
                 DD = self.G[np.ix_(Ksites_add, Ksites_add)] - NN
                 CC = self.G[np.ix_(Ksites_add, Ksites_old)]
-                BB = self.G[np.ix_(Ksites_old, Ksites_add)]
-                Xinv = np.linalg.inv(self.G[np.ix_(Ksites_old, Ksites_old)] - np.diag(self.occ_vec[0:self.xmin]))
-
-                probs[i_k] = (-1) * np.linalg.det(DD - np.matmul(np.matmul(CC, Xinv), BB))
+                self.BB = self.G[np.ix_(Ksites_old, Ksites_add)]
+                if k==0:
+                    self.Xinv = np.linalg.inv(self.G[np.ix_(Ksites_old, Ksites_old)] - np.diag(self.occ_vec[0:self.xmin]))
+                print("Xinv.shape=", self.Xinv.shape)
+                print("CC.shape=", CC.shape)
+                print("BB.shape=", self.BB.shape)
+                self.Schur_complement = DD - np.matmul(np.matmul(CC, self.Xinv), self.BB)
+                probs[i_k] = (-1) * np.linalg.det(self.Schur_complement)
 
         # IMPROVE: For large matrices the ratio of determinants leads to numerical
         # instabilities which results in not normalized probability distributions   
@@ -142,7 +148,19 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.occ_vec[pos_i] = 1
         self.occ_positions[k] = pos_i
 
-        # preprare helper variables for the next pass 
+        if not self.naive_update:
+            # preprare helper variables for the next pass 
+            # update Xinv based on previous Xinv
+            XinvB = np.matmul(self.Xinv, self.BB) 
+            Sinv = np.linalg.inv(self.Schur_complement)
+            Ablock = (self.Xinv + 
+            np.matmul(np.matmul(XinvB, Sinv), XinvB.transpose()))
+            Bblock = - np.matmul(XinvB, Sinv)
+            Cblock = - np.matmul(Sinv, XinvB.transpose())
+            Dblock = Sinv 
+            #self.Xinv_new = np.vstack((np.hstack((Ablock, Bblock)), np.hstack((Cblock, Dblock))))
+            self.Xinv_new = np.block([[Ablock, Bblock], [Cblock, Dblock]])
+            self.Xinv = self.Xinv_new
 
         self.state_index += 1 
 

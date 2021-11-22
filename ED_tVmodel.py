@@ -37,7 +37,7 @@ assert(np.all([ invbasis_dict[bin2int(basis_dict[ii]).item()] == ii for ii in ra
 Hamiltonian_tV = np.zeros((dimH, dimH))
 
 t_par = 1.0 # t_par > 0, since kinetic_term() provides already a minus sign 
-V_par = 5.0
+V_par = 3.0
 
 # kinetic term
 H_kin = np.zeros((dimH, dimH))
