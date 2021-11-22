@@ -25,7 +25,7 @@ __all__ = ['SlaterJastrow_ansatz']
 class SlaterJastrow_ansatz(selfMADE):
     """
         Variational wavefunction ansatz for a fermionic many-particle system in the 
-        canonical ensemble (meaning that the particle number is fixed).
+        canonical ensemble.
 
         This is realized by aggregation of MADE neural network, representing the Jastrow factor, and 
         a Slater determinant sampler 'SlaterDetSampler', which is provided by the calling 
@@ -127,9 +127,8 @@ class SlaterJastrow_ansatz(selfMADE):
 
                 # Checks 
                 assert np.isclose(torch.sum(probs, dim=-1).item(), 1.0)
-                # REMOVE: taken care of in slater_sampler.get_cond_prob()
                 ## clamp negative values which are in absolute magnitude below machine precision
-                #probs = torch.where(abs(probs) > 1e-15, probs, torch.tensor(0.0))
+                probs = torch.where(abs(probs) > 1e-8, probs, torch.tensor(0.0))
                 if i==0:
                     assert(np.all(np.isclose(probs.numpy(), cond_prob_fermi)))
 

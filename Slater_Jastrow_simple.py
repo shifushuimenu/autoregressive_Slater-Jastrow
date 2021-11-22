@@ -152,7 +152,7 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
     return ( hop_from_to, I_prime, matrix_elem )
                
 #@profile
-def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=0.0):
+def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=5.0):
     '''
     Local energy of periodic 1D t-V model
     
@@ -201,7 +201,7 @@ def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=0.0):
             #eng_i = wi * ratio
 
             # ==============================================
-            assert np.isclose( (psi_func(config_i) / psi_loc), ratio )
+            assert np.isclose( (psi_func(config_i) / psi_loc), ratio ), "Error: ratio1= %16.8f, ratio2 = %16.8f" % (psi_func(config_i) / psi_loc, ratio)
             # Alternative approach:
             # Recalculate wave function aplitude for each connecting state 
             # without using low-rank update. 

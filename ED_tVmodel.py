@@ -6,11 +6,13 @@ from Slater_Jastrow_simple import ( kinetic_term,
     Lattice1d )
 from scipy.special import binom 
 
+import matplotlib.pyplot as plt 
 
-Np = 2 #5
-Ns = 5 # 13
+Np = 3#5
+Ns = 7 # 13
 
 dimH = int(binom(Ns, Np))
+print("dimH=", dimH)
 lattice = Lattice1d(ns=Ns)
 
 # build the basis 
@@ -26,8 +28,8 @@ for s in range(2**Ns):
 
 assert ii == dimH-1, "ii={}, dimH-1={}".format(ii, dimH-1)
 
-print("basis_dict=", basis_dict)
-print("invbasis_dict=", invbasis_dict)
+#print("basis_dict=", basis_dict)
+#print("invbasis_dict=", invbasis_dict)
 assert(np.all([ invbasis_dict[bin2int(basis_dict[ii]).item()] == ii for ii in range(dimH) ]))
 
 
@@ -35,7 +37,7 @@ assert(np.all([ invbasis_dict[bin2int(basis_dict[ii]).item()] == ii for ii in ra
 Hamiltonian_tV = np.zeros((dimH, dimH))
 
 t_par = 1.0 # t_par > 0, since kinetic_term() provides already a minus sign 
-V_par = 0.0
+V_par = 5.0
 
 # kinetic term
 H_kin = np.zeros((dimH, dimH))
@@ -61,17 +63,34 @@ for ii in range(dimH):
 
 Hamiltonian_tV = H_kin + H_int
 
-print("Hamiltonian=", Hamiltonian_tV)
+#print("Hamiltonian=", Hamiltonian_tV)
 
-vals, vecs = np.linalg.eig(Hamiltonian_tV)
+print("diagonalizing Hamiltonian")
+vals, vecs = np.linalg.eigh(Hamiltonian_tV)
 
+#print("unsorted energies=", vals)
 idx = np.argsort(vals)
 vals = vals[idx]
-vecs = vecs[idx]
-print("energies=", vals)
+vecs = vecs[:, idx]
+print("energies=", vals[0:10])
 print("ground state energy =", np.min(vals))
-print("ground state = ", vecs[0])
+#print("ground state = ", vecs[:, 0])
 
+# measurements on the ground state 
+GS = vecs[:, 0]
+szsz_corr = np.zeros(Ns)
+corr_ = np.zeros(Ns)
 
+for ii in range(dimH):
+    config = basis_dict[ii]
+    config_sz = 2*config - 1
+    corr_[:] = 0.0
+    for k in range(0, Ns):
+        corr_[k] = (np.roll(config_sz, shift=-k) * config_sz).sum(axis=-1) / Ns
+    szsz_corr[:] += corr_[:] * abs(GS[ii])**2
 
+np.savetxt('ED_szsz_corr_Ns%dNp%dV%4.4f.dat' % (Ns, Np, V_par), szsz_corr[:, None])
+
+plt.plot(range(Ns), szsz_corr[:], '--r')
+plt.show()
 

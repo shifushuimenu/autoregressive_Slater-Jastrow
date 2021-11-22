@@ -11,9 +11,9 @@ torch.manual_seed(seed)
 if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 max_iter = 1000
-Nsites = 5 # 13 # 10
-Nparticles = 2 #5 # 5
-Vint = 0.0
+Nsites = 7 # 13 # 10
+Nparticles = 3 #5 # 5
+Vint = 5.0
 
 
 def train(model, learning_rate, num_samples=10, use_cuda=False):
@@ -57,7 +57,10 @@ def _update_curve(energy, precision):
         plt.axhline(E_exact, ls='--', label="exact")
         plt.title("$L$=%d, $N$=%d, $V/t$ = %4.4f" % (Nsites, Nparticles, Vint))
         plt.legend(loc="upper right")
-        plt.show()
+        #plt.show()
+
+    MM = np.hstack((np.array(energy_list)[:,None], np.array(precision_list)[:,None]))
+    np.savetxt("energies_Ns{}Np{}V{}.dat".format(Nsites, Nparticles, Vint), MM)
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
@@ -67,7 +70,7 @@ SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticle
 
 model = VMCKernel(energy_loc=tVmodel_loc, ansatz=SJA)
 
-E_exact = -2.61803399
+E_exact = -2.9774135797163597
 
 t0 = time.time()
 for i, (energy, precision) in enumerate(train(model, learning_rate = 0.1, num_samples=100, use_cuda = use_cuda)):
@@ -88,7 +91,26 @@ state = {
 }
 torch.save(state, 'state_Ns{}Np{}V{}.pt'.format(Nsites, Nparticles, Vint))
 
+
+szsz_corr = np.zeros(Nsites)
+corr_ = np.zeros(Nsites)
+
+
 print("Now sample from the converged ansatz")
-for i in range(10):
+num_samples = 1000
+for _ in range(num_samples):
     sample_unfolded, sample_prob = SJA.sample_unfolded()
-    print(sample_prob, occ_numbers_collapse(sample_unfolded, Nsites).numpy())    
+    config = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
+    print("config=", config)       
+    config_sz = 2*config - 1
+    corr_[:] = 0.0
+    for k in range(0, Nsites):
+        corr_[k] = (np.roll(config_sz, shift=-k) * config_sz).sum(axis=-1) / Nsites
+    szsz_corr[:] += corr_[:]
+
+szsz_corr[:] /= num_samples
+
+np.savetxt("szsz_corr_Ns{}Np{}V{}.dat".format(Nsites, Nparticles, Vint), szsz_corr)
+
+plt.plot(range(Nsites), szsz_corr[:], '--b')
+#plt.show()

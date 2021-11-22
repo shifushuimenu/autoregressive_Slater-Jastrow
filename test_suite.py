@@ -271,7 +271,7 @@ def local_OBDM(alpha, sp_states):
 
         Input:
         ------
-        alpha (array of ints) : particle positions in basis states alpha, ordered increasingly 
+        alpha (array of ints) : array of occupation numbers, e.g. [1,0,1,1,0]
         sp_states (Nsites x Nparticles array) : P-matrix representing Slater determinant 
 
         Output:
@@ -283,13 +283,13 @@ def local_OBDM(alpha, sp_states):
         >>> sp_states = U[:,0:2]
         >>> loc_OBDM = local_OBDM([0,1,1,0], sp_states)
     """
-    # IMPROVE: assert no batch dimension 
     alpha = np.asarray(alpha)
-    assert len(np.nonzero(alpha)[0]) == sp_states.shape[1] # IMPROVE: replace np.nonzero()  by bin2pos()
-    Nsites = sp_states.shape[0]
+    assert len(alpha.shape) == 1 # no batch dimension 
+    Ns, Np = sp_states.shape
     L_idx = bin2pos(alpha)  # select these cols from P-matrix 
+    assert len(L_idx) == Np
     M = np.matmul( sp_states, np.linalg.inv(sp_states[L_idx]) ) 
-    GG = np.zeros((Nsites, Nsites))
+    GG = np.zeros((Ns, Ns))
     GG[:, L_idx] = M[:,:]
     return GG.T
 
@@ -313,15 +313,11 @@ def ratio_Slater(G, alpha, beta, r, s):
                 G_{ji} =  <\alpha| c_j^{\dagger} c_i |\psi> / <\alpha | \psi>
     """
     # IMPROVE: assert that beta is indeed obtained from alpha 
+    G = np.asarray(G)
     alpha = np.asarray(alpha)
     beta = np.asarray(beta)
-    G = np.asarray(G)
-    R = 1 - G[r,r] - G[s,s] + G[r,s] + G[s,r]  
-    sign = +1
-    s_ = min(s,r); r_ = max(s,r)
-    for i in range(s_+1, r_):
-        sign *= (-1) if beta[i] == 1 else 1
-
+    R = (1 - G[r,r] - G[s,s] + G[r,s] + G[s,r])
+    sign = np.prod([(-1) if beta[i] == 1 else 1 for i in range(min(s,r)+1, max(s,r))])
     return R * sign
 
 
