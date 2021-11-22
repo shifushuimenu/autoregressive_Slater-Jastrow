@@ -1,12 +1,7 @@
 import torch
-from torch import nn
 import numpy as np
-import math
 
 from torch.distributions.categorical import Categorical
-
-from utils import default_dtype_torch
-
 from bitcoding import bin2pos, int2bin
 
 
@@ -15,21 +10,18 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         Sample a set of particle positions from a Slater determinant of 
         orthogonal orbitals via direct componentwise sampling, thereby
         making sure that the particle positions come out ordered.
-        
-        The Slater determinant is constructed from the first `N_particles`
-        number of single-particle eigenstates. 
-        
+                
         Parameters:
         -----------
         single_particle_eigfunc: 2D arraylike
             Matrix of dimension D x D containing all the single-particle
             eigenfunctions as columns. Note that D is the dimension
             of the single-particle Hilbert space.
-        N_particles: int
-            Number of particles where N_particles <= D.
+        Nparticles: int
+            Number of particles where `Nparticles` <= `D`.
 
         From the matrix containing the single-particle eigenfunctions 
-        as columns, the first 'N_particles" columns are chosen to form the 
+        as columns, the first `Nparticles` columns are chosen to form the 
         Slater determinant.
     """
     def __init__(self, single_particle_eigfunc, Nparticles):
@@ -54,7 +46,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
     def reset_sampler(self):        
         self.occ_vec = np.zeros(self.D, dtype=np.float64)
         self.occ_positions = np.zeros(self.N, dtype=np.int64)
-        self.occ_positions[:] = -10^6
+        self.occ_positions[:] = -10^6 # set to invalid values 
         # list of particle positions 
         self.Ksites = []
         self.xmin = 0
@@ -63,10 +55,13 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # State index of the sampler: no sampling step so far 
         self.state_index = -1
 
-    def get_cond_prob(self, k):
-        """
-            Conditional probability for the position of the k-th particle 
-            The support of the distribution changes with `k`.
+        # helper variables for low-rank update
+
+
+    def get_cond_prob(self, k, naive=True):
+        r""" Conditional probability for the position x of the k-th particle.
+
+             The support x \in [xmin, xmax-1] of the distribution changes with `k`.
         """
         self.xmin = 0 if k==0 else self.occ_positions[k-1] + 1 
         self.xmax = self.D - self.N + k + 1
@@ -85,12 +80,28 @@ class SlaterDetSampler_ordered(torch.nn.Module):
             GG_num = self.G[np.ix_(Ksites_tmp, Ksites_tmp)] - np.diag(occ_vec_tmp[0:i_k+1])
             occ_vec_tmp[i_k] = 0  # reset for next loop
         
-            probs[i_k] = - np.linalg.det(GG_num) / np.linalg.det(GG_denom)
+            if naive:
+                probs[i_k] = - np.linalg.det(GG_num) / np.linalg.det(GG_denom)
+            else: # use block determinant formula
+                Ksites_old = self.Ksites
+                Ksites_add = list(range(self.xmin, i_k+1))
+                occ_vec_add = [0] * (i_k - self.xmin) + [1]
+                if len(occ_vec_add) > 1:
+                    NN = np.diag(occ_vec_add[:])
+                else:
+                    NN = occ_vec_add
+                DD = self.G[np.ix_(Ksites_add, Ksites_add)] - NN
+                CC = self.G[np.ix_(Ksites_add, Ksites_old)]
+                BB = self.G[np.ix_(Ksites_old, Ksites_add)]
+                Xinv = np.linalg.inv(self.G[np.ix_(Ksites_old, Ksites_old)] - np.diag(self.occ_vec[0:self.xmin]))
+
+                probs[i_k] = (-1) * np.linalg.det(DD - np.matmul(np.matmul(CC, Xinv), BB))
+
         # IMPROVE: For large matrices the ratio of determinants leads to numerical
         # instabilities which results in not normalized probability distributions   
         # => use LOW-RANK UPDATE     
         #print("probs[:]=", probs[:], "  np.sum(probs[:])=", np.sum(probs[:])) 
-        #assert np.isclose(np.sum(probs[:]), 1.0) # assert normalization 
+        assert np.isclose(np.sum(probs[:]), 1.0) # assert normalization 
         # clamp negative values which are in absolute magnitude below machine precision
         probs = np.where(abs(probs) > 1e-15, probs, 0.0)
 
@@ -130,6 +141,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.occ_vec[self.xmin:pos_i] = 0
         self.occ_vec[pos_i] = 1
         self.occ_positions[k] = pos_i
+
+        # preprare helper variables for the next pass 
 
         self.state_index += 1 
 
