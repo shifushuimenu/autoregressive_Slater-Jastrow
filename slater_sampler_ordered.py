@@ -4,6 +4,7 @@ import numpy as np
 from torch.distributions.categorical import Categorical
 from bitcoding import bin2pos, int2bin
 
+from profilehooks import profile
 
 class SlaterDetSampler_ordered(torch.nn.Module):
     """
@@ -59,7 +60,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         # helper variables for low-rank update
 
-
+    @profile
     def get_cond_prob(self, k):
         r""" Conditional probability for the position x of the k-th particle.
 
@@ -136,7 +137,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         
         return self.occ_vec, prob_sample
 
-
+    @profile
     def update_state(self, pos_i):
 
         assert( 0 <= int(pos_i) < self.D )
@@ -167,6 +168,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                     NN = np.diag(occ_vec_add[:])
                 else:
                     NN = occ_vec_add
+
+                # IMPROVE: The following 4 quantities have been calculated already
+                # while calculating the conditional probabilities. 
                 self.DD = self.G[np.ix_(Ksites_add, Ksites_add)] - NN
                 self.CC = self.G[np.ix_(Ksites_add, self.Ksites_old)]
                 self.BB = self.G[np.ix_(self.Ksites_old, Ksites_add)]
