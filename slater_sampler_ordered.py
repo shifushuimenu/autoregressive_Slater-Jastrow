@@ -24,7 +24,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         as columns, the first `Nparticles` columns are chosen to form the 
         Slater determinant.
     """
-    def __init__(self, single_particle_eigfunc, Nparticles, naive=False):
+    def __init__(self, single_particle_eigfunc, Nparticles, naive=True):
         super(SlaterDetSampler_ordered, self).__init__()
         self.epsilon = 1e-5
         self.N = Nparticles         
@@ -70,37 +70,36 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         probs = np.zeros(self.D) #np.zeros(len(range(self.xmin, self.xmax)))
 
-        Ksites_tmp = self.Ksites[:]
-        occ_vec_tmp = self.occ_vec[:]
-        GG_denom = self.G[np.ix_(self.Ksites, self.Ksites)] - np.diag(self.occ_vec[0:len(self.Ksites)])
+        if self.naive_update:
+            Ksites_tmp = self.Ksites[:]
+            occ_vec_tmp = self.occ_vec[:]
+            GG_denom = self.G[np.ix_(self.Ksites, self.Ksites)] - np.diag(self.occ_vec[0:len(self.Ksites)])
+
         for i_k in range(self.xmin, self.xmax):
-            # print("i_k=", i_k)
-            # print("occ_vec_tmp=", occ_vec_tmp)
-            # print("len(Ksites_tmp)", len(Ksites_tmp), " occ_vec_tmp[0:i_k+1]", occ_vec_tmp[0:i_k+1].shape)
-            Ksites_tmp.append(i_k)
-            occ_vec_tmp[i_k] = 1
-            GG_num = self.G[np.ix_(Ksites_tmp, Ksites_tmp)] - np.diag(occ_vec_tmp[0:i_k+1])
-            occ_vec_tmp[i_k] = 0  # reset for next loop
         
             if self.naive_update:
+                Ksites_tmp.append(i_k)
+                occ_vec_tmp[i_k] = 1
+                GG_num = self.G[np.ix_(Ksites_tmp, Ksites_tmp)] - np.diag(occ_vec_tmp[0:i_k+1])
+                occ_vec_tmp[i_k] = 0  # reset for next loop
                 probs[i_k] = - np.linalg.det(GG_num) / np.linalg.det(GG_denom)
             else: # use block determinant formula
-                Ksites_old = self.Ksites
+                self.Ksites_old = self.Ksites.copy()
                 Ksites_add = list(range(self.xmin, i_k+1))
                 occ_vec_add = [0] * (i_k - self.xmin) + [1]
                 if len(occ_vec_add) > 1:
                     NN = np.diag(occ_vec_add[:])
                 else:
                     NN = occ_vec_add
-                DD = self.G[np.ix_(Ksites_add, Ksites_add)] - NN
-                CC = self.G[np.ix_(Ksites_add, Ksites_old)]
-                self.BB = self.G[np.ix_(Ksites_old, Ksites_add)]
-                if k==0:
-                    self.Xinv = np.linalg.inv(self.G[np.ix_(Ksites_old, Ksites_old)] - np.diag(self.occ_vec[0:self.xmin]))
-                print("Xinv.shape=", self.Xinv.shape)
-                print("CC.shape=", CC.shape)
-                print("BB.shape=", self.BB.shape)
-                self.Schur_complement = DD - np.matmul(np.matmul(CC, self.Xinv), self.BB)
+                self.DD = self.G[np.ix_(Ksites_add, Ksites_add)] - NN
+                self.CC = self.G[np.ix_(Ksites_add, self.Ksites_old)]
+                self.BB = self.G[np.ix_(self.Ksites_old, Ksites_add)]
+                if self.state_index==-1: # no sampling step so far 
+                    # here self.Xinv = [] always. IMPROVE: This line is useless.
+                    self.Xinv = np.linalg.inv(self.G[np.ix_(self.Ksites_old, self.Ksites_old)] - np.diag(self.occ_vec[0:self.xmin]))
+                else:
+                    pass # self.Xinv should have been updated by calling update_state(pos_i)
+                self.Schur_complement = self.DD - np.matmul(np.matmul(self.CC, self.Xinv), self.BB)
                 probs[i_k] = (-1) * np.linalg.det(self.Schur_complement)
 
         # IMPROVE: For large matrices the ratio of determinants leads to numerical
@@ -151,16 +150,38 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         if not self.naive_update:
             # preprare helper variables for the next pass 
             # update Xinv based on previous Xinv
-            XinvB = np.matmul(self.Xinv, self.BB) 
-            Sinv = np.linalg.inv(self.Schur_complement)
-            Ablock = (self.Xinv + 
-            np.matmul(np.matmul(XinvB, Sinv), XinvB.transpose()))
-            Bblock = - np.matmul(XinvB, Sinv)
-            Cblock = - np.matmul(Sinv, XinvB.transpose())
-            Dblock = Sinv 
-            #self.Xinv_new = np.vstack((np.hstack((Ablock, Bblock)), np.hstack((Cblock, Dblock))))
-            self.Xinv_new = np.block([[Ablock, Bblock], [Cblock, Dblock]])
-            self.Xinv = self.Xinv_new
+
+            if self.state_index == -1: # first update step 
+                Ksites_add = list(range(0, pos_i+1))
+                occ_vec_add = [0] * pos_i + [1]
+                if len(occ_vec_add) > 1: # np.diag() does not work for one-element arrays 
+                    NN = np.diag(occ_vec_add[:])
+                else:
+                    NN = occ_vec_add
+                self.Xinv_new = np.linalg.inv(self.G[np.ix_(Ksites_add, Ksites_add)] - NN)
+                self.Xinv = self.Xinv_new
+            else:                
+                Ksites_add = list(range(self.xmin, pos_i+1))  # put the sampled pos_i instead of loop variable i_k
+                occ_vec_add = [0] * (int(pos_i) - self.xmin) + [1] # IMPROVE: pos_i is a tensor here, which is not necessary 
+                if len(occ_vec_add) > 1:
+                    NN = np.diag(occ_vec_add[:])
+                else:
+                    NN = occ_vec_add
+                self.DD = self.G[np.ix_(Ksites_add, Ksites_add)] - NN
+                self.CC = self.G[np.ix_(Ksites_add, self.Ksites_old)]
+                self.BB = self.G[np.ix_(self.Ksites_old, Ksites_add)]
+                self.Schur_complement = self.DD - np.matmul(np.matmul(self.CC, self.Xinv), self.BB)
+
+                XinvB = np.matmul(self.Xinv, self.BB) 
+                Sinv = np.linalg.inv(self.Schur_complement)
+                Ablock = (self.Xinv + 
+                    np.matmul(np.matmul(XinvB, Sinv), XinvB.transpose()))
+                Bblock = - np.matmul(XinvB, Sinv)
+                Cblock = - np.matmul(Sinv, XinvB.transpose())
+                Dblock = Sinv 
+                #self.Xinv_new = np.vstack((np.hstack((Ablock, Bblock)), np.hstack((Cblock, Dblock))))
+                self.Xinv_new = np.block([[Ablock, Bblock], [Cblock, Dblock]])
+                self.Xinv = self.Xinv_new
 
         self.state_index += 1 
 
