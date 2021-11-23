@@ -25,7 +25,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         as columns, the first `Nparticles` columns are chosen to form the 
         Slater determinant.
     """
-    def __init__(self, single_particle_eigfunc, Nparticles, naive=True):
+    def __init__(self, single_particle_eigfunc, Nparticles, naive=False):
         super(SlaterDetSampler_ordered, self).__init__()
         self.epsilon = 1e-5
         self.N = Nparticles         
@@ -75,9 +75,13 @@ class SlaterDetSampler_ordered(torch.nn.Module):
             Ksites_tmp = self.Ksites[:]
             occ_vec_tmp = self.occ_vec[:]
             GG_denom = self.G[np.ix_(self.Ksites, self.Ksites)] - np.diag(self.occ_vec[0:len(self.Ksites)])
+        else:
+            self.BB_reuse = []   # list of matrices to be reused later 
+            self.Schur_complement_reuse = []  # list of matrices to be reused later 
 
+        mm=-1
         for i_k in range(self.xmin, self.xmax):
-        
+            mm += 1
             if self.naive_update:
                 Ksites_tmp.append(i_k)
                 occ_vec_tmp[i_k] = 1
@@ -92,17 +96,21 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                     NN = np.diag(occ_vec_add[:])
                 else:
                     NN = occ_vec_add
-                self.DD = self.G[np.ix_(Ksites_add, Ksites_add)] - NN
-                self.CC = self.G[np.ix_(Ksites_add, self.Ksites_old)]
+                DD = self.G[np.ix_(Ksites_add, Ksites_add)] - NN
                 self.BB = self.G[np.ix_(self.Ksites_old, Ksites_add)]
+                CC = self.BB.transpose()
+                self.BB_reuse.append(self.BB)
                 if self.state_index==-1: # no sampling step so far 
                     # here self.Xinv = [] always. IMPROVE: This line is useless.
                     self.Xinv = np.linalg.inv(self.G[np.ix_(self.Ksites_old, self.Ksites_old)] - np.diag(self.occ_vec[0:self.xmin]))
                 else:
                     pass # self.Xinv should have been updated by calling update_state(pos_i)
-                self.Schur_complement = self.DD - np.matmul(np.matmul(self.CC, self.Xinv), self.BB)
+                self.Schur_complement = DD - np.matmul(np.matmul(CC, self.Xinv), self.BB)
+                self.Schur_complement_reuse.append(self.Schur_complement)
                 probs[i_k] = (-1) * np.linalg.det(self.Schur_complement)
 
+        if not self.naive_update:
+            assert len(self.BB_reuse) == len(self.Schur_complement_reuse) == (mm+1) # IMPROVE: remove this as well as the variable mm
         # IMPROVE: For large matrices the ratio of determinants leads to numerical
         # instabilities which results in not normalized probability distributions   
         # => use LOW-RANK UPDATE     
@@ -169,15 +177,12 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 else:
                     NN = occ_vec_add
 
-                # IMPROVE: The following 4 quantities have been calculated already
-                # while calculating the conditional probabilities. 
-                self.DD = self.G[np.ix_(Ksites_add, Ksites_add)] - NN
-                self.CC = self.G[np.ix_(Ksites_add, self.Ksites_old)]
-                self.BB = self.G[np.ix_(self.Ksites_old, Ksites_add)]
-                self.Schur_complement = self.DD - np.matmul(np.matmul(self.CC, self.Xinv), self.BB)
+                mm = int(pos_i) - self.xmin  # the m-th position on the current support of the conditional probs
+                BB_ = self.BB_reuse[mm]      # select previously computed matrices for the sampled position (i.e. pos_i, which is the m-th position of the current support)
+                Schur_complement_ = self.Schur_complement_reuse[mm]
 
-                XinvB = np.matmul(self.Xinv, self.BB) 
-                Sinv = np.linalg.inv(self.Schur_complement)
+                XinvB = np.matmul(self.Xinv, BB_) 
+                Sinv = np.linalg.inv(Schur_complement_)
                 Ablock = (self.Xinv + 
                     np.matmul(np.matmul(XinvB, Sinv), XinvB.transpose()))
                 Bblock = - np.matmul(XinvB, Sinv)
