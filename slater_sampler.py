@@ -224,10 +224,8 @@ class SlaterDetSampler(torch.nn.Module):
         
         # sample 
         probs = self.get_cond_prob(k) 
-        print("sample: probs=", probs)
 
         pos = Categorical(probs).sample().numpy()
-        print("sample: pos=", pos)
         
         # conditional prob in this sampling step
         cond_prob_k = probs[pos]
@@ -281,7 +279,6 @@ class SlaterDetSampler(torch.nn.Module):
         prob_sample = 1.0
         for k in np.arange(self.N):
             _, cond_prob_k = self._sample_k(k)
-            print("cond_prob_k=", cond_prob_k)
             prob_sample *= cond_prob_k
             
         return self.occ_vec, prob_sample

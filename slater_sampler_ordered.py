@@ -86,10 +86,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 Ksites_tmp.append(i_k)
                 occ_vec_tmp[i_k] = 1
                 GG_num = self.G[np.ix_(Ksites_tmp, Ksites_tmp)] - np.diag(occ_vec_tmp[0:i_k+1])
-                occ_vec_tmp[i_k] = 0  # reset for next loop
+                occ_vec_tmp[i_k] = 0  # reset for next loop iteration
                 probs[i_k] = - np.linalg.det(GG_num) / np.linalg.det(GG_denom)
             else: # use block determinant formula
-                self.Ksites_old = self.Ksites.copy()
                 Ksites_add = list(range(self.xmin, i_k+1))
                 occ_vec_add = [0] * (i_k - self.xmin) + [1]
                 if len(occ_vec_add) > 1:
@@ -97,12 +96,12 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 else:
                     NN = occ_vec_add
                 DD = self.G[np.ix_(Ksites_add, Ksites_add)] - NN
-                self.BB = self.G[np.ix_(self.Ksites_old, Ksites_add)]
+                self.BB = self.G[np.ix_(self.Ksites, Ksites_add)]
                 CC = self.BB.transpose()
                 self.BB_reuse.append(self.BB)
                 if self.state_index==-1: # no sampling step so far 
                     # here self.Xinv = [] always. IMPROVE: This line is useless.
-                    self.Xinv = np.linalg.inv(self.G[np.ix_(self.Ksites_old, self.Ksites_old)] - np.diag(self.occ_vec[0:self.xmin]))
+                    self.Xinv = np.linalg.inv(self.G[np.ix_(self.Ksites, self.Ksites)] - np.diag(self.occ_vec[0:self.xmin]))
                 else:
                     pass # self.Xinv should have been updated by calling update_state(pos_i)
                 self.Schur_complement = DD - np.matmul(np.matmul(CC, self.Xinv), self.BB)
@@ -157,9 +156,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.occ_positions[k] = pos_i
 
         if not self.naive_update:
-            # preprare helper variables for the next pass 
-            # update Xinv based on previous Xinv
-
+            # Update Xinv based on previous Xinv using 
+            # formula for inverse of a block matrix 
             if self.state_index == -1: # first update step 
                 Ksites_add = list(range(0, pos_i+1))
                 occ_vec_add = [0] * pos_i + [1]
@@ -188,7 +186,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 Bblock = - np.matmul(XinvB, Sinv)
                 Cblock = - np.matmul(Sinv, XinvB.transpose())
                 Dblock = Sinv 
-                #self.Xinv_new = np.vstack((np.hstack((Ablock, Bblock)), np.hstack((Cblock, Dblock))))
                 self.Xinv_new = np.block([[Ablock, Bblock], [Cblock, Dblock]])
                 self.Xinv = self.Xinv_new
 
@@ -275,9 +272,9 @@ if __name__ == "__main__":
         Slater2spOBDM
     )
 
-    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=10, potential='none', PBC=False)
+    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=10, potential='none', PBC=False, HF=False)
     Nparticles = 3
-    num_samples = 40000
+    num_samples = 4000
 
     SDsampler = SlaterDetSampler_ordered(eigvecs, Nparticles=Nparticles)
 

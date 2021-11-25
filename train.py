@@ -11,9 +11,9 @@ torch.manual_seed(seed)
 if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 
-max_iter = 500
-Nsites = 20 # 13 # 10
-Nparticles = 10 #5 # 5
+max_iter = 1000
+Nsites = 7 # 13 # 10
+Nparticles = 3 #5 # 5
 Vint = 3.0
 
 
@@ -52,7 +52,7 @@ energy_list, precision_list = [], []
 def _update_curve(energy, precision):
     energy_list.append(energy)
     precision_list.append(precision)
-    if len(energy_list)%999 == 0:
+    if len(energy_list)%50 == 0:
         plt.errorbar(np.arange(1, len(energy_list) + 1), energy_list, yerr=precision_list, capsize=3, label="Slater-Jastrow")
         # dashed line for exact energy
         plt.axhline(E_exact, ls='--', label="exact")
@@ -60,8 +60,17 @@ def _update_curve(energy, precision):
         plt.legend(loc="upper right")
         #plt.show()
 
-    MM = np.hstack((np.array(energy_list)[:,None], np.array(precision_list)[:,None]))
-    np.savetxt("energies_Ns{}Np{}V{}.dat".format(Nsites, Nparticles, Vint), MM)
+        MM = np.hstack((np.array(energy_list)[:,None], np.array(precision_list)[:,None]))
+        np.savetxt("energies_Ns{}Np{}V{}.dat".format(Nsites, Nparticles, Vint), MM)
+
+        # save converged ansatz
+        state = {
+            "energy": energy,
+            "precision": precision, 
+            "net": SJA.state_dict()
+        }
+        torch.save(state, 'state_Ns{}Np{}V{}.pt'.format(Nsites, Nparticles, Vint))
+
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
@@ -71,7 +80,7 @@ SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticle
 
 model = VMCKernel(energy_loc=tVmodel_loc, ansatz=SJA)
 
-E_exact = -3.3478904193465335
+E_exact = -5.802177512728626
 
 t0 = time.time()
 for i, (energy, precision) in enumerate(train(model, learning_rate = 0.1, num_samples=100, use_cuda = use_cuda)):
@@ -84,13 +93,6 @@ for i, (energy, precision) in enumerate(train(model, learning_rate = 0.1, num_sa
     if i >= max_iter:
         break
 
-# save converged ansatz
-state = {
-    "energy": energy,
-    "precision": precision, 
-    "net": SJA.state_dict()
-}
-torch.save(state, 'state_Ns{}Np{}V{}.pt'.format(Nsites, Nparticles, Vint))
 
 
 szsz_corr = np.zeros(Nsites)
