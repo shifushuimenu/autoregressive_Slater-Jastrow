@@ -14,7 +14,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 
         Parameters:
         -----------
-        single_particle_eigfunc: 2D arraylike
+        single_particle_eigfunc: 2D arraylike or None
             Matrix of dimension D x D containing all the single-particle
             eigenfunctions as columns. Note that D is the dimension
             of the single-particle Hilbert space.
@@ -25,21 +25,26 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         as columns, the first `Nparticles` columns are chosen to form the 
         Slater determinant.
     """
-    def __init__(self, single_particle_eigfunc, Nparticles, naive=False):
+    def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, naive=False):
         super(SlaterDetSampler_ordered, self).__init__()
         self.epsilon = 1e-5
+        self.D = Nsites 
         self.N = Nparticles         
-        self.eigfunc = np.array(single_particle_eigfunc)
-        self.D = self.eigfunc.shape[0]
         assert(self.N<=self.D)  
-        # P-matrix representation of Slater determinant, (D x N)-matrix
-        self.P = self.eigfunc[:,0:self.N]
-
         self.naive_update = naive
-
+        if single_particle_eigfunc is not None: 
+           self.eigfunc = np.array(single_particle_eigfunc)
+           assert Nsites == self.eigfunc.shape[0]
+           # P-matrix representation of Slater determinant, (D x N)-matrix
+           self.P = self.eigfunc[:,0:self.N]
+           self.U = np.matmul(self.P, np.transpose(self.P))
+        else: # optimize also the columns of the Slater determinant 
+           self.P = nn.Parameter(torch.rand(self.D, self.N, requires_grad=True)) # leaf Variable, updated during SGD; columns are not (!) orthonormal 
+           Q, R = torch.qr(self.P, some=True) # orthonormalize columns 
+           Q = Q.detach().numpy()
+           self.U = np.matmul(Q, np.transpose(Q))
         # U is the key matrix representing the Slater determinant for sampling purposes.
         # Its principal minors are the probabilities of certain particle configurations. 
-        self.U = np.matmul(self.P, np.transpose(self.P))
 
         # Green's function 
         self.G = np.eye(self.D) - self.U
@@ -276,7 +281,7 @@ if __name__ == "__main__":
     Nparticles = 3
     num_samples = 4000
 
-    SDsampler = SlaterDetSampler_ordered(eigvecs, Nparticles=Nparticles)
+    SDsampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs)
 
     # Check that sampling the Slater determinant gives the correct average density. 
     occ_vec = torch.zeros(Nsites)
