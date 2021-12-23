@@ -15,7 +15,7 @@ from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 
 from profilehooks import profile
 
-@profile
+#@profile
 def fermion_parity( n, state_idx, i, j ):
     """
         Starting from the occupation number state encoded by the integer 
@@ -84,7 +84,7 @@ class Lattice1d(object):
         self.neigh[ns-1, 1] = 0
 ###############################
 
-@profile        
+#@profile        
 def kinetic_term( I, lattice, t_hop=1.0 ):
     """
         Parameters:
@@ -151,7 +151,7 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
 
     return ( hop_from_to, I_prime, matrix_elem )
                
-@profile
+#@profile
 def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=3.0):
     '''
     Local energy of periodic 1D t-V model
@@ -189,7 +189,7 @@ def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=3.0):
     acc = 0.0
 
     assert len(from_to) == len(states) == len(wl)
-    OBDM_loc = local_OBDM(alpha=config[0], sp_states = ansatz.slater_sampler.P)
+    OBDM_loc = local_OBDM(alpha=config[0], sp_states = ansatz.slater_sampler.P_ortho.detach().numpy())
     for wi, config_i, (r,s) in zip(wl, states, from_to):
         if wi != 0: # there are unphysical connecting states whose matrix elements are set to zero
             if not (r==0 and s==0):
@@ -210,7 +210,7 @@ def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=3.0):
             acc += eng_i
     return acc
 
-@profile
+#@profile
 def vmc_measure(local_measure, sample_list, num_bin=50):
     '''
     perform measurements on samples
@@ -223,6 +223,7 @@ def vmc_measure(local_measure, sample_list, num_bin=50):
     Returns:
         tuple: expectation valued of energy, gradient, energy*gradient and error of energy.
     '''
+    print("inside VMC measure")
     # measurements
     energy_loc_list, grad_loc_list = [], []
     for i, config in enumerate(sample_list):
@@ -284,7 +285,7 @@ class VMCKernel(object):
         self.ansatz = ansatz
         self.energy_loc = energy_loc
 
-    @profile
+    #@profile
     def prob(self,config):
         '''
         probability of configuration.
@@ -298,7 +299,7 @@ class VMCKernel(object):
         config = np.array(config)
         return self.ansatz.prob(config)
 
-    @profile
+    #@profile
     def local_measure(self, config):
         '''
         get local quantities energy_loc, grad_loc.

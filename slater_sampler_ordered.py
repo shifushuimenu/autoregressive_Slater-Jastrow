@@ -1,4 +1,7 @@
+# TODO: update using block determinant formula does not pass the test under __main__():
+
 import torch
+import torch.nn as nn
 import numpy as np
 
 from torch.distributions.categorical import Categorical
@@ -25,7 +28,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         as columns, the first `Nparticles` columns are chosen to form the 
         Slater determinant.
     """
-    def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, naive=False):
+    def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, naive=True):
         super(SlaterDetSampler_ordered, self).__init__()
         self.epsilon = 1e-5
         self.D = Nsites 
@@ -36,21 +39,30 @@ class SlaterDetSampler_ordered(torch.nn.Module):
            self.eigfunc = np.array(single_particle_eigfunc)
            assert Nsites == self.eigfunc.shape[0]
            # P-matrix representation of Slater determinant, (D x N)-matrix
-           self.P = self.eigfunc[:,0:self.N]
-           self.U = np.matmul(self.P, np.transpose(self.P))
+           self.P = torch.tensor(self.eigfunc[:,0:self.N])
+           self.P_ortho = self.P 
+           # U is the key matrix representing the Slater determinant for sampling purposes.
+           # Its principal minors are the probabilities of certain particle configurations.            
+           self.U = torch.matmul(self.P, self.P.transpose(-1,-2)) 
+           # Green's function 
+           self.G = torch.eye(self.D) - self.U    
+       
         else: # optimize also the columns of the Slater determinant 
            self.P = nn.Parameter(torch.rand(self.D, self.N, requires_grad=True)) # leaf Variable, updated during SGD; columns are not (!) orthonormal 
-           Q, R = torch.qr(self.P, some=True) # orthonormalize columns 
-           Q = Q.detach().numpy()
-           self.U = np.matmul(Q, np.transpose(Q))
-        # U is the key matrix representing the Slater determinant for sampling purposes.
-        # Its principal minors are the probabilities of certain particle configurations. 
+           self.reortho_orbitals()  # orthonormalize columns 
 
-        # Green's function 
-        self.G = np.eye(self.D) - self.U
+        print("requires grad ?:", self.U.requires_grad)
+        print("self.P.is_leaf =", self.P.is_leaf)
+        print("self.P_ortho.is_leaf =", self.P_ortho.is_leaf)
 
         self.reset_sampler()
 
+    def reortho_orbitals(self):
+        self.P_ortho, R = torch.qr(self.P, some=True) # P-matrix with orthonormal columns; self.P is updated during SGD 
+        self.U = torch.matmul(self.P_ortho, self.P_ortho.transpose(-1,-2))
+        # Green's function 
+        self.G = torch.eye(self.D) - self.U    
+        
     def reset_sampler(self):        
         self.occ_vec = np.zeros(self.D, dtype=np.float64)
         self.occ_positions = np.zeros(self.N, dtype=np.int64)
@@ -65,7 +77,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         # helper variables for low-rank update
 
-    @profile
+    #@profile
     def get_cond_prob(self, k):
         r""" Conditional probability for the position x of the k-th particle.
 
@@ -74,12 +86,12 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.xmin = 0 if k==0 else self.occ_positions[k-1] + 1 
         self.xmax = self.D - self.N + k + 1
 
-        probs = np.zeros(self.D) #np.zeros(len(range(self.xmin, self.xmax)))
+        probs = torch.zeros(self.D) #np.zeros(len(range(self.xmin, self.xmax)))
 
         if self.naive_update:
             Ksites_tmp = self.Ksites[:]
             occ_vec_tmp = self.occ_vec[:]
-            GG_denom = self.G[np.ix_(self.Ksites, self.Ksites)] - np.diag(self.occ_vec[0:len(self.Ksites)])
+            GG_denom = self.G[np.ix_(self.Ksites, self.Ksites)] - torch.diag(torch.tensor(self.occ_vec[0:len(self.Ksites)]))
         else:
             self.BB_reuse = []   # list of matrices to be reused later 
             self.Schur_complement_reuse = []  # list of matrices to be reused later 
@@ -90,14 +102,14 @@ class SlaterDetSampler_ordered(torch.nn.Module):
             if self.naive_update:
                 Ksites_tmp.append(i_k)
                 occ_vec_tmp[i_k] = 1
-                GG_num = self.G[np.ix_(Ksites_tmp, Ksites_tmp)] - np.diag(occ_vec_tmp[0:i_k+1])
+                GG_num = self.G[np.ix_(Ksites_tmp, Ksites_tmp)] - torch.diag(torch.tensor(occ_vec_tmp[0:i_k+1]))
                 occ_vec_tmp[i_k] = 0  # reset for next loop iteration
-                probs[i_k] = - np.linalg.det(GG_num) / np.linalg.det(GG_denom)
+                probs[i_k] = - torch.det(GG_num) / torch.det(GG_denom)
             else: # use block determinant formula
                 Ksites_add = list(range(self.xmin, i_k+1))
                 occ_vec_add = [0] * (i_k - self.xmin) + [1]
                 if len(occ_vec_add) > 1:
-                    NN = np.diag(occ_vec_add[:])
+                    NN = torch.diag(occ_vec_add[:])
                 else:
                     NN = occ_vec_add
                 DD = self.G[np.ix_(Ksites_add, Ksites_add)] - NN
@@ -106,12 +118,12 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 self.BB_reuse.append(self.BB)
                 if self.state_index==-1: # no sampling step so far 
                     # here self.Xinv = [] always. IMPROVE: This line is useless.
-                    self.Xinv = np.linalg.inv(self.G[np.ix_(self.Ksites, self.Ksites)] - np.diag(self.occ_vec[0:self.xmin]))
+                    self.Xinv = torch.linalg.inv(self.G[np.ix_(self.Ksites, self.Ksites)] - torch.diag(torch.tensor(self.occ_vec[0:self.xmin])))
                 else:
                     pass # self.Xinv should have been updated by calling update_state(pos_i)
-                self.Schur_complement = DD - np.matmul(np.matmul(CC, self.Xinv), self.BB)
+                self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)
                 self.Schur_complement_reuse.append(self.Schur_complement)
-                probs[i_k] = (-1) * np.linalg.det(self.Schur_complement)
+                probs[i_k] = (-1) * torch.det(self.Schur_complement)
 
         if not self.naive_update:
             assert len(self.BB_reuse) == len(self.Schur_complement_reuse) == (mm+1) # IMPROVE: remove this as well as the variable mm
@@ -119,9 +131,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # instabilities which results in not normalized probability distributions   
         # => use LOW-RANK UPDATE     
         #print("probs[:]=", probs[:], "  np.sum(probs[:])=", np.sum(probs[:])) 
-        assert np.isclose(np.sum(probs[:]), 1.0) # assert normalization 
+        assert torch.isclose(probs.sum(), torch.tensor([1.0])) # assert normalization 
         # clamp negative values which are in absolute magnitude below machine precision
-        probs = np.where(abs(probs) > 1e-15, probs, 0.0)
+        probs = torch.where(abs(probs) > 1e-15, probs, torch.tensor([0.0]))
 
         return probs 
 
@@ -149,7 +161,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         
         return self.occ_vec, prob_sample
 
-    @profile
+    #@profile
     def update_state(self, pos_i):
 
         assert( 0 <= int(pos_i) < self.D )
@@ -232,10 +244,11 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                     [0.3 , 0.  ]]])
         """        
         row_idx = torch.Tensor(bin2pos(samples)).to(torch.long) # tensors used as indices must be long
-        assert row_idx.shape[-1] == self.P.shape[-1]
+        assert row_idx.shape[-1] == self.P_ortho.shape[-1]
         # select 2 (3,4,...) rows from a matrix with 2 (3,4,...) columns 
-        submat = np.take(self.P, row_idx, axis=-2) # broadcast over leading dimensions of row_idx
-        psi_amplitude = np.linalg.det(submat)
+        # submat = np.take(self.P, row_idx, axis=-2) # broadcast over leading dimensions of row_idx
+        submat = self.P_ortho[..., row_idx, :]
+        psi_amplitude = torch.det(submat)
         return psi_amplitude 
 
 
@@ -281,7 +294,7 @@ if __name__ == "__main__":
     Nparticles = 3
     num_samples = 4000
 
-    SDsampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs)
+    SDsampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
 
     # Check that sampling the Slater determinant gives the correct average density. 
     occ_vec = torch.zeros(Nsites)

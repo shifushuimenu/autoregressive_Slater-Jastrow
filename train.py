@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from test_suite import prepare_test_system_zeroT
 
 torch.set_default_dtype(default_dtype_torch)
+torch.autograd.set_detect_anomaly(True)
+
 # set random number seed
 use_cuda = False
 seed = 10086
@@ -19,7 +21,7 @@ Vint = 3.0
 
 def train(model, learning_rate, num_samples=10, use_cuda=False):
     '''
-    train a model.
+    train a model using stochastic gradient descent 
 
     Args:
         model (obj): a model that meet VMC model definition.
@@ -32,17 +34,31 @@ def train(model, learning_rate, num_samples=10, use_cuda=False):
         # get expectation values for energy, gradient and their product,
         # as well as the precision of energy.        
         sample_list = np.zeros((num_samples, Nsites)) 
-        # Why not      with torch.no_grad():    during sampling ?
-        for i in range(num_samples):
-            sample_unfolded, sample_prob = SJA.sample_unfolded()
-            sample_list[i] = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
+        with torch.no_grad():
+            for i in range(num_samples):
+                sample_unfolded, sample_prob = SJA.sample_unfolded()
+                sample_list[i] = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
+
+        
+        print("after sampling and before calculating gradients")
         energy, grad, energy_grad, precision = vmc_measure(model.local_measure, sample_list, num_bin=50)
 
-        # update variables using steepest gradient descent
+        # update variables using stochastic gradient descent
         g_list = [eg - energy * g for eg, g in zip(energy_grad, grad)]
         for var, g in zip(model.ansatz.parameters(), g_list):
             delta = learning_rate * g
             var.data -= delta
+
+        # re-orthogonalize the columns of the Slater determinant
+        # and update bias of the zero-th component 
+        if isinstance(model.ansatz, SlaterJastrow_ansatz):
+            print("slater_sampler.P.grad=", model.ansatz.slater_sampler.P.grad)
+            print("named parameters", list(model.ansatz.named_parameters()))
+            exit(1)
+            model.ansatz.slater_sampler.reortho_orbitals()
+            model.ansatz.bias_zeroth_component[:] = model.ansatz.slater_sampler.get_cond_prob(k=0)
+            model.ansatz.slater_sampler.reset_sampler() # probably not needed 
+
         yield energy, precision
         
         
@@ -75,12 +91,12 @@ def _update_curve(energy, precision):
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
 (_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, Nparticles=Nparticles, Vnnint=Vint)
-Sdet_sampler = SlaterDetSampler_ordered(eigvecs, Nparticles=Nparticles)
+Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)
 
 model = VMCKernel(energy_loc=tVmodel_loc, ansatz=SJA)
 
-E_exact = -5.802177512728626
+E_exact = -3.3478904193465335
 
 t0 = time.time()
 for i, (energy, precision) in enumerate(train(model, learning_rate = 0.1, num_samples=100, use_cuda = use_cuda)):
@@ -92,8 +108,6 @@ for i, (energy, precision) in enumerate(train(model, learning_rate = 0.1, num_sa
     # stop condition
     if i >= max_iter:
         break
-
-
 
 szsz_corr = np.zeros(Nsites)
 corr_ = np.zeros(Nsites)

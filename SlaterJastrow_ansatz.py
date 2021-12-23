@@ -64,11 +64,18 @@ class SlaterJastrow_ansatz(selfMADE):
         assert kwargs['num_components'] == slater_sampler.N
         assert kwargs['D'] == slater_sampler.D
 
-        slater_sampler.reset_sampler() # make sure sampling can start from the first component
-        kwargs['bias_zeroth_component'] = slater_sampler.get_cond_prob(k=0)
-        
+        #slater_sampler.reset_sampler() # make sure sampling can start from the first component
+        # kwargs['bias_zeroth_component'] = slater_sampler.get_cond_prob(k=0)
+
         super(SlaterJastrow_ansatz, self).__init__(**kwargs)
-        self.slater_sampler = slater_sampler
+
+        #self.slater_sampler = slater_sampler
+        self.const_orbitals = False
+
+        self.slater_sampler = SlaterDetSampler_ordered(Nsites=self.D, Nparticles=self.num_components,
+                single_particle_eigfunc=None, naive=True)
+        kwargs['bias_zeroth_component'] = self.slater_sampler.get_cond_prob(k=0)
+
         self.deactivate_Slater = deactivate_Slater
         self.deactivate_Jastrow = deactivate_Jastrow
         
@@ -130,7 +137,8 @@ class SlaterJastrow_ansatz(selfMADE):
                 ## clamp negative values which are in absolute magnitude below machine precision
                 probs = torch.where(abs(probs) > 1e-8, probs, torch.tensor(0.0))
                 if i==0:
-                    assert(np.all(np.isclose(probs.numpy(), cond_prob_fermi)))
+                    if self.const_orbitals:
+                       assert(np.all(np.isclose(probs.numpy(), cond_prob_fermi)))
 
                 pos_one_hot = OneHotCategorical(probs).sample() 
                 k_i = torch.nonzero(pos_one_hot[0])[0][0]                         
@@ -206,7 +214,7 @@ class SlaterJastrow_ansatz(selfMADE):
             x_hat_F = torch.zeros_like(x_hat_B, requires_grad=False)
             self.slater_sampler.reset_sampler()
             for k in range(0, self.num_components): 
-                x_hat_F[..., k*self.D:(k+1)*self.D] = torch.tensor(self.slater_sampler.get_cond_prob(k))
+                x_hat_F[..., k*self.D:(k+1)*self.D] = self.slater_sampler.get_cond_prob(k)
                 self.slater_sampler.update_state(pos[k])
             x_hat = x_hat_B * x_hat_F
             x_hat[..., 0:self.D] = x_hat_F[..., 0:self.D]  # cond_prob_fermi(i=0) is already contained as 'bias_zeroth_component' in MADE.
@@ -214,7 +222,10 @@ class SlaterJastrow_ansatz(selfMADE):
                 norm = torch.sum(x_hat[..., k*self.D:(k+1)*self.D])
                 x_hat[..., k*self.D:(k+1)*self.D] /= norm
 
-        assert(x_hat.requires_grad and not x_hat_F.requires_grad)
+        if self.const_orbitals:
+            assert(x_hat.requires_grad and not x_hat_F.requires_grad)
+        else:
+            assert(x_hat.requires_grad and x_hat_F.requires_grad)
 
         mm = x_hat * samples_unfold_flat # Pick only the probabilities at actually sampled positions !
         ones = torch.ones(*mm.shape)
@@ -246,7 +257,8 @@ class SlaterJastrow_ansatz(selfMADE):
         samples = torch.as_tensor(samples)
         assert len(samples.shape) == 2 and samples.shape[0] == 1 # Convention: just one sample per batch allowed
         amp_abs = torch.sqrt(torch.exp(self.log_prob(samples)))
-        amp_sign = torch.tensor(np.sign(self.slater_sampler.psi_amplitude(samples)), requires_grad=False)
+        amp_sign = torch.sign(self.slater_sampler.psi_amplitude(samples))
+        #assert amp_sign.requires_grad
         return amp_abs * amp_sign
 
     def prob(self, samples):
@@ -343,7 +355,7 @@ def quick_tests():
 
     # Aggregation of MADE neural network as Jastrow factor 
     # and Slater determinant sampler. 
-    Sdet_sampler = SlaterDetSampler_ordered(eigvecs, Nparticles=N_particles)
+    Sdet_sampler = SlaterDetSampler_ordered(Nsites=N_sites, Nparticles=N_particles, single_particle_eigfunc=eigvecs)
     SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=N_particles, D=N_sites, net_depth=2)
 
     batch = torch.zeros(4, N_particles*N_sites)
@@ -402,7 +414,7 @@ if __name__ == '__main__':
 
     # Aggregation of MADE neural network as Jastrow factor 
     # and Slater determinant sampler. 
-    Sdet_sampler = SlaterDetSampler_ordered(eigvecs, Nparticles=N_particles)
+    Sdet_sampler = SlaterDetSampler_ordered(Nsites=N_sites, Nparticles=N_particles, single_particle_eigfunc=eigvecs)
     SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=N_particles, D=N_sites, net_depth=2)
 
     data_dim = 2**N_sites
