@@ -70,7 +70,7 @@ class SlaterJastrow_ansatz(selfMADE):
         super(SlaterJastrow_ansatz, self).__init__(**kwargs)
 
         #self.slater_sampler = slater_sampler
-        self.const_orbitals = False
+        self.input_orbitals = False
 
         self.slater_sampler = SlaterDetSampler_ordered(Nsites=self.D, Nparticles=self.num_components,
                 single_particle_eigfunc=None, naive=True)
@@ -79,6 +79,10 @@ class SlaterJastrow_ansatz(selfMADE):
         self.deactivate_Slater = deactivate_Slater
         self.deactivate_Jastrow = deactivate_Jastrow
         
+
+    def sample(self):
+        sample_unfolded, prob_sample = self.sample_unfolded()
+        return occ_numbers_collapse(sample_unfolded, self.D)
 
     def sample_unfolded(self, seed=None):
         """
@@ -137,7 +141,7 @@ class SlaterJastrow_ansatz(selfMADE):
                 ## clamp negative values which are in absolute magnitude below machine precision
                 probs = torch.where(abs(probs) > 1e-8, probs, torch.tensor(0.0))
                 if i==0:
-                    if self.const_orbitals:
+                    if self.input_orbitals:
                        assert(np.all(np.isclose(probs.numpy(), cond_prob_fermi)))
 
                 pos_one_hot = OneHotCategorical(probs).sample() 
@@ -222,7 +226,7 @@ class SlaterJastrow_ansatz(selfMADE):
                 norm = torch.sum(x_hat[..., k*self.D:(k+1)*self.D])
                 x_hat[..., k*self.D:(k+1)*self.D] /= norm
 
-        if self.const_orbitals:
+        if self.input_orbitals:
             assert(x_hat.requires_grad and not x_hat_F.requires_grad)
         else:
             assert(x_hat.requires_grad and x_hat_F.requires_grad)

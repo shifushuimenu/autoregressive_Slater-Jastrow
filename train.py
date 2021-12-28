@@ -54,10 +54,9 @@ def train(model, learning_rate, num_samples=10, use_cuda=False):
         if isinstance(model.ansatz, SlaterJastrow_ansatz):
             print("slater_sampler.P.grad=", model.ansatz.slater_sampler.P.grad)
             print("named parameters", list(model.ansatz.named_parameters()))
-            exit(1)
             model.ansatz.slater_sampler.reortho_orbitals()
+            model.ansatz.slater_sampler.reset_sampler()
             model.ansatz.bias_zeroth_component[:] = model.ansatz.slater_sampler.get_cond_prob(k=0)
-            model.ansatz.slater_sampler.reset_sampler() # probably not needed 
 
         yield energy, precision
         
@@ -74,7 +73,7 @@ def _update_curve(energy, precision):
         plt.axhline(E_exact, ls='--', label="exact")
         plt.title("$L$=%d, $N$=%d, $V/t$ = %4.4f" % (Nsites, Nparticles, Vint))
         plt.legend(loc="upper right")
-        #plt.show()
+        plt.show()
 
         MM = np.hstack((np.array(energy_list)[:,None], np.array(precision_list)[:,None]))
         np.savetxt("energies_Ns{}Np{}V{}.dat".format(Nsites, Nparticles, Vint), MM)
@@ -114,6 +113,8 @@ corr_ = np.zeros(Nsites)
 
 
 print("Now sample from the converged ansatz")
+dd = torch.load('state_Ns{}Np{}V{}.pt'.format(Nsites, Nparticles, Vint))
+SJA.load_state_dict(dd['net'])
 num_samples = 1000
 for _ in range(num_samples):
     sample_unfolded, sample_prob = SJA.sample_unfolded()
@@ -130,4 +131,4 @@ szsz_corr[:] /= num_samples
 np.savetxt("szsz_corr_Ns{}Np{}V{}.dat".format(Nsites, Nparticles, Vint), szsz_corr)
 
 plt.plot(range(Nsites), szsz_corr[:], '--b')
-#plt.show()
+plt.show()

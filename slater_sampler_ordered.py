@@ -58,7 +58,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.reset_sampler()
 
     def reortho_orbitals(self):
-        self.P_ortho, R = torch.qr(self.P, some=True) # P-matrix with orthonormal columns; self.P is updated during SGD 
+        self.P_ortho, R = torch.linalg.qr(self.P, mode='reduced') # P-matrix with orthonormal columns; on the other hand, it is self.P which is updated during SGD.
         self.U = torch.matmul(self.P_ortho, self.P_ortho.transpose(-1,-2))
         # Green's function 
         self.G = torch.eye(self.D) - self.U    
