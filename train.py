@@ -8,14 +8,14 @@ torch.autograd.set_detect_anomaly(True)
 
 # set random number seed
 use_cuda = False
-seed = 10086
+seed = 42
 torch.manual_seed(seed)
 if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 
-max_iter = 1000
-Nsites = 7 # 13 # 10
-Nparticles = 3 #5 # 5
+max_iter = 100 # 1000 
+Nsites = 7 # 10
+Nparticles = 3 # 5
 Vint = 3.0
 
 
@@ -67,7 +67,7 @@ energy_list, precision_list = [], []
 def _update_curve(energy, precision):
     energy_list.append(energy)
     precision_list.append(precision)
-    if len(energy_list)%50 == 0:
+    if len(energy_list)%(max_iter-1) == 0:
         plt.errorbar(np.arange(1, len(energy_list) + 1), energy_list, yerr=precision_list, capsize=3, label="Slater-Jastrow")
         # dashed line for exact energy
         plt.axhline(E_exact, ls='--', label="exact")
@@ -91,7 +91,7 @@ def _update_curve(energy, precision):
 # and Slater determinant sampler. 
 (_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, Nparticles=Nparticles, Vnnint=Vint)
 Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
-SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)
+SJA = SlaterJastrow_ansatz(slater_sampler=None, num_components=Nparticles, D=Nsites, net_depth=2)
 
 model = VMCKernel(energy_loc=tVmodel_loc, ansatz=SJA)
 

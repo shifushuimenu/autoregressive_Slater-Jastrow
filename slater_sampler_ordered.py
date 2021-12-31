@@ -36,6 +36,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         assert(self.N<=self.D)  
         self.naive_update = naive
         if single_particle_eigfunc is not None: 
+           self.optimize_orbitals = False 
            self.eigfunc = np.array(single_particle_eigfunc)
            assert Nsites == self.eigfunc.shape[0]
            # P-matrix representation of Slater determinant, (D x N)-matrix
@@ -48,21 +49,29 @@ class SlaterDetSampler_ordered(torch.nn.Module):
            self.G = torch.eye(self.D) - self.U    
        
         else: # optimize also the columns of the Slater determinant 
+           self.optimize_orbitals = True 
            self.P = nn.Parameter(torch.rand(self.D, self.N, requires_grad=True)) # leaf Variable, updated during SGD; columns are not (!) orthonormal 
            self.reortho_orbitals()  # orthonormalize columns 
 
         print("requires grad ?:", self.U.requires_grad)
-        print("self.P.is_leaf =", self.P.is_leaf)
         print("self.P_ortho.is_leaf =", self.P_ortho.is_leaf)
+        print("self.P.is_leaf =", self.P.is_leaf)
 
         self.reset_sampler()
 
     def reortho_orbitals(self):
-        self.P_ortho, R = torch.linalg.qr(self.P, mode='reduced') # P-matrix with orthonormal columns; on the other hand, it is self.P which is updated during SGD.
-        self.U = torch.matmul(self.P_ortho, self.P_ortho.transpose(-1,-2))
-        # Green's function 
-        self.G = torch.eye(self.D) - self.U    
-        
+        if self.optimize_orbitals:
+           self.P_ortho, R = torch.linalg.qr(self.P, mode='reduced') # P-matrix with orthonormal columns; on the other hand, it is self.P which is updated during SGD.
+           self.P.requires_grad = False
+           del self.P
+           self.P = nn.Parameter(self.P_ortho.detach())
+           self.U = torch.matmul(self.P, self.P.transpose(-1,-2))
+           # Green's function 
+           self.G = torch.eye(self.D) - self.U    
+        else:
+           pass 
+
+
     def reset_sampler(self):        
         self.occ_vec = np.zeros(self.D, dtype=np.float64)
         self.occ_positions = np.zeros(self.N, dtype=np.int64)

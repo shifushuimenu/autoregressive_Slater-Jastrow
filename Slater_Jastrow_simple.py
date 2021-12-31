@@ -313,7 +313,6 @@ class VMCKernel(object):
         config = np.array(config)
         assert len(config.shape) == 2 and config.shape[0] == 1 # Convention: batch dimension required, but only one sample per batch allowed
         psi_loc = self.ansatz.psi_amplitude(torch.from_numpy(config))
-
         assert(psi_loc.requires_grad)
         with torch.autograd.set_detect_anomaly(True):
             # get gradient {d/dW}_{loc}

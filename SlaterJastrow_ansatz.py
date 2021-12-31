@@ -59,23 +59,21 @@ class SlaterJastrow_ansatz(selfMADE):
         self.D = kwargs['D']
         self.num_components = kwargs['num_components']
         self.net_depth = kwargs['net_depth']
+        assert isinstance(slater_sampler, SlaterDetSampler_ordered) or slater_sampler is None 
+        self.input_orbitals = (slater_sampler is not None) 
 
-        assert isinstance(slater_sampler, SlaterDetSampler_ordered)
-        assert kwargs['num_components'] == slater_sampler.N
-        assert kwargs['D'] == slater_sampler.D
-
-        #slater_sampler.reset_sampler() # make sure sampling can start from the first component
-        # kwargs['bias_zeroth_component'] = slater_sampler.get_cond_prob(k=0)
-
+        if slater_sampler is not None:
+           assert kwargs['num_components'] == slater_sampler.N
+           assert kwargs['D'] == slater_sampler.D
+        else:         
+           slater_sampler = SlaterDetSampler_ordered(Nsites=self.D, Nparticles=self.num_components,
+                   single_particle_eigfunc=None, naive=True)
+        
+        slater_sampler.reset_sampler() # make sure sampling can start from the first component
+        kwargs['bias_zeroth_component'] = slater_sampler.get_cond_prob(k=0)
         super(SlaterJastrow_ansatz, self).__init__(**kwargs)
 
-        #self.slater_sampler = slater_sampler
-        self.input_orbitals = False
-
-        self.slater_sampler = SlaterDetSampler_ordered(Nsites=self.D, Nparticles=self.num_components,
-                single_particle_eigfunc=None, naive=True)
-        kwargs['bias_zeroth_component'] = self.slater_sampler.get_cond_prob(k=0)
-
+        self.slater_sampler = slater_sampler
         self.deactivate_Slater = deactivate_Slater
         self.deactivate_Jastrow = deactivate_Jastrow
         
@@ -127,10 +125,7 @@ class SlaterJastrow_ansatz(selfMADE):
                 if self.deactivate_Slater:
                     probs = x_hat[:,i*self.D:(i+1)*self.D]
                 else:
-                    if i != 0:
-                        probs = x_hat[:,i*self.D:(i+1)*self.D] * cond_prob_fermi
-                    else:
-                        probs = x_hat[:,i*self.D:(i+1)*self.D]  # cond_prob_fermi(i=0) is already contained as 'bias_zeroth_component' in MADE.
+                    probs = x_hat[:,i*self.D:(i+1)*self.D] * cond_prob_fermi
                 # With the factor coming from Slater determinant the probabilities are not normalized.                    
                 # OneHotCategorical() accepts unnormalized probabilities, still it is better to normalize.
                 norm = torch.sum(probs, dim=-1)
@@ -196,10 +191,11 @@ class SlaterJastrow_ansatz(selfMADE):
         pos = bin2pos(samples)[0]
 
         # Adapt the Pauli blocker layer to particle positions in each sample.
-        for i in range(self.num_components-1):
-            self.net[-1].Pauli_blocker[i+1,:] = 0.0
-            self.net[-1].Pauli_blocker[i+1,:pos[i]+1] = torch.tensor([float('-inf')]) 
-            self.net[-1].Pauli_blocker[i+1,self.D-self.num_components+(i+1)+1:] = torch.tensor([float('-inf')])
+        with torch.no_grad():
+           for i in range(self.num_components-1):
+               self.net[-1].Pauli_blocker[i+1,:] = 0.0
+               self.net[-1].Pauli_blocker[i+1,:pos[i]+1] = torch.tensor([float('-inf')]) 
+               self.net[-1].Pauli_blocker[i+1,self.D-self.num_components+(i+1)+1:] = torch.tensor([float('-inf')])
 
         samples_unfold = occ_numbers_unfold(samples, duplicate_entries=False)
         # Flatten leading dimensions (This is necessary since there may a batch of samples 
@@ -228,7 +224,7 @@ class SlaterJastrow_ansatz(selfMADE):
 
         if self.input_orbitals:
             assert(x_hat.requires_grad and not x_hat_F.requires_grad)
-        else:
+        else: # optimize orbitals in Slater determinant, too 
             assert(x_hat.requires_grad and x_hat_F.requires_grad)
 
         mm = x_hat * samples_unfold_flat # Pick only the probabilities at actually sampled positions !

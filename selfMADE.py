@@ -161,8 +161,8 @@ class selfMADE(torch.nn.Module):
         
         assert type(self.net[-1]) == Softmax_blocked, "Expected `Softmax_blocked` as last network layer."
         # Pauli-blocker for the first component -> take log, because this will be passed through Softmax
-        self.net[-1].Pauli_blocker[0, 0:self.D-self.num_components+1] = torch.log(torch.Tensor(self.bias_zeroth_component)[0:self.D-self.num_components+1])
-        self.net[-1].Pauli_blocker[0, self.D-self.num_components+1:] = torch.tensor([float('-inf')])
+        self.net[-1].Pauli_blocker[0, 0:self.D-self.num_components+1] = torch.tensor([0.0], requires_grad=False) # no longer needed, taken care of by slater_sampler:  torch.log(torch.Tensor(self.bias_zeroth_component)[0:self.D-self.num_components+1])
+        self.net[-1].Pauli_blocker[0, self.D-self.num_components+1:] = torch.tensor([float('-inf')], requires_grad=False)
         
     def forward(self, x):
         x_hat = self.net(x)
