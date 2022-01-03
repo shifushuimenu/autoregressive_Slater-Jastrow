@@ -1,0 +1,22 @@
+[ ] symmetry projection 
+
+[ ] in kinetic_term(): 
+    M[...] = 2**i + 2**j => too large ints cannot be represented by C-long 
+
+[ ] direct sampling from a Pfaffian ansatz 
+
+[ ] speed up bitcoding using bitarray.py  
+
+[ ] stochastic reconfiguration of LBFGS instead of stochastic gradient descent optimization 
+
+[ ] argparse 
+
+[ ] When computing the local energy, the ratio of amplitudes for two very similar states is required,
+    which differ only by one electron position. Still, both configurations must be passed through 
+    the neural network. This is the 4fficiency bottleneck. Is it possible to evaluate only part of the 
+    neural network ? Is it possible to take the gradient wth respect to the inputs and then calculate 
+    the change in the probability amplitude given the small change in the input (just one position) ?
+
+[ ] verify speedup of advanced update of slater sampler  
+
+[ ] How can a Pfaffian be expanded in terms of Slater determinants ?  
