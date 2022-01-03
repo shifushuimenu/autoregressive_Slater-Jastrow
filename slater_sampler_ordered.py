@@ -1,5 +1,3 @@
-# TODO: update using block determinant formula does not pass the test under __main__():
-
 import torch
 import torch.nn as nn
 import numpy as np
