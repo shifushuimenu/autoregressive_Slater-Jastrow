@@ -115,10 +115,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
             else: # use block determinant formula
                 Ksites_add = list(range(self.xmin, i_k+1))
                 occ_vec_add = torch.tensor([0] * (i_k - self.xmin) + [1])
-                if len(occ_vec_add) > 1:
-                    NN = torch.diag(occ_vec_add[:])
-                else:
-                    NN = occ_vec_add
+                NN = torch.diag(occ_vec_add[:])
                 DD = self.G[np.ix_(Ksites_add, Ksites_add)] - NN
                 self.BB = self.G[np.ix_(self.Ksites, Ksites_add)]
                 if len(self.BB) == 0:
@@ -148,10 +145,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # clamp negative values which are in absolute magnitude below machine precision
         probs = torch.where(abs(probs) > 1e-15, probs, torch.tensor([0.0]))
 
-        if self.naive_update:
-            print("get_cond_prob (naive): k=", k, "probs=", probs)
-        else:
-            print("get_cond_prob (block update): k=", k, "probs=", probs)
 
         return probs 
 
@@ -165,7 +158,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         cond_prob_k = probs[pos]
 
         # update state of the sampler given the result of the sampling step 
-        self.update_state(pos)
+        self.update_state(pos.item())
 
         return pos, cond_prob_k
 
@@ -182,7 +175,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
     #@profile
     def update_state(self, pos_i):
 
-        assert( 0 <= int(pos_i) < self.D )
+        assert type(pos_i) == int 
+        assert( 0 <= pos_i < self.D )
         k = self.state_index + 1
 
         self.Ksites.extend(list(range(self.xmin, pos_i+1)))
@@ -204,13 +198,10 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 self.Xinv = self.Xinv_new
             else:                
                 Ksites_add = list(range(self.xmin, pos_i+1))  # put the sampled pos_i instead of loop variable i_k
-                occ_vec_add = [0] * (int(pos_i) - self.xmin) + [1] # IMPROVE: pos_i is a tensor here, which is not necessary 
-                if len(occ_vec_add) > 1:
-                    NN = torch.diag(torch.tensor(occ_vec_add[:]))
-                else:
-                    NN = torch.tensor(occ_vec_add)
+                occ_vec_add = [0] * (pos_i - self.xmin) + [1] # IMPROVE: pos_i is a tensor here, which is not necessary 
+                NN = torch.diag(torch.tensor(occ_vec_add[:]))
 
-                mm = int(pos_i) - self.xmin  # the m-th position on the current support of the conditional probs
+                mm = pos_i - self.xmin  # the m-th position on the current support of the conditional probs
                 BB_ = self.BB_reuse[mm]      # select previously computed matrices for the sampled position (i.e. pos_i, which is the m-th position of the current support)
                 Schur_complement_ = self.Schur_complement_reuse[mm]
 
@@ -309,8 +300,8 @@ if __name__ == "__main__":
         Slater2spOBDM
     )
 
-    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=4, potential='none', PBC=False, HF=False)
-    Nparticles = 2
+    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=10, potential='none', PBC=False, HF=False)
+    Nparticles = 5
     num_samples = 4
 
     SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
@@ -321,7 +312,7 @@ if __name__ == "__main__":
     # Check that sampling the Slater determinant gives the correct average density. 
     occ_vec = torch.zeros(Nsites)
     for s in range(num_samples):
-        occ_vec_, prob_sample = SDsampler.sample()
+        occ_vec_, prob_sample = SDsampler2.sample()
         print("=================================================================")
         print("amp_sample= %16.8f"%(np.sqrt(prob_sample)))
         print("naive sampler: amplitude= %16.8f"%(SDsampler1.psi_amplitude(occ_vec_)))

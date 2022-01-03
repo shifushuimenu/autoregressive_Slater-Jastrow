@@ -193,7 +193,7 @@ def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=3.0):
     for wi, config_i, (r,s) in zip(wl, states, from_to):
         if wi != 0: # there are unphysical connecting states whose matrix elements are set to zero
             if not (r==0 and s==0):
-                abspsi_conf_i = torch.sqrt(ansatz.prob(config_i)).item()
+                abspsi_conf_i = torch.sqrt(ansatz.prob(config_i)).item() # The repeated density estimation of very similar configurations is the bottleneck. 
                 ratio = (abspsi_conf_i / abs(psi_loc)) * np.sign(ratio_Slater(OBDM_loc, alpha=config[0], beta=config_i[0], r=r, s=s))
             else:
                 ratio = 1.0 # <alpha/psi> / <alpha/psi> = 1

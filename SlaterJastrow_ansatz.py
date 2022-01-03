@@ -19,6 +19,7 @@ from bitcoding import int2bin, bin2pos
 from utils import default_dtype_torch
 
 import sys
+from profilehooks import profile 
 
 __all__ = ['SlaterJastrow_ansatz']
 
@@ -165,7 +166,7 @@ class SlaterJastrow_ansatz(selfMADE):
 
         return x_out, prob_sample
 
-
+    @profile 
     def log_prob(self, samples):
         """
             Logarithm of the amplitude squared of the wave function on an 
