@@ -17,6 +17,13 @@
     neural network ? Is it possible to take the gradient wth respect to the inputs and then calculate 
     the change in the probability amplitude given the small change in the input (just one position) ?
 
+    Problem: (1) Calculate log_prob_MADE(config) in a single pass
+             (2) Calculate log_prob_Slater(config)
+             The sum of (1) and (2) is not correctly normalized. For a correct normalization all conditional 
+             probabilities coming from the Slater determinant are needed. 
+             How can the fermionic conditional probabilities of a similar state be reused ?
+    => Low-rank update of the conditional probabilities given those of a similar state.  
+
 [ ] verify speedup of advanced update of slater sampler  
 
 [ ] How can a Pfaffian be expanded in terms of Slater determinants ?
