@@ -141,7 +141,7 @@ class SlaterJastrow_ansatz(selfMADE):
                        assert(np.all(np.isclose(probs.numpy(), cond_prob_fermi)))
 
                 pos_one_hot = OneHotCategorical(probs).sample() 
-                k_i = torch.nonzero(pos_one_hot[0])[0][0]                         
+                k_i = torch.nonzero(pos_one_hot[0])[0][0].item()                         
 
                 prob_sample *= probs[0, k_i].item() # index 0: just one sample per batch
 
@@ -187,16 +187,18 @@ class SlaterJastrow_ansatz(selfMADE):
         samples = torch.as_tensor(samples)
         assert samples.shape[0] == 1 # just one sample per batch
 
-        # IMPROVE: Take care of batched input in the Pauli blocker. 
-        # Otherwise the result will be wrong. !!!!!!!!!!!!!!!!
+        # The conditional fermionic probabilities depend on the particle positions
+        # and need to be recalculated iteratively.
+        # Therefore batch processing is not possible. 
         pos = bin2pos(samples)[0]
 
-        # Adapt the Pauli blocker layer to particle positions in each sample.
+        # During density estimation the Pauli blocker layer is not needed. 
         with torch.no_grad():
-           for i in range(self.num_components-1):
-               self.net[-1].Pauli_blocker[i+1,:] = 0.0
-               self.net[-1].Pauli_blocker[i+1,:pos[i]+1] = torch.tensor([float('-inf')]) 
-               self.net[-1].Pauli_blocker[i+1,self.D-self.num_components+(i+1)+1:] = torch.tensor([float('-inf')])
+           self.net[-1].Pauli_blocker[:,:] = 0.0
+        ###    for i in range(self.num_components-1):
+        ###       self.net[-1].Pauli_blocker[i+1,:] = 0.0
+        ###       self.net[-1].Pauli_blocker[i+1,:pos[i]+1] = torch.tensor([float('-inf')]) 
+        ###       self.net[-1].Pauli_blocker[i+1,self.D-self.num_components+(i+1)+1:] = torch.tensor([float('-inf')])
 
         samples_unfold = occ_numbers_unfold(samples, duplicate_entries=False)
         # Flatten leading dimensions (This is necessary since there may a batch of samples 
@@ -216,7 +218,7 @@ class SlaterJastrow_ansatz(selfMADE):
             self.slater_sampler.reset_sampler()
             for k in range(0, self.num_components): 
                 x_hat_F[..., k*self.D:(k+1)*self.D] = self.slater_sampler.get_cond_prob(k)
-                self.slater_sampler.update_state(pos[k])
+                self.slater_sampler.update_state(pos[k].item())
             x_hat = x_hat_B * x_hat_F
             x_hat[..., 0:self.D] = x_hat_F[..., 0:self.D]  # cond_prob_fermi(i=0) is already contained as 'bias_zeroth_component' in MADE.
             for k in range(self.num_components):
