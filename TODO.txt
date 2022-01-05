@@ -33,4 +33,6 @@
 [ ] Use an ansatz with complex numbers 
 
 [ ] Use the Thouless theorem to find a non-redundant parametrization of any Slater determinant. 
-    There are 2*Np*(Ns-Np) parameters, or Np*(Ns-Np) complex parameters, rather than Ns*Ns parameters. 
+    There are 2*Np*(Ns-Np) parameters, or Np*(Ns-Np) complex parameters, rather than Ns*Ns parameters.
+
+ 
