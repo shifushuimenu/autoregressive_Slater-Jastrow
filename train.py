@@ -13,10 +13,10 @@ torch.manual_seed(seed)
 if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 
-max_iter = 100 # 1000 
+max_iter = 1000 # 1000 
 Nsites = 7 # 10
 Nparticles = 3 # 5
-Vint = 3.0
+Vint = 5.0
 
 
 def train(model, learning_rate, num_samples=10, use_cuda=False):
@@ -36,6 +36,7 @@ def train(model, learning_rate, num_samples=10, use_cuda=False):
         sample_list = np.zeros((num_samples, Nsites)) 
         with torch.no_grad():
             for i in range(num_samples):
+                print("sample nr =", i)
                 sample_unfolded, sample_prob = SJA.sample_unfolded()
                 sample_list[i] = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
 
@@ -75,27 +76,27 @@ def _update_curve(energy, precision):
         plt.legend(loc="upper right")
         plt.show()
 
-        MM = np.hstack((np.array(energy_list)[:,None], np.array(precision_list)[:,None]))
-        np.savetxt("energies_Ns{}Np{}V{}.dat".format(Nsites, Nparticles, Vint), MM)
+    MM = np.hstack((np.array(energy_list)[:,None], np.array(precision_list)[:,None]))
+    np.savetxt("energies_Ns{}Np{}V{}.dat".format(Nsites, Nparticles, Vint), MM)
 
-        # save converged ansatz
-        state = {
-            "energy": energy,
-            "precision": precision, 
-            "net": SJA.state_dict()
-        }
-        torch.save(state, 'state_Ns{}Np{}V{}.pt'.format(Nsites, Nparticles, Vint))
+    # save converged ansatz
+    state = {
+        "energy": energy,
+        "precision": precision, 
+        "net": SJA.state_dict()
+    }
+    torch.save(state, 'state_Ns{}Np{}V{}.pt'.format(Nsites, Nparticles, Vint))
 
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
 (_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, Nparticles=Nparticles, Vnnint=Vint)
 Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
-SJA = SlaterJastrow_ansatz(slater_sampler=None, num_components=Nparticles, D=Nsites, net_depth=2)
+SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)
 
 model = VMCKernel(energy_loc=tVmodel_loc, ansatz=SJA)
 
-E_exact = -3.3478904193465335
+E_exact =  -2.9774135797163597 #-3.3478904193465335
 
 t0 = time.time()
 for i, (energy, precision) in enumerate(train(model, learning_rate = 0.1, num_samples=100, use_cuda = use_cuda)):

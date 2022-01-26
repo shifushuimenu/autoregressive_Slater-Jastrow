@@ -152,7 +152,7 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
     return ( hop_from_to, I_prime, matrix_elem )
                
 #@profile
-def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=3.0):
+def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=5.0):
     '''
     Local energy of periodic 1D t-V model
     
@@ -189,7 +189,9 @@ def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=3.0):
     acc = 0.0
 
     assert len(from_to) == len(states) == len(wl)
+    print("before local OBDM")
     OBDM_loc = local_OBDM(alpha=config[0], sp_states = ansatz.slater_sampler.P_ortho.detach().numpy())
+    print("before density estimation of connecting states")
     for wi, config_i, (r,s) in zip(wl, states, from_to):
         if wi != 0: # there are unphysical connecting states whose matrix elements are set to zero
             if not (r==0 and s==0):

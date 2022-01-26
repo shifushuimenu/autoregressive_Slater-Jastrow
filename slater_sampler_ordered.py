@@ -183,7 +183,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.occ_vec[self.xmin:pos_i] = 0
         self.occ_vec[pos_i] = 1
         self.occ_positions[k] = pos_i
-
         if not self.naive_update:
             # Update Xinv based on previous Xinv using 
             # formula for inverse of a block matrix 
