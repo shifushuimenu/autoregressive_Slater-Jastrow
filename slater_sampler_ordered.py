@@ -84,7 +84,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         # helper variables for low-rank update
 
-    #@profile
+    @profile
     def get_cond_prob(self, k):
         r""" Conditional probability for the position x of the k-th particle.
 
@@ -172,7 +172,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         
         return self.occ_vec, prob_sample
 
-    #@profile
+    @profile
     def update_state(self, pos_i):
 
         assert type(pos_i) == int 
@@ -298,15 +298,27 @@ if __name__ == "__main__":
         prepare_test_system_zeroT,
         Slater2spOBDM
     )
+    from time import time 
 
-    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=10, potential='none', PBC=False, HF=False)
-    Nparticles = 5
-    num_samples = 4
+    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=400, potential='none', PBC=False, HF=False)
+    Nparticles = 200
+    num_samples = 2
 
     SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
     SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
     SDsampler2 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
 
+    t0 = time()
+    for _ in range(num_samples):
+        occ_vec, _ = SDsampler1.sample()
+    t1 = time()
+    print("naive, elapsed=", (t1-t0) )
+
+    t0 = time()
+    for _ in range(num_samples):
+        occ_vec, _ = SDsampler2.sample()
+    t1 = time()
+    print("block update, elapsed=", (t1-t0) )
 
     # Check that sampling the Slater determinant gives the correct average density. 
     occ_vec = torch.zeros(Nsites)
@@ -320,9 +332,9 @@ if __name__ == "__main__":
         occ_vec += occ_vec_
        
 
-    print("occ_vec=", occ_vec)    
+    #print("occ_vec=", occ_vec)    
     density = occ_vec / float(num_samples)
-    print("density=", density)
+    #print("density=", density)
 
     OBDM = Slater2spOBDM(eigvecs[:, 0:Nparticles])
 
@@ -333,4 +345,4 @@ if __name__ == "__main__":
     ax.plot(range(len(density)), density, label=r"av.density $\langle n \rangle$ (sampled)")
     ax.plot(range(len(np.diag(OBDM))), np.diag(OBDM), label=r"$\langle n \rangle$ (from OBDM)")
     plt.legend()
-    plt.show()
+    #plt.show()
