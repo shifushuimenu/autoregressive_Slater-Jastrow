@@ -9,6 +9,7 @@ from memory_layout import store_G_linearly, idx_linearly_stored_G, \
                           idx_linearly_stored_G_blockB1
 
 from profilehooks import profile
+from time import time 
 
 class SlaterDetSampler_ordered(torch.nn.Module):
     """
@@ -55,6 +56,11 @@ class SlaterDetSampler_ordered(torch.nn.Module):
            self.optimize_orbitals = True 
            self.P = nn.Parameter(torch.rand(self.D, self.N, requires_grad=True)) # leaf Variable, updated during SGD; columns are not (!) orthonormal 
            self.reortho_orbitals()  # orthonormalize columns 
+
+
+        # timing 
+        self.t_fetch_memory = 0.0
+        self.t_det = 0.0
 
         print("requires grad ?:", self.U.requires_grad)
         print("self.P_ortho.is_leaf =", self.P_ortho.is_leaf)
@@ -128,6 +134,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 occ_vec_tmp[i_k] = 0  # reset for next loop iteration
                 probs[i_k] = - torch.det(GG_num) / torch.det(GG_denom)
             else: # use block determinant formula
+                t0 = time()
                 Ksites_add = list(range(self.xmin, i_k+1))
                 occ_vec_add = torch.tensor([0] * (i_k - self.xmin) + [1])
                 NN = torch.diag(occ_vec_add[:])
@@ -155,7 +162,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                         B2 = idx_linearly_stored_G_blockB1(self.G_lin_mem, self.Ksites, [Ksites_add[-1]], "B1")  # self.G[np.ix_(self.Ksites, [Ksites_add[-1]])]
 
                     BBsubmat = torch.hstack((A2, B2))    
-
+                t1 = time()
+                self.t_fetch_memory += (t1-t0)
+                t0 = time()
                 DD = DDsubmat - NN  # self.G[np.ix_(Ksites_add, Ksites_add)] - NN  
                 self.BB = BBsubmat  # self.G[np.ix_(self.Ksites, Ksites_add)]      
                 if len(self.BB) == 0:
@@ -172,10 +181,13 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 if len(self.BB) == 0:
                    self.Schur_complement = DD - torch.tensor([0.0])
                 else:
-                   self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)
-                self.Schur_complement_reuse.append(self.Schur_complement)
-                print("Schur_complement.size=", self.Schur_complement.shape)
-                probs[i_k] = (-1) * torch.det(self.Schur_complement)
+                   # Note: self.Xinv is a symmetric matrix and DD is also symmetric.
+                   #       Thus, the Schur complement is also a symmetric matrix. 
+                   self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)                   
+                self.Schur_complement_reuse.append(self.Schur_complement)           
+                t1 = time()    
+                probs[i_k] = (-1) * torch.det(self.Schur_complement)                                                
+                self.t_det += (t1- t0)
 
         if not self.naive_update:
             assert len(self.BB_reuse) == len(self.Schur_complement_reuse) == (mm+1) # IMPROVE: remove this as well as the variable mm
@@ -237,6 +249,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 else:
                     NN = torch.tensor(occ_vec_add)
                 Ablock = self.G[np.ix_(Ksites_add, Ksites_add)] 
+                print("Ablock=", Ablock)
                 self.Xinv_new = torch.linalg.inv(Ablock - NN)  
                 self.Xinv = self.Xinv_new
             else:                
@@ -244,16 +257,18 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 occ_vec_add = [0] * (pos_i - self.xmin) + [1] # IMPROVE: pos_i is a tensor here, which is not necessary 
                 NN = torch.diag(torch.tensor(occ_vec_add[:]))
 
-                mm = pos_i - self.xmin  # the m-th position on the current support of the conditional probs
+                mm = pos_i - self.xmin       # the m-th position on the current support of the conditional probs
                 BB_ = self.BB_reuse[mm]      # select previously computed matrices for the sampled position (i.e. pos_i, which is the m-th position of the current support)
                 Schur_complement_ = self.Schur_complement_reuse[mm]
-
+                # Note: The Schur complement is a symmetric matrix, therefore Sinv is also symmetric. 
                 XinvB = torch.matmul(self.Xinv, BB_) 
                 Sinv = torch.linalg.inv(Schur_complement_)
                 Ablock = (self.Xinv + 
                     torch.matmul(torch.matmul(XinvB, Sinv), XinvB.transpose(-1,-2)))
                 Bblock = - torch.matmul(XinvB, Sinv)
-                Cblock = - torch.matmul(Sinv, XinvB.transpose(-1,-2))
+                # The following line is not needed due to symmetry since Cblock = Bblock.transpose(-1,-2).
+                # Cblock = - torch.matmul(Sinv, XinvB.transpose(-1,-2))
+                Cblock = Bblock.transpose(-1,-2)
                 Dblock = Sinv 
                 self.Xinv_new = torch.vstack(( torch.hstack((Ablock, Bblock)), torch.hstack((Cblock, Dblock)) ))  # np.block([[Ablock, Bblock], [Cblock, Dblock]])
                 self.Xinv = self.Xinv_new
@@ -365,7 +380,8 @@ if __name__ == "__main__":
     t1 = time()
     print("block update, elapsed=", (t1-t0) )
 
-
+    print("t_fetch_memory=", SDsampler2.t_fetch_memory)
+    print("t_det=", SDsampler2.t_det)
 
     # # Check that sampling the Slater determinant gives the correct average density. 
     # occ_vec = torch.zeros(Nsites)
