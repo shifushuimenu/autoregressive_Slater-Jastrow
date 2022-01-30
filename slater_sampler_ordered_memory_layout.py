@@ -96,7 +96,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         # helper variables for low-rank update
 
-    #@profile
+    @profile
     def get_cond_prob(self, k):
         r""" Conditional probability for the position x of the k-th particle.
 
@@ -114,6 +114,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         else:
             self.BB_reuse = []   # list of matrices to be reused later 
             self.Schur_complement_reuse = []  # list of matrices to be reused later 
+            self.CCXinvBB_reuse = [] # almost the same as Schur complement, except for D block 
 
         mm=-1
         for i_k in range(self.xmin, self.xmax):
@@ -135,18 +136,18 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 occ_vec_tmp[i_k] = 0  # reset for next loop iteration
                 probs[i_k] = - torch.det(GG_num) / torch.det(GG_denom)
             else: # use block determinant formula
+                t0 = time()
                 Ksites_add = list(range(self.xmin, i_k+1))
                 occ_vec_add = torch.tensor([0] * (i_k - self.xmin) + [1])
                 NN = torch.diag(occ_vec_add[:])
 
                 if mm==0:
-                    DDsubmat = idx_linearly_stored_G(self.G_lin_mem, Ksites_add, Ksites_add, "D") # self.G[np.ix_(Ksites_add, Ksites_add)] # 
+                    DDsubmat =  idx_linearly_stored_G(self.G_lin_mem, Ksites_add, Ksites_add, "D")     # self.G[np.ix_(Ksites_add, Ksites_add)]
                     if len(self.Ksites) == 0: # How to deal with empty arrays ? 
                         BBsubmat = torch.tensor([]) # self.G[np.ix_(self.Ksites, Ksites_add)]
                     else:
                         BBsubmat = idx_linearly_stored_G(self.G_lin_mem, self.Ksites, Ksites_add, "B")
                 else:
-                    t0 = time()
                     A1 = DDsubmat                    
                     B1 = idx_linearly_stored_G(self.G_lin_mem, Ksites_add[:-1], [Ksites_add[-1]], "B")    # self.G[np.ix_(Ksites_add[:-1], [Ksites_add[-1]])]
                     assert torch.isclose(B1, self.G[np.ix_(Ksites_add[:-1], [Ksites_add[-1]])]).all()
@@ -155,8 +156,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                     D1 = idx_linearly_stored_G(self.G_lin_mem, [Ksites_add[-1]], [Ksites_add[-1]], "D")   # self.G[Ksites_add[-1], Ksites_add[-1]][None, None]  # convert tensor element to 2d array 
                     assert torch.isclose(D1, self.G[Ksites_add[-1], Ksites_add[-1]][None, None]).all()
                     DDsubmat = torch.vstack((torch.hstack((A1, B1)), torch.hstack((C1, D1))))    
-                    t1 = time()
-                    self.t_fetch_memory += (t1 - t0)
 
                     A2 = BBsubmat 
                     if len(self.Ksites) == 0: # How to deal with empty arrays ? 
@@ -166,6 +165,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
                     BBsubmat = torch.hstack((A2, B2))    
 
+                t1 = time()
+                self.t_fetch_memory += (t1 - t0)
                 DD = DDsubmat - NN  # self.G[np.ix_(Ksites_add, Ksites_add)] - NN  
                 self.BB = BBsubmat  # self.G[np.ix_(self.Ksites, Ksites_add)]      
                 if len(self.BB) == 0:
@@ -180,7 +181,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 else:
                     pass # self.Xinv should have been updated by calling update_state(pos_i)
                 if len(self.BB) == 0:
-                   self.Schur_complement = DD - torch.tensor([0.0])
+                   self.CCXinvBB = torch.tensor([0.0])
+                   self.Schur_complement = DD - self.CCXinvBB                   
                 else:
                    # Note: self.Xinv is a symmetric matrix and DD is also symmetric.
                    #       Thus, the Schur complement is also a symmetric matrix.    
@@ -191,42 +193,27 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                    # self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)  
                    #####
 
-                   if mm==0:
-                      self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)
-                      print("mm==0: self.Schur_complement=", self.Schur_complement)
-                      print("mm==0: DD=", DD)
+                   if mm==0:                      
+                      self.CCXinvBB = torch.matmul(torch.matmul(CC, self.Xinv), self.BB)
+                      self.Schur_complement = DD - self.CCXinvBB
                       BtXinv = torch.matmul(CC, self.Xinv)
                    else:
-                      AA1 = self.Schur_complement_reuse[mm-1]   # don't double count the old D-block. AA1 comes with a minus sign
-                      print("AA1=", AA1)
-                      print("self.Xinv.shape=", self.Xinv.shape)
-                      print("self.BB=", self.BB)
-                      print("BtXinv=", BtXinv)
+                      AA1 = self.CCXinvBB_reuse[mm-1]         
                       BB1 = torch.matmul(BtXinv, self.BB[:,-1][:, None])
-                      print("BB1=", BB1)
-                      print("BB1.shape=", BB1.shape)
                       CC1 = BB1.transpose(-1,-2)
-                      print("CC1.shape=", CC1.shape)
-                      print("BtXinv.shape=", BtXinv.shape)
                       # update BtXinv = B.T * Xinv:
                       BtXinv = torch.vstack((BtXinv, torch.matmul(self.Xinv, self.BB[:,-1][:,None]).transpose(-1,-2)))
+                      ####BtXinv = torch.vstack((BtXinv, torch.matmul(CC[-1,:][None,:], self.Xinv)))
                       DD1 = torch.matmul(BtXinv[-1,:][None,:], self.BB[:,-1][:,None])
-                      self.Schur_complement = DD - torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1))))
-
-                      print("Schur complement ==================")
-                      print(torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1)))))
-                      print("----correct-------")
-                      print(torch.matmul(torch.matmul(CC, self.Xinv), self.BB))
-                      print("End Schur complement ==============")
-
+                      self.CCXinvBB = torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1))))
+                      self.Schur_complement = DD - self.CCXinvBB
                       assert torch.isclose(self.Schur_complement, DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)).all()
-
-
 
                    t1 = time()
                    self.t_matmul += (t1 - t0)                  
                    #print("self.Xinv.shape=", self.Xinv.shape, "self.BB.shape=", self.BB.shape)                 
-                self.Schur_complement_reuse.append(self.Schur_complement)           
+                self.Schur_complement_reuse.append(self.Schur_complement)   
+                self.CCXinvBB_reuse.append(self.CCXinvBB)       
                 t0 = time()
                 probs[i_k] = (-1) * torch.det(self.Schur_complement)      
                 t1 = time()                                              
@@ -402,8 +389,8 @@ if __name__ == "__main__":
 
     from time import time 
 
-    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=10, potential='none', PBC=False, HF=False)
-    Nparticles = 5
+    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=400, potential='none', PBC=False, HF=False)
+    Nparticles = 200
     num_samples = 2
 
     #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
@@ -438,17 +425,17 @@ if __name__ == "__main__":
     #     occ_vec += occ_vec_
        
 
-    #print("occ_vec=", occ_vec)    
-    density = occ_vec / float(num_samples)
-    #print("density=", density)
+    # #print("occ_vec=", occ_vec)    
+    # density = occ_vec / float(num_samples)
+    # #print("density=", density)
 
-    OBDM = Slater2spOBDM(eigvecs[:, 0:Nparticles])
+    # OBDM = Slater2spOBDM(eigvecs[:, 0:Nparticles])
 
-    f = plt.figure(figsize=(8,6))
-    ax = f.add_subplot(1,1,1)
-    ax.set_xlabel(r"site $i$")
-    ax.set_ylabel(r"av. density")
-    ax.plot(range(len(density)), density, label=r"av.density $\langle n \rangle$ (sampled)")
-    ax.plot(range(len(np.diag(OBDM))), np.diag(OBDM), label=r"$\langle n \rangle$ (from OBDM)")
-    plt.legend()
-    #plt.show()
+    # f = plt.figure(figsize=(8,6))
+    # ax = f.add_subplot(1,1,1)
+    # ax.set_xlabel(r"site $i$")
+    # ax.set_ylabel(r"av. density")
+    # ax.plot(range(len(density)), density, label=r"av.density $\langle n \rangle$ (sampled)")
+    # ax.plot(range(len(np.diag(OBDM))), np.diag(OBDM), label=r"$\langle n \rangle$ (from OBDM)")
+    # plt.legend()
+    # #plt.show()
