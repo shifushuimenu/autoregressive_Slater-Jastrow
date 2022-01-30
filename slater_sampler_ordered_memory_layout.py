@@ -96,7 +96,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         # helper variables for low-rank update
 
-    @profile
+    #@profile
     def get_cond_prob(self, k):
         r""" Conditional probability for the position x of the k-th particle.
 
@@ -184,8 +184,45 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 else:
                    # Note: self.Xinv is a symmetric matrix and DD is also symmetric.
                    #       Thus, the Schur complement is also a symmetric matrix.    
-                   t0 = time()                
-                   self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)   
+                   t0 = time()          
+
+                   # Iterative calculation of the Schur complement 
+                   ##### original expression 
+                   # self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)  
+                   #####
+
+                   if mm==0:
+                      self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)
+                      print("mm==0: self.Schur_complement=", self.Schur_complement)
+                      print("mm==0: DD=", DD)
+                      BtXinv = torch.matmul(CC, self.Xinv)
+                   else:
+                      AA1 = self.Schur_complement_reuse[mm-1]   # don't double count the old D-block. AA1 comes with a minus sign
+                      print("AA1=", AA1)
+                      print("self.Xinv.shape=", self.Xinv.shape)
+                      print("self.BB=", self.BB)
+                      print("BtXinv=", BtXinv)
+                      BB1 = torch.matmul(BtXinv, self.BB[:,-1][:, None])
+                      print("BB1=", BB1)
+                      print("BB1.shape=", BB1.shape)
+                      CC1 = BB1.transpose(-1,-2)
+                      print("CC1.shape=", CC1.shape)
+                      print("BtXinv.shape=", BtXinv.shape)
+                      # update BtXinv = B.T * Xinv:
+                      BtXinv = torch.vstack((BtXinv, torch.matmul(self.Xinv, self.BB[:,-1][:,None]).transpose(-1,-2)))
+                      DD1 = torch.matmul(BtXinv[-1,:][None,:], self.BB[:,-1][:,None])
+                      self.Schur_complement = DD - torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1))))
+
+                      print("Schur complement ==================")
+                      print(torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1)))))
+                      print("----correct-------")
+                      print(torch.matmul(torch.matmul(CC, self.Xinv), self.BB))
+                      print("End Schur complement ==============")
+
+                      assert torch.isclose(self.Schur_complement, DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)).all()
+
+
+
                    t1 = time()
                    self.t_matmul += (t1 - t0)                  
                    #print("self.Xinv.shape=", self.Xinv.shape, "self.BB.shape=", self.BB.shape)                 
@@ -233,7 +270,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         
         return self.occ_vec, prob_sample
 
-    @profile
+    #@profile
     def update_state(self, pos_i):
 
         assert type(pos_i) == int 
@@ -365,8 +402,8 @@ if __name__ == "__main__":
 
     from time import time 
 
-    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=400, potential='none', PBC=False, HF=False)
-    Nparticles = 200
+    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=10, potential='none', PBC=False, HF=False)
+    Nparticles = 5
     num_samples = 2
 
     #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
