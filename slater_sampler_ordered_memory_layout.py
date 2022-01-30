@@ -60,6 +60,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         # timing 
         self.t_fetch_memory = 0.0
+        self.t_matmul = 0.0
         self.t_det = 0.0
 
         print("requires grad ?:", self.U.requires_grad)
@@ -134,7 +135,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 occ_vec_tmp[i_k] = 0  # reset for next loop iteration
                 probs[i_k] = - torch.det(GG_num) / torch.det(GG_denom)
             else: # use block determinant formula
-                t0 = time()
                 Ksites_add = list(range(self.xmin, i_k+1))
                 occ_vec_add = torch.tensor([0] * (i_k - self.xmin) + [1])
                 NN = torch.diag(occ_vec_add[:])
@@ -146,6 +146,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                     else:
                         BBsubmat = idx_linearly_stored_G(self.G_lin_mem, self.Ksites, Ksites_add, "B")
                 else:
+                    t0 = time()
                     A1 = DDsubmat                    
                     B1 = idx_linearly_stored_G(self.G_lin_mem, Ksites_add[:-1], [Ksites_add[-1]], "B")    # self.G[np.ix_(Ksites_add[:-1], [Ksites_add[-1]])]
                     assert torch.isclose(B1, self.G[np.ix_(Ksites_add[:-1], [Ksites_add[-1]])]).all()
@@ -154,6 +155,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                     D1 = idx_linearly_stored_G(self.G_lin_mem, [Ksites_add[-1]], [Ksites_add[-1]], "D")   # self.G[Ksites_add[-1], Ksites_add[-1]][None, None]  # convert tensor element to 2d array 
                     assert torch.isclose(D1, self.G[Ksites_add[-1], Ksites_add[-1]][None, None]).all()
                     DDsubmat = torch.vstack((torch.hstack((A1, B1)), torch.hstack((C1, D1))))    
+                    t1 = time()
+                    self.t_fetch_memory += (t1 - t0)
 
                     A2 = BBsubmat 
                     if len(self.Ksites) == 0: # How to deal with empty arrays ? 
@@ -162,9 +165,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                         B2 = idx_linearly_stored_G_blockB1(self.G_lin_mem, self.Ksites, [Ksites_add[-1]], "B1")  # self.G[np.ix_(self.Ksites, [Ksites_add[-1]])]
 
                     BBsubmat = torch.hstack((A2, B2))    
-                t1 = time()
-                self.t_fetch_memory += (t1-t0)
-                t0 = time()
+
                 DD = DDsubmat - NN  # self.G[np.ix_(Ksites_add, Ksites_add)] - NN  
                 self.BB = BBsubmat  # self.G[np.ix_(self.Ksites, Ksites_add)]      
                 if len(self.BB) == 0:
@@ -182,12 +183,17 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                    self.Schur_complement = DD - torch.tensor([0.0])
                 else:
                    # Note: self.Xinv is a symmetric matrix and DD is also symmetric.
-                   #       Thus, the Schur complement is also a symmetric matrix. 
-                   self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)                   
+                   #       Thus, the Schur complement is also a symmetric matrix.    
+                   t0 = time()                
+                   self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)   
+                   t1 = time()
+                   self.t_matmul += (t1 - t0)                  
+                   #print("self.Xinv.shape=", self.Xinv.shape, "self.BB.shape=", self.BB.shape)                 
                 self.Schur_complement_reuse.append(self.Schur_complement)           
-                t1 = time()    
-                probs[i_k] = (-1) * torch.det(self.Schur_complement)                                                
-                self.t_det += (t1- t0)
+                t0 = time()
+                probs[i_k] = (-1) * torch.det(self.Schur_complement)      
+                t1 = time()                                              
+                self.t_det += (t1 - t0)
 
         if not self.naive_update:
             assert len(self.BB_reuse) == len(self.Schur_complement_reuse) == (mm+1) # IMPROVE: remove this as well as the variable mm
@@ -227,7 +233,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         
         return self.occ_vec, prob_sample
 
-    #@profile
+    @profile
     def update_state(self, pos_i):
 
         assert type(pos_i) == int 
@@ -249,7 +255,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 else:
                     NN = torch.tensor(occ_vec_add)
                 Ablock = self.G[np.ix_(Ksites_add, Ksites_add)] 
-                print("Ablock=", Ablock)
                 self.Xinv_new = torch.linalg.inv(Ablock - NN)  
                 self.Xinv = self.Xinv_new
             else:                
@@ -381,6 +386,7 @@ if __name__ == "__main__":
     print("block update, elapsed=", (t1-t0) )
 
     print("t_fetch_memory=", SDsampler2.t_fetch_memory)
+    print("t_matmul(Schur complement)=", SDsampler2.t_matmul)
     print("t_det=", SDsampler2.t_det)
 
     # # Check that sampling the Slater determinant gives the correct average density. 

@@ -1,3 +1,6 @@
+# TODO: - remove len() everywhere, enter `lr` and `lc` directly as function arguments 
+# 
+
 import numpy as np
 import torch 
 from profilehooks import profile
