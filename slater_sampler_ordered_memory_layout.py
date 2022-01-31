@@ -168,21 +168,21 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 t1 = time()
                 self.t_fetch_memory += (t1 - t0)
                 DD = DDsubmat - NN  # self.G[np.ix_(Ksites_add, Ksites_add)] - NN  
-                self.BB = BBsubmat  # self.G[np.ix_(self.Ksites, Ksites_add)]      
-                if len(self.BB) == 0:
-                   CC = self.BB
+                BB = BBsubmat  # self.G[np.ix_(self.Ksites, Ksites_add)]      
+                if len(BB) == 0:
+                   CC = BB
                 else:
-                   CC = self.BB.transpose(-1, -2)
-                self.BB_reuse.append(self.BB)
+                   CC = BB.transpose(-1, -2)
+                self.BB_reuse.append(BB)
                 if self.state_index==-1: # no sampling step so far 
                     # here self.Xinv = [] always. IMPROVE: This line is useless.
                     # self.Xinv = torch.linalg.inv(self.G[np.ix_(self.Ksites, self.Ksites)] - torch.diag(torch.tensor(self.occ_vec[0:self.xmin])))   
                     self.Xinv = torch.tensor([])
                 else:
                     pass # self.Xinv should have been updated by calling update_state(pos_i)
-                if len(self.BB) == 0:
-                   self.CCXinvBB = torch.tensor([0.0])
-                   self.Schur_complement = DD - self.CCXinvBB                   
+                if len(BB) == 0:
+                   CCXinvBB = torch.tensor([0.0])
+                   Schur_complement = DD - torch.tensor([0.0])                 
                 else:
                    # Note: self.Xinv is a symmetric matrix and DD is also symmetric.
                    #       Thus, the Schur complement is also a symmetric matrix.    
@@ -194,28 +194,28 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                    #####
 
                    if mm==0:                      
-                      self.CCXinvBB = torch.matmul(torch.matmul(CC, self.Xinv), self.BB)
-                      self.Schur_complement = DD - self.CCXinvBB
+                      CCXinvBB = torch.matmul(torch.matmul(CC, self.Xinv), BB)
+                      Schur_complement = DD - CCXinvBB                      
                       BtXinv = torch.matmul(CC, self.Xinv)
                    else:
                       AA1 = self.CCXinvBB_reuse[mm-1]         
-                      BB1 = torch.matmul(BtXinv, self.BB[:,-1][:, None])
+                      BB1 = torch.matmul(BtXinv, BB[:,-1][:, None])
                       CC1 = BB1.transpose(-1,-2)
                       # update BtXinv = B.T * Xinv:
-                      BtXinv = torch.vstack((BtXinv, torch.matmul(self.Xinv, self.BB[:,-1][:,None]).transpose(-1,-2)))
+                      BtXinv = torch.vstack((BtXinv, torch.matmul(self.Xinv, BB[:,-1][:,None]).transpose(-1,-2)))
                       ####BtXinv = torch.vstack((BtXinv, torch.matmul(CC[-1,:][None,:], self.Xinv)))
-                      DD1 = torch.matmul(BtXinv[-1,:][None,:], self.BB[:,-1][:,None])
-                      self.CCXinvBB = torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1))))
-                      self.Schur_complement = DD - self.CCXinvBB
-                      assert torch.isclose(self.Schur_complement, DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)).all()
+                      DD1 = torch.matmul(BtXinv[-1,:][None,:], BB[:,-1][:,None])
+                      CCXinvBB = torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1))))
+                      Schur_complement = DD - CCXinvBB                      
+                      assert torch.isclose(Schur_complement, DD - torch.matmul(torch.matmul(CC, self.Xinv), BB)).all()
 
                    t1 = time()
                    self.t_matmul += (t1 - t0)                  
                    #print("self.Xinv.shape=", self.Xinv.shape, "self.BB.shape=", self.BB.shape)                 
-                self.Schur_complement_reuse.append(self.Schur_complement)   
-                self.CCXinvBB_reuse.append(self.CCXinvBB)       
+                self.Schur_complement_reuse.append(Schur_complement)   
+                self.CCXinvBB_reuse.append(CCXinvBB)       
                 t0 = time()
-                probs[i_k] = (-1) * torch.det(self.Schur_complement)      
+                probs[i_k] = (-1) * torch.det(Schur_complement)      
                 t1 = time()                                              
                 self.t_det += (t1 - t0)
 
@@ -279,8 +279,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 else:
                     NN = torch.tensor(occ_vec_add)
                 Ablock = self.G[np.ix_(Ksites_add, Ksites_add)] 
-                self.Xinv_new = torch.linalg.inv(Ablock - NN)  
-                self.Xinv = self.Xinv_new
+                Xinv_new = torch.linalg.inv(Ablock - NN)  
+                self.Xinv = Xinv_new
             else:                
                 Ksites_add = list(range(self.xmin, pos_i+1))  # put the sampled pos_i instead of loop variable i_k
                 occ_vec_add = [0] * (pos_i - self.xmin) + [1] # IMPROVE: pos_i is a tensor here, which is not necessary 
@@ -299,8 +299,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 # Cblock = - torch.matmul(Sinv, XinvB.transpose(-1,-2))
                 Cblock = Bblock.transpose(-1,-2)
                 Dblock = Sinv 
-                self.Xinv_new = torch.vstack(( torch.hstack((Ablock, Bblock)), torch.hstack((Cblock, Dblock)) ))  # np.block([[Ablock, Bblock], [Cblock, Dblock]])
-                self.Xinv = self.Xinv_new
+                Xinv_new = torch.vstack(( torch.hstack((Ablock, Bblock)), torch.hstack((Cblock, Dblock)) ))  # np.block([[Ablock, Bblock], [Cblock, Dblock]])
+                self.Xinv = Xinv_new
 
 
         self.state_index += 1 
@@ -389,13 +389,15 @@ if __name__ == "__main__":
 
     from time import time 
 
-    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=400, potential='none', PBC=False, HF=False)
-    Nparticles = 200
-    num_samples = 2
+    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=20, potential='none', PBC=False, HF=False)
+    Nparticles = 10
+    num_samples = 1000
 
     #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
     #SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
     SDsampler2 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
+
+    print("Nsites=", Nsites, "Nparticles=", Nparticles, "num_samples=", num_samples)
 
     # t0 = time()
     # for _ in range(num_samples):
