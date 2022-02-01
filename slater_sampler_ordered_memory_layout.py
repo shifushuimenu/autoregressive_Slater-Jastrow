@@ -1,3 +1,9 @@
+# TODO: - replace hstack and vstack by directly writing to preallocated memory 
+#         For this the sizes of the blocks need to be known explicitly. 
+#       - Rather than calculating the determinant of the Schur complement use the formula
+#         for the determinant of a block matrix. 
+#  
+
 
 import torch
 import torch.nn as nn
@@ -60,6 +66,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         # timing 
         self.t_fetch_memory = 0.0
+        self.t_matmul = 0.0
         self.t_det = 0.0
 
         print("requires grad ?:", self.U.requires_grad)
@@ -87,6 +94,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.occ_positions[:] = -10^6 # set to invalid values 
         # list of particle positions 
         self.Ksites = []
+        self.len_Ksites = 0
         self.xmin = 0
         self.xmax = self.D - self.N + 1
 
@@ -113,6 +121,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         else:
             self.BB_reuse = []   # list of matrices to be reused later 
             self.Schur_complement_reuse = []  # list of matrices to be reused later 
+            self.CCXinvBB_reuse = [] # almost the same as Schur complement, except for D block 
 
         mm=-1
         for i_k in range(self.xmin, self.xmax):
@@ -136,58 +145,96 @@ class SlaterDetSampler_ordered(torch.nn.Module):
             else: # use block determinant formula
                 t0 = time()
                 Ksites_add = list(range(self.xmin, i_k+1))
+                len_Ksites_add = i_k+1 - self.xmin
                 occ_vec_add = torch.tensor([0] * (i_k - self.xmin) + [1])
                 NN = torch.diag(occ_vec_add[:])
 
                 if mm==0:
-                    DDsubmat = idx_linearly_stored_G(self.G_lin_mem, Ksites_add, Ksites_add, "D") # self.G[np.ix_(Ksites_add, Ksites_add)] # 
-                    if len(self.Ksites) == 0: # How to deal with empty arrays ? 
+                    DDsubmat =  idx_linearly_stored_G(self.G_lin_mem, Ksites_add, Ksites_add, chunk="D", 
+                                    lr=len_Ksites_add, lc=len_Ksites_add) # self.G[np.ix_(Ksites_add, Ksites_add)]
+                    assert torch.isclose(DDsubmat, self.G[np.ix_(Ksites_add, Ksites_add)]).all()    
+                    if self.len_Ksites == 0: # How to deal with empty arrays ? 
                         BBsubmat = torch.tensor([]) # self.G[np.ix_(self.Ksites, Ksites_add)]
                     else:
-                        BBsubmat = idx_linearly_stored_G(self.G_lin_mem, self.Ksites, Ksites_add, "B")
+                        BBsubmat = idx_linearly_stored_G(self.G_lin_mem, self.Ksites, Ksites_add, chunk="B", 
+                                    lr=self.len_Ksites, lc=len_Ksites_add)
                 else:
                     A1 = DDsubmat                    
-                    B1 = idx_linearly_stored_G(self.G_lin_mem, Ksites_add[:-1], [Ksites_add[-1]], "B")    # self.G[np.ix_(Ksites_add[:-1], [Ksites_add[-1]])]
+                    B1 = idx_linearly_stored_G(self.G_lin_mem, Ksites_add[:-1], [Ksites_add[-1]], chunk="B",
+                                    lr=len_Ksites_add-1, lc=1)    # self.G[np.ix_(Ksites_add[:-1], [Ksites_add[-1]])]
                     assert torch.isclose(B1, self.G[np.ix_(Ksites_add[:-1], [Ksites_add[-1]])]).all()
-                    C1 = idx_linearly_stored_G(self.G_lin_mem, [Ksites_add[-1]], Ksites_add[:-1], "C")    # self.G[np.ix_([Ksites_add[-1]], Ksites_add[:-1])]
+                    C1 = idx_linearly_stored_G(self.G_lin_mem, [Ksites_add[-1]], Ksites_add[:-1], chunk="C",
+                                    lr=1, lc=len_Ksites_add-1)    # self.G[np.ix_([Ksites_add[-1]], Ksites_add[:-1])]
                     assert torch.isclose(C1, self.G[np.ix_([Ksites_add[-1]], Ksites_add[:-1])]).all()
-                    D1 = idx_linearly_stored_G(self.G_lin_mem, [Ksites_add[-1]], [Ksites_add[-1]], "D")   # self.G[Ksites_add[-1], Ksites_add[-1]][None, None]  # convert tensor element to 2d array 
+                    D1 = idx_linearly_stored_G(self.G_lin_mem, [Ksites_add[-1]], [Ksites_add[-1]], chunk="D",
+                                    lr=1, lc=1)   # self.G[Ksites_add[-1], Ksites_add[-1]][None, None]  # convert tensor element to 2d array 
                     assert torch.isclose(D1, self.G[Ksites_add[-1], Ksites_add[-1]][None, None]).all()
                     DDsubmat = torch.vstack((torch.hstack((A1, B1)), torch.hstack((C1, D1))))    
 
                     A2 = BBsubmat 
-                    if len(self.Ksites) == 0: # How to deal with empty arrays ? 
+                    if self.len_Ksites == 0: # How to deal with empty arrays ? 
                         B2 = torch.tensor([])
                     else: 
-                        B2 = idx_linearly_stored_G_blockB1(self.G_lin_mem, self.Ksites, [Ksites_add[-1]], "B1")  # self.G[np.ix_(self.Ksites, [Ksites_add[-1]])]
-
+                        B2 = idx_linearly_stored_G_blockB1(self.G_lin_mem, self.Ksites, [Ksites_add[-1]], chunk="B1",
+                                    lr=self.len_Ksites, lc=1)  # self.G[np.ix_(self.Ksites, [Ksites_add[-1]])]
                     BBsubmat = torch.hstack((A2, B2))    
+
                 t1 = time()
-                self.t_fetch_memory += (t1-t0)
-                t0 = time()
+                self.t_fetch_memory += (t1 - t0)                    
+
                 DD = DDsubmat - NN  # self.G[np.ix_(Ksites_add, Ksites_add)] - NN  
-                self.BB = BBsubmat  # self.G[np.ix_(self.Ksites, Ksites_add)]      
-                if len(self.BB) == 0:
-                   CC = self.BB
+                print("NN=", NN)
+                BB = BBsubmat  # self.G[np.ix_(self.Ksites, Ksites_add)]      
+                if self.len_Ksites == 0:                   
+                   CC = BB
                 else:
-                   CC = self.BB.transpose(-1, -2)
-                self.BB_reuse.append(self.BB)
+                   CC = BB.transpose(-1, -2)
+                self.BB_reuse.append(BB)
                 if self.state_index==-1: # no sampling step so far 
                     # here self.Xinv = [] always. IMPROVE: This line is useless.
                     # self.Xinv = torch.linalg.inv(self.G[np.ix_(self.Ksites, self.Ksites)] - torch.diag(torch.tensor(self.occ_vec[0:self.xmin])))   
                     self.Xinv = torch.tensor([])
                 else:
                     pass # self.Xinv should have been updated by calling update_state(pos_i)
-                if len(self.BB) == 0:
-                   self.Schur_complement = DD - torch.tensor([0.0])
+                if self.len_Ksites == 0:                   
+                   CCXinvBB = torch.tensor([0.0])
+                   Schur_complement = DD - torch.tensor([0.0])                 
                 else:
                    # Note: self.Xinv is a symmetric matrix and DD is also symmetric.
-                   #       Thus, the Schur complement is also a symmetric matrix. 
-                   self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)                   
-                self.Schur_complement_reuse.append(self.Schur_complement)           
-                t1 = time()    
-                probs[i_k] = (-1) * torch.det(self.Schur_complement)                                                
-                self.t_det += (t1- t0)
+                   #       Thus, the Schur complement is also a symmetric matrix.    
+                   t0 = time()          
+
+                   # Iterative calculation of the Schur complement 
+                   ##### original expression 
+                   # self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)  
+                   #####
+
+                   if mm==0:     
+                      BtXinv = torch.matmul(CC, self.Xinv)                  
+                      CCXinvBB = torch.matmul(BtXinv, BB)
+                      Schur_complement = DD - CCXinvBB                      
+                      
+                   else:
+                      AA1 = self.CCXinvBB_reuse[mm-1]         
+                      BB1 = torch.matmul(BtXinv, BB[:,-1][:, None])
+                      CC1 = BB1.transpose(-1,-2)
+                      # update BtXinv = B.T * Xinv:
+                      BtXinv = torch.vstack((BtXinv, torch.matmul(self.Xinv, BB[:,-1][:,None]).transpose(-1,-2)))
+                      ####BtXinv = torch.vstack((BtXinv, torch.matmul(CC[-1,:][None,:], self.Xinv)))
+                      DD1 = torch.matmul(BtXinv[-1,:][None,:], BB[:,-1][:,None])
+                      CCXinvBB = torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1))))
+                      Schur_complement = DD - CCXinvBB                      
+                      assert torch.isclose(Schur_complement, DD - torch.matmul(torch.matmul(CC, self.Xinv), BB)).all()
+
+                   t1 = time()
+                   self.t_matmul += (t1 - t0)                  
+                   #print("self.Xinv.shape=", self.Xinv.shape, "self.BB.shape=", self.BB.shape)                                     
+                self.Schur_complement_reuse.append(Schur_complement)   
+                self.CCXinvBB_reuse.append(CCXinvBB)       
+                t0 = time()                
+                probs[i_k] = (-1) * torch.det(Schur_complement)                                                                   
+                t1 = time()                 
+                self.t_det += (t1 - t0)
 
         if not self.naive_update:
             assert len(self.BB_reuse) == len(self.Schur_complement_reuse) == (mm+1) # IMPROVE: remove this as well as the variable mm
@@ -235,6 +282,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         k = self.state_index + 1
 
         self.Ksites.extend(list(range(self.xmin, pos_i+1)))
+        self.len_Ksites += (pos_i+1 - self.xmin)
         self.occ_vec[self.xmin:pos_i] = 0
         self.occ_vec[pos_i] = 1
         self.occ_positions[k] = pos_i
@@ -244,14 +292,13 @@ class SlaterDetSampler_ordered(torch.nn.Module):
             if self.state_index == -1: # first update step 
                 Ksites_add = list(range(0, pos_i+1))
                 occ_vec_add = [0] * pos_i + [1]
-                if len(occ_vec_add) > 1: # np.diag() does not work for one-element arrays 
+                if pos_i > 0: # np.diag() does not work for one-element arrays 
                     NN = torch.diag(torch.tensor(occ_vec_add[:]))
                 else:
                     NN = torch.tensor(occ_vec_add)
                 Ablock = self.G[np.ix_(Ksites_add, Ksites_add)] 
-                print("Ablock=", Ablock)
-                self.Xinv_new = torch.linalg.inv(Ablock - NN)  
-                self.Xinv = self.Xinv_new
+                Xinv_new = torch.linalg.inv(Ablock - NN)  
+                self.Xinv = Xinv_new
             else:                
                 Ksites_add = list(range(self.xmin, pos_i+1))  # put the sampled pos_i instead of loop variable i_k
                 occ_vec_add = [0] * (pos_i - self.xmin) + [1] # IMPROVE: pos_i is a tensor here, which is not necessary 
@@ -270,8 +317,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 # Cblock = - torch.matmul(Sinv, XinvB.transpose(-1,-2))
                 Cblock = Bblock.transpose(-1,-2)
                 Dblock = Sinv 
-                self.Xinv_new = torch.vstack(( torch.hstack((Ablock, Bblock)), torch.hstack((Cblock, Dblock)) ))  # np.block([[Ablock, Bblock], [Cblock, Dblock]])
-                self.Xinv = self.Xinv_new
+                Xinv_new = torch.vstack(( torch.hstack((Ablock, Bblock)), torch.hstack((Cblock, Dblock)) ))  # np.block([[Ablock, Bblock], [Cblock, Dblock]])
+                self.Xinv = Xinv_new
 
 
         self.state_index += 1 
@@ -360,13 +407,15 @@ if __name__ == "__main__":
 
     from time import time 
 
-    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=400, potential='none', PBC=False, HF=False)
-    Nparticles = 200
+    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=1000, potential='none', PBC=False, HF=False)
+    Nparticles = 100
     num_samples = 2
 
     #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
     #SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
     SDsampler2 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
+
+    print("Nsites=", Nsites, "Nparticles=", Nparticles, "num_samples=", num_samples)
 
     # t0 = time()
     # for _ in range(num_samples):
@@ -381,6 +430,7 @@ if __name__ == "__main__":
     print("block update, elapsed=", (t1-t0) )
 
     print("t_fetch_memory=", SDsampler2.t_fetch_memory)
+    print("t_matmul(Schur complement)=", SDsampler2.t_matmul)
     print("t_det=", SDsampler2.t_det)
 
     # # Check that sampling the Slater determinant gives the correct average density. 
@@ -395,17 +445,17 @@ if __name__ == "__main__":
     #     occ_vec += occ_vec_
        
 
-    #print("occ_vec=", occ_vec)    
-    density = occ_vec / float(num_samples)
-    #print("density=", density)
+    # #print("occ_vec=", occ_vec)    
+    # density = occ_vec / float(num_samples)
+    # #print("density=", density)
 
-    OBDM = Slater2spOBDM(eigvecs[:, 0:Nparticles])
+    # OBDM = Slater2spOBDM(eigvecs[:, 0:Nparticles])
 
-    f = plt.figure(figsize=(8,6))
-    ax = f.add_subplot(1,1,1)
-    ax.set_xlabel(r"site $i$")
-    ax.set_ylabel(r"av. density")
-    ax.plot(range(len(density)), density, label=r"av.density $\langle n \rangle$ (sampled)")
-    ax.plot(range(len(np.diag(OBDM))), np.diag(OBDM), label=r"$\langle n \rangle$ (from OBDM)")
-    plt.legend()
-    #plt.show()
+    # f = plt.figure(figsize=(8,6))
+    # ax = f.add_subplot(1,1,1)
+    # ax.set_xlabel(r"site $i$")
+    # ax.set_ylabel(r"av. density")
+    # ax.plot(range(len(density)), density, label=r"av.density $\langle n \rangle$ (sampled)")
+    # ax.plot(range(len(np.diag(OBDM))), np.diag(OBDM), label=r"$\langle n \rangle$ (from OBDM)")
+    # plt.legend()
+    # #plt.show()
