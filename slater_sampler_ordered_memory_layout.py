@@ -14,6 +14,8 @@ from bitcoding import bin2pos, int2bin
 from memory_layout import store_G_linearly, idx_linearly_stored_G, \
                           idx_linearly_stored_G_blockB1
 
+from block_update import block_update_inverse 
+
 from profilehooks import profile
 from time import time 
 
@@ -183,7 +185,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 self.t_fetch_memory += (t1 - t0)                    
 
                 DD = DDsubmat - NN  # self.G[np.ix_(Ksites_add, Ksites_add)] - NN  
-                print("NN=", NN)
                 BB = BBsubmat  # self.G[np.ix_(self.Ksites, Ksites_add)]      
                 if self.len_Ksites == 0:                   
                    CC = BB
@@ -198,21 +199,31 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                     pass # self.Xinv should have been updated by calling update_state(pos_i)
                 if self.len_Ksites == 0:                   
                    CCXinvBB = torch.tensor([0.0])
-                   Schur_complement = DD - torch.tensor([0.0])                 
+                   Schur_complement = DD - torch.tensor([0.0]) 
+                   detSC = torch.det(Schur_complement) # scalar                 
                 else:
                    # Note: self.Xinv is a symmetric matrix and DD is also symmetric.
                    #       Thus, the Schur complement is also a symmetric matrix.    
                    t0 = time()          
 
+                   # ------------------------------------------------------------------------------
                    # Iterative calculation of the Schur complement 
                    ##### original expression 
                    # self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)  
                    #####
-
                    if mm==0:     
                       BtXinv = torch.matmul(CC, self.Xinv)                  
                       CCXinvBB = torch.matmul(BtXinv, BB)
-                      Schur_complement = DD - CCXinvBB                      
+                      Schur_complement = DD - CCXinvBB    
+                      print("m==0, Schur_complement=", Schur_complement)
+                      detSC = torch.det(Schur_complement) # scalar 
+
+                      # The following is needed for iterative calculation of the determinant of  
+                      # the Schur complement 
+                      # `SCm_inv` is the inverse of the "modified Schur complement" where modified                       
+                      # means that the lower right element of the Schur complement matrix is changed. 
+                      # `SCm_inv` is updated iteratively using the formula for the inverse of a block matrix. 
+                      SCm_inv = 1.0 / (Schur_complement + 1) #torch.linalg.inv(Schur_complememt + 1)
                       
                    else:
                       AA1 = self.CCXinvBB_reuse[mm-1]         
@@ -226,13 +237,34 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                       Schur_complement = DD - CCXinvBB                      
                       assert torch.isclose(Schur_complement, DD - torch.matmul(torch.matmul(CC, self.Xinv), BB)).all()
 
+                      ### original formula: determinant of Schur complement ("SC")
+                      ### detSC = torch.det(Schur_complement)
+                      ###
+
+                      # calculate last element of SC_inv (inverse of the Schur complement) from SCm_inv (inverse of 
+                      # modified Schur complement, which is being updated)
+                      SC_inv_el =  SCm_inv[-1,-1]/(1.0 - SCm_inv[-1,-1])
+                      detSC = detSC * (1.0 + SC_inv_el) \
+                           * (Schur_complement[-1,-1] - torch.matmul(Schur_complement[-1,0:-1][None,:], \
+                                                             torch.matmul(SCm_inv, Schur_complement[0:-1,-1][:,None])))
+                      assert torch.isclose(detSC, torch.det(Schur_complement))
+
+                      # for next step of iterative calculation of the determinant of the Schur complement 
+                      assert DD1.shape[0] == DD1.shape[1] == 1
+                      SCm_inv = block_update_inverse(SCm_inv, Schur_complement[0:-1,-1][:,None], \
+                                Schur_complement[-1,0:-1][None,:], Schur_complement[-1,-1][None,None] + 1.0)
+                      temp = Schur_complement[...]
+                      temp[-1,-1] = temp[-1,-1] + 1
+                
+                   # ------------------------------------------------------------------------------
                    t1 = time()
                    self.t_matmul += (t1 - t0)                  
                    #print("self.Xinv.shape=", self.Xinv.shape, "self.BB.shape=", self.BB.shape)                                     
                 self.Schur_complement_reuse.append(Schur_complement)   
                 self.CCXinvBB_reuse.append(CCXinvBB)       
+
                 t0 = time()                
-                probs[i_k] = (-1) * torch.det(Schur_complement)                                                                   
+                probs[i_k] = (-1) * detSC                                      
                 t1 = time()                 
                 self.t_det += (t1 - t0)
 
@@ -310,6 +342,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 # Note: The Schur complement is a symmetric matrix, therefore Sinv is also symmetric. 
                 XinvB = torch.matmul(self.Xinv, BB_) 
                 Sinv = torch.linalg.inv(Schur_complement_)
+                # IMPROVE: isn't this an outer product ? 
                 Ablock = (self.Xinv + 
                     torch.matmul(torch.matmul(XinvB, Sinv), XinvB.transpose(-1,-2)))
                 Bblock = - torch.matmul(XinvB, Sinv)
@@ -407,12 +440,12 @@ if __name__ == "__main__":
 
     from time import time 
 
-    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=1000, potential='none', PBC=False, HF=False)
-    Nparticles = 100
+    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=10, potential='none', PBC=False, HF=False)
+    Nparticles = 5
     num_samples = 2
 
     #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
-    #SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
+    SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
     SDsampler2 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
 
     print("Nsites=", Nsites, "Nparticles=", Nparticles, "num_samples=", num_samples)
@@ -433,16 +466,16 @@ if __name__ == "__main__":
     print("t_matmul(Schur complement)=", SDsampler2.t_matmul)
     print("t_det=", SDsampler2.t_det)
 
-    # # Check that sampling the Slater determinant gives the correct average density. 
-    # occ_vec = torch.zeros(Nsites)
-    # for s in range(num_samples):
-    #     occ_vec_, prob_sample = SDsampler2.sample()
-    #     print("=================================================================")
-    #     print("amp_sample= %16.8f"%(np.sqrt(prob_sample)))
-    #     print("naive sampler: amplitude= %16.8f"%(SDsampler1.psi_amplitude(occ_vec_)))
-    #     print("block update sampler: amplitude=", SDsampler2.psi_amplitude(occ_vec_))
-    #     print("=================================================================")
-    #     occ_vec += occ_vec_
+    # Check that sampling the Slater determinant gives the correct average density. 
+    occ_vec = torch.zeros(Nsites)
+    for s in range(num_samples):
+        occ_vec_, prob_sample = SDsampler2.sample()
+        print("=================================================================")
+        print("amp_sample= %16.8f"%(np.sqrt(prob_sample)))
+        print("naive sampler: amplitude= %16.8f"%(SDsampler1.psi_amplitude(occ_vec_)))
+        print("block update sampler: amplitude=", SDsampler2.psi_amplitude(occ_vec_))
+        print("=================================================================")
+        occ_vec += occ_vec_
        
 
     # #print("occ_vec=", occ_vec)    
