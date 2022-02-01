@@ -215,7 +215,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                       BtXinv = torch.matmul(CC, self.Xinv)                  
                       CCXinvBB = torch.matmul(BtXinv, BB)
                       Schur_complement = DD - CCXinvBB    
-                      print("m==0, Schur_complement=", Schur_complement)
                       detSC = torch.det(Schur_complement) # scalar 
 
                       # The following is needed for iterative calculation of the determinant of  
@@ -247,15 +246,13 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                       detSC = detSC * (1.0 + SC_inv_el) \
                            * (Schur_complement[-1,-1] - torch.matmul(Schur_complement[-1,0:-1][None,:], \
                                                              torch.matmul(SCm_inv, Schur_complement[0:-1,-1][:,None])))
+
                       assert torch.isclose(detSC, torch.det(Schur_complement))
 
                       # for next step of iterative calculation of the determinant of the Schur complement 
                       assert DD1.shape[0] == DD1.shape[1] == 1
                       SCm_inv = block_update_inverse(SCm_inv, Schur_complement[0:-1,-1][:,None], \
-                                Schur_complement[-1,0:-1][None,:], Schur_complement[-1,-1][None,None] + 1.0)
-                      temp = Schur_complement[...]
-                      temp[-1,-1] = temp[-1,-1] + 1
-                
+                                Schur_complement[-1,0:-1][None,:], Schur_complement[-1,-1][None,None] + 1.0)                 
                    # ------------------------------------------------------------------------------
                    t1 = time()
                    self.t_matmul += (t1 - t0)                  
@@ -440,12 +437,12 @@ if __name__ == "__main__":
 
     from time import time 
 
-    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=10, potential='none', PBC=False, HF=False)
-    Nparticles = 5
+    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=400, potential='none', PBC=False, HF=False)
+    Nparticles = 200
     num_samples = 2
 
     #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
-    SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
+    #SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
     SDsampler2 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
 
     print("Nsites=", Nsites, "Nparticles=", Nparticles, "num_samples=", num_samples)
@@ -466,16 +463,16 @@ if __name__ == "__main__":
     print("t_matmul(Schur complement)=", SDsampler2.t_matmul)
     print("t_det=", SDsampler2.t_det)
 
-    # Check that sampling the Slater determinant gives the correct average density. 
-    occ_vec = torch.zeros(Nsites)
-    for s in range(num_samples):
-        occ_vec_, prob_sample = SDsampler2.sample()
-        print("=================================================================")
-        print("amp_sample= %16.8f"%(np.sqrt(prob_sample)))
-        print("naive sampler: amplitude= %16.8f"%(SDsampler1.psi_amplitude(occ_vec_)))
-        print("block update sampler: amplitude=", SDsampler2.psi_amplitude(occ_vec_))
-        print("=================================================================")
-        occ_vec += occ_vec_
+    # # Check that sampling the Slater determinant gives the correct average density. 
+    # occ_vec = torch.zeros(Nsites)
+    # for s in range(num_samples):
+    #     occ_vec_, prob_sample = SDsampler2.sample()
+    #     print("=================================================================")
+    #     print("amp_sample= %16.8f"%(np.sqrt(prob_sample)))
+    #     print("naive sampler: amplitude= %16.8f"%(SDsampler1.psi_amplitude(occ_vec_)))
+    #     print("block update sampler: amplitude=", SDsampler2.psi_amplitude(occ_vec_))
+    #     print("=================================================================")
+    #     occ_vec += occ_vec_
        
 
     # #print("occ_vec=", occ_vec)    
