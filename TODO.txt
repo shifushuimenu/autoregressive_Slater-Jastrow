@@ -7,7 +7,7 @@
 
 [ ] speed up bitcoding using bitarray.py  
 
-[ ] stochastic reconfiguration of LBFGS instead of stochastic gradient descent optimization 
+[ ] stochastic reconfiguration or LBFGS instead of stochastic gradient descent optimization 
 
 [ ] argparse 
 
@@ -22,7 +22,10 @@
              The sum of (1) and (2) is not correctly normalized. For a correct normalization all conditional 
              probabilities coming from the Slater determinant are needed. 
              How can the fermionic conditional probabilities of a similar state be reused ?
-    => Low-rank update of the conditional probabilities given those of a similar state.  
+     => Low-rank update of the conditional probabilities given those of a similar state.  (seems very complicated)
+    Solution: While sampling a configuration, compute the probabilities of all states reachable by the 
+              kinetic operator along the way. These are O(Nsites) states. (Note that the hopping matrix element could 
+              be bond-dependent.) Output: (sample, sample_prob, local_kinetic_energy) 
 
 [ ] verify speedup of advanced update of slater sampler  
 
@@ -33,4 +36,8 @@
 [ ] Use an ansatz with complex numbers 
 
 [ ] Use the Thouless theorem to find a non-redundant parametrization of any Slater determinant. 
-    There are 2*Np*(Ns-Np) parameters, or Np*(Ns-Np) complex parameters, rather than Ns*Ns parameters. 
+    There are 2*Np*(Ns-Np) parameters, or Np*(Ns-Np) complex parameters, rather than Ns*Ns parameters.
+
+[ ] Exact diagonalization and Slater-Jastrow ansatz give the same result as long as the Hartree-Fock 
+    ansatz used as the Slater determinant is for a closed-shell system. How to deal with degeneracies
+    in the Hartree-Fock spectrum ?  
