@@ -1,6 +1,3 @@
-# TODO: - remove len() everywhere, enter `lr` and `lc` directly as function arguments 
-# 
-
 import numpy as np
 import torch 
 from profilehooks import profile
@@ -19,8 +16,7 @@ def store_G_linearly(G):
    assert g.shape == (Ns*Ns, 1)
    return g 
 
-
-def idx_linearly_stored_G(G_linear_mem, rows, cols, chunk):
+def idx_linearly_stored_G(G_linear_mem, rows, cols, chunk, lr, lc):
     """
        `G_linear_mem` will be a torch tensor. 
       
@@ -39,9 +35,13 @@ def idx_linearly_stored_G(G_linear_mem, rows, cols, chunk):
     assert not (len(cols) == 1 and len(rows) > 1) or (cols[0] == rows[-1] + 1)
     assert ( not (len(cols) == 1 and len(rows) == 1) or 
             (cols[0] == rows[0] or cols[0] == rows[0] + 1 or rows[0] == cols[0] + 1) )
-       
-    lr = len(rows); lc = len(cols)
+
+    # avoid calling len(), instead provide this information explicitly when calling the function   
+    assert lr == len(rows)
+    assert lc == len(cols)
+
     a1 = max(rows[-1], cols[-1])
+
     if lr == 1:
         if lc == 1:
             if chunk == "D":
@@ -64,7 +64,7 @@ def idx_linearly_stored_G(G_linear_mem, rows, cols, chunk):
         return G_linear_mem[offset:offset+lr, 0].reshape(-1,1) # B -> reshape to column vector 
 
 
-def idx_linearly_stored_G_blockB(G_linear_mem, rows, cols, chunk):
+def idx_linearly_stored_G_blockB(G_linear_mem, rows, cols, chunk, lr, lc):
     """
         Block B is immediately adjacent to a square block A.
          _____________
@@ -79,7 +79,10 @@ def idx_linearly_stored_G_blockB(G_linear_mem, rows, cols, chunk):
     assert rows[0] == 0
     assert rows[-1] + 1 == cols[0]
     
-    lr = len(rows); lc = len(cols)
+    # avoid calling len(), instead provide this information explicitly when calling the function   
+    assert lr == len(rows)
+    assert lc == len(cols)
+
     B_out = np.empty((lr, lc))
 
     offset = lr*lr
@@ -92,10 +95,13 @@ def idx_linearly_stored_G_blockB(G_linear_mem, rows, cols, chunk):
     return B_out 
 
 
-def idx_linearly_stored_G_blockB1(G_linear_mem, rows, cols, chunk):
+def idx_linearly_stored_G_blockB1(G_linear_mem, rows, cols, chunk, lr, lc):
     assert chunk in ("B1")
     assert len(cols) == 1
-    lr = len(rows)
+    # avoid calling len(), instead provide this information explicitly when calling the function   
+    assert lr == len(rows)
+    assert lc == len(cols)
+
     col = cols[0]
     assert col > lr 
     i = (col-lr)
