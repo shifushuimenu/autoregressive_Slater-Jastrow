@@ -125,7 +125,10 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         else:
             self.BB_reuse = []   # list of matrices to be reused later 
             self.Schur_complement_reuse = []  # list of matrices to be reused later 
-            self.CCXinvBB_reuse = [] # almost the same as Schur complement, except for D block 
+            self.CCXinvBB_reuse = [] # almost the same as Schur complement, except for D block   
+            # preallocate larger memory suitable for all iteration steps 
+            CCXinvBB = torch.empty(self.xmax-self.xmin, self.xmax-self.xmin, dtype=default_dtype_torch) 
+            BtXinv_new = torch.empty(self.xmax-self.xmin, self.len_Ksites, dtype=default_dtype_torch)
 
         mm=-1
         for i_k in range(self.xmin, self.xmax):
@@ -161,7 +164,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                         BBsubmat = torch.tensor([]) # self.G[np.ix_(self.Ksites, Ksites_add)]
                     else:
                         BBsubmat = idx_linearly_stored_G(self.G_lin_mem, self.Ksites, Ksites_add, chunk="B", 
-                                    lr=self.len_Ksites, lc=len_Ksites_add)
+                                    lr=self.len_Ksites, lc=len_Ksites_add)                                   
                 else:
                     A1 = DDsubmat                    
                     B1 = idx_linearly_stored_G(self.G_lin_mem, Ksites_add[:-1], [Ksites_add[-1]], chunk="B",
@@ -173,15 +176,29 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                     D1 = idx_linearly_stored_G(self.G_lin_mem, [Ksites_add[-1]], [Ksites_add[-1]], chunk="D",
                                     lr=1, lc=1)   # D1 = self.G[Ksites_add[-1], Ksites_add[-1]][None, None]  # convert tensor element to 2d array 
                     assert torch.isclose(D1, self.G[Ksites_add[-1], Ksites_add[-1]][None, None]).all()
-                    DDsubmat = torch.vstack((torch.hstack((A1, B1)), torch.hstack((C1, D1))))    
+
+                    print("mm=", mm, "self.len_Ksites=", self.len_Ksites)
+                    print("A1.shape=", A1.shape)
+                    print("B1.shape=", B1.shape)
+                    print("C1.shape=", C1.shape)
+                    print("D1.shape=", D1.shape)
+
+                    DDsubmat = torch.vstack((torch.hstack((A1, B1)), torch.hstack((C1, D1))))  
 
                     A2 = BBsubmat 
                     if self.len_Ksites == 0: # How to deal with empty arrays ? 
                         B2 = torch.tensor([])
+                        BBsubmat = torch.tensor([])
                     else: 
                         B2 = idx_linearly_stored_G_blockB1(self.G_lin_mem, self.Ksites, [Ksites_add[-1]], chunk="B1",
                                     lr=self.len_Ksites, lc=1)  # B2 = self.G[np.ix_(self.Ksites, [Ksites_add[-1]])]
-                    BBsubmat = torch.hstack((A2, B2))    
+
+                        print("A2.shape=", A2.shape)
+                        print("B2.shape=", B2.shape)                                    
+                        ###BBsubmat = torch.hstack((A2, B2))
+                        BBsubmat = torch.empty(self.len_Ksites, mm+1, dtype=default_dtype_torch)
+                        BBsubmat[0:self.len_Ksites, 0:mm] = A2[:,0:mm]
+                        BBsubmat[0:self.len_Ksites, mm] = B2[:, 0]  
 
                 t1 = time()
                 self.t_fetch_memory += (t1 - t0)                    
@@ -199,9 +216,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                     self.Xinv = torch.tensor([])
                 else:
                     pass # self.Xinv should have been updated by calling update_state(pos_i)
-                if self.len_Ksites == 0:                   
-                   CCXinvBB = torch.tensor([0.0])
-                   Schur_complement = DD - torch.tensor([0.0]) 
+                if self.len_Ksites == 0:                 
+                   CCXinvBB[0:mm+1, 0:mm+1] = 0.0 
+                   Schur_complement = DD - 0.0
                    detSC = torch.det(Schur_complement) # scalar                 
                 else:
                    # Note: self.Xinv is a symmetric matrix and DD is also symmetric.
@@ -213,9 +230,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                    # self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)  
                    #####
                    if mm==0:     
-                      BtXinv = torch.matmul(CC, self.Xinv)                  
-                      CCXinvBB = torch.matmul(BtXinv, BB)
-                      Schur_complement = DD - CCXinvBB    
+                      BtXinv = torch.matmul(CC, self.Xinv)              
+                      CCXinvBB[0:mm+1, 0:mm+1] = torch.matmul(BtXinv, BB)
+                      Schur_complement = DD - CCXinvBB[0:mm+1, 0:mm+1]
                       detSC = torch.det(Schur_complement) # scalar 
 
                       # The following is needed for iterative calculation of the determinant of  
@@ -231,16 +248,14 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                       BB1 = torch.matmul(BtXinv, BB[:,-1][:, None])
                       ###CC1 = BB1.transpose(-1,-2)
                       # update BtXinv = B.T * Xinv:
-                      ###BtXinv = torch.vstack((BtXinv, torch.matmul(self.Xinv, BB[:,-1][:,None]).transpose(-1,-2)))
-                      BtXinv_new = torch.empty(mm+1, self.len_Ksites, dtype=default_dtype_torch)
+                      ###BtXinv = torch.vstack((BtXinv, torch.matmul(self.Xinv, BB[:,-1][:,None]).transpose(-1,-2)))                      
                       BtXinv_new[0:mm, :] = BtXinv
                       BtXinv_new[mm, :] = torch.matmul(self.Xinv, BB[:,-1])
-                      assert torch.isclose(BtXinv_new, torch.vstack((BtXinv, torch.matmul(self.Xinv, BB[:,-1][:,None]).transpose(-1,-2)))).all()
-                      BtXinv = BtXinv_new    
+                      assert torch.isclose(BtXinv_new[0:mm+1, :], torch.vstack((BtXinv, torch.matmul(self.Xinv, BB[:,-1][:,None]).transpose(-1,-2)))).all()
+                      BtXinv = BtXinv_new[0:mm+1, :]    
                       ####BtXinv = torch.vstack((BtXinv, torch.matmul(CC[-1,:][None,:], self.Xinv)))
                       DD1 = torch.matmul(BtXinv[-1,:][None,:], BB[:,-1][:,None])
                       ###CCXinvBB = torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1))))
-                      CCXinvBB = torch.empty(mm+1, mm+1, dtype=default_dtype_torch)
                       CCXinvBB[0:mm, 0:mm] = AA1
                       CCXinvBB[0:mm, mm] = BB1[:,0]
                       CCXinvBB[mm, 0:mm] = BB1[:,0]
@@ -248,7 +263,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                       ###assert torch.isclose(CCXinvBB, torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1))))).all()
                       t1 = time()                      
                       self.t_update_Schur += (t1 - t0)
-                      Schur_complement = DD - CCXinvBB                      
+                      Schur_complement = DD - CCXinvBB[0:mm+1, 0:mm+1]                      
                       assert torch.isclose(Schur_complement, DD - torch.matmul(torch.matmul(CC, self.Xinv), BB)).all()                      
                       ### original formula: determinant of Schur complement ("SC")
                       ###detSC = torch.det(Schur_complement)
@@ -276,8 +291,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                            
                    # ------------------------------------------------------------------------------                                   
                    #print("self.Xinv.shape=", self.Xinv.shape, "self.BB.shape=", self.BB.shape)                                     
-                self.Schur_complement_reuse.append(Schur_complement)   
-                self.CCXinvBB_reuse.append(CCXinvBB)       
+                self.Schur_complement_reuse.append(Schur_complement)  
+                self.CCXinvBB_reuse.append(CCXinvBB[0:mm+1, 0:mm+1])       
                             
                 probs[i_k] = (-1) * detSC                                      
 
@@ -454,8 +469,8 @@ if __name__ == "__main__":
 
     from time import time 
 
-    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=400, potential='none', PBC=False, HF=False)
-    Nparticles = 200
+    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=40, potential='none', PBC=False, HF=False)
+    Nparticles = 20
     num_samples = 2
 
     #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
