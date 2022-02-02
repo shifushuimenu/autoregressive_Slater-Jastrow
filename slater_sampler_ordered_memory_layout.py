@@ -69,6 +69,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # timing 
         self.t_fetch_memory = 0.0
         self.t_matmul = 0.0
+        self.t_update_Schur = 0.0
         self.t_det = 0.0
 
         print("requires grad ?:", self.U.requires_grad)
@@ -203,8 +204,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                    detSC = torch.det(Schur_complement) # scalar                 
                 else:
                    # Note: self.Xinv is a symmetric matrix and DD is also symmetric.
-                   #       Thus, the Schur complement is also a symmetric matrix.    
-                   t0 = time()          
+                   #       Thus, the Schur complement is also a symmetric matrix.            
 
                    # ------------------------------------------------------------------------------
                    # Iterative calculation of the Schur complement 
@@ -225,6 +225,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                       SCm_inv = 1.0 / (Schur_complement + 1) #torch.linalg.inv(Schur_complememt + 1)
                       
                    else:
+                      t0 = time()
                       AA1 = self.CCXinvBB_reuse[mm-1]         
                       BB1 = torch.matmul(BtXinv, BB[:,-1][:, None])
                       CC1 = BB1.transpose(-1,-2)
@@ -235,35 +236,39 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                       CCXinvBB = torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1))))
                       Schur_complement = DD - CCXinvBB                      
                       assert torch.isclose(Schur_complement, DD - torch.matmul(torch.matmul(CC, self.Xinv), BB)).all()
-
+                      t1 = time()
+                      self.t_update_Schur += (t1 - t0)
                       ### original formula: determinant of Schur complement ("SC")
-                      ### detSC = torch.det(Schur_complement)
+                      ###detSC = torch.det(Schur_complement)
                       ###
 
+                      t0 = time()
                       # calculate last element of SC_inv (inverse of the Schur complement) from SCm_inv (inverse of 
                       # modified Schur complement, which is being updated)
                       SC_inv_el =  SCm_inv[-1,-1]/(1.0 - SCm_inv[-1,-1])
                       detSC = detSC * (1.0 + SC_inv_el) \
                            * (Schur_complement[-1,-1] - torch.matmul(Schur_complement[-1,0:-1][None,:], \
                                                              torch.matmul(SCm_inv, Schur_complement[0:-1,-1][:,None])))
+                      t1 = time()
+                      self.t_matmul += (t1 - t0)  
 
                       assert torch.isclose(detSC, torch.det(Schur_complement))
 
                       # for next step of iterative calculation of the determinant of the Schur complement 
                       assert DD1.shape[0] == DD1.shape[1] == 1
+                      t0 = time()
                       SCm_inv = block_update_inverse(SCm_inv, Schur_complement[0:-1,-1][:,None], \
-                                Schur_complement[-1,0:-1][None,:], Schur_complement[-1,-1][None,None] + 1.0)                 
-                   # ------------------------------------------------------------------------------
-                   t1 = time()
-                   self.t_matmul += (t1 - t0)                  
+                                Schur_complement[-1,0:-1][None,:], Schur_complement[-1,-1][None,None] + 1.0)    
+                      t1 = time()                 
+                      self.t_det += (t1 - t0)  
+                                           
+                   # ------------------------------------------------------------------------------                                   
                    #print("self.Xinv.shape=", self.Xinv.shape, "self.BB.shape=", self.BB.shape)                                     
                 self.Schur_complement_reuse.append(Schur_complement)   
                 self.CCXinvBB_reuse.append(CCXinvBB)       
-
-                t0 = time()                
+                            
                 probs[i_k] = (-1) * detSC                                      
-                t1 = time()                 
-                self.t_det += (t1 - t0)
+
 
         if not self.naive_update:
             assert len(self.BB_reuse) == len(self.Schur_complement_reuse) == (mm+1) # IMPROVE: remove this as well as the variable mm
@@ -442,26 +447,27 @@ if __name__ == "__main__":
     num_samples = 2
 
     #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
-    #SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
-    SDsampler2 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
+    SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
+    #SDsampler2 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
 
     print("Nsites=", Nsites, "Nparticles=", Nparticles, "num_samples=", num_samples)
 
-    # t0 = time()
-    # for _ in range(num_samples):
-    #     occ_vec, _ = SDsampler1.sample()
-    # t1 = time()
-    # print("naive, elapsed=", (t1-t0) )
-
     t0 = time()
     for _ in range(num_samples):
-        occ_vec, _ = SDsampler2.sample()
+        occ_vec, _ = SDsampler1.sample()
     t1 = time()
-    print("block update, elapsed=", (t1-t0) )
+    print("naive, elapsed=", (t1-t0) )
 
-    print("t_fetch_memory=", SDsampler2.t_fetch_memory)
-    print("t_matmul(Schur complement)=", SDsampler2.t_matmul)
-    print("t_det=", SDsampler2.t_det)
+    # t0 = time()
+    # for _ in range(num_samples):
+    #     occ_vec, _ = SDsampler2.sample()
+    # t1 = time()
+    # print("block update, elapsed=", (t1-t0) )
+
+    # print("t_fetch_memory=", SDsampler2.t_fetch_memory)
+    # print("t_matmul(Schur complement)=", SDsampler2.t_matmul)
+    # print("t_det=", SDsampler2.t_det)
+    # print("t_update_Schur=", SDsampler2.t_update_Schur)
 
     # # Check that sampling the Slater determinant gives the correct average density. 
     # occ_vec = torch.zeros(Nsites)
