@@ -13,7 +13,8 @@ def store_G_linearly(G):
       
       g = np.vstack((g, B, C, D)).reshape(-1,1, order="F") # Fortran-like index order: "innermost index is fastest" 
 
-   assert g.shape == (Ns*Ns, 1)
+   g = g.ravel()
+   assert g.shape == (Ns*Ns,)
    return g 
 
 def idx_linearly_stored_G(G_linear_mem, rows, cols, chunk, lr, lc):
@@ -48,21 +49,21 @@ def idx_linearly_stored_G(G_linear_mem, rows, cols, chunk, lr, lc):
             if chunk == "D":
                 assert rows[0] == cols[0]
                 offset = a1*a1 + 2*a1
-                return G_linear_mem[offset, 0][None, None] # D -> convert single element into matrix 
+                return G_linear_mem[offset][None, None] # D -> convert single element into matrix 
             elif chunk == "B":
                 assert cols[0] > rows[0]
                 offset = a1*a1
-                return G_linear_mem[offset+rows[0], 0].reshape(-1,1) 
+                return G_linear_mem[offset+rows[0]][None, None] #.reshape(-1,1) 
             elif chunk == "C":
                 assert rows[0] > cols[0]
                 offset = a1*a1 + a1 
-                return G_linear_mem[offset+cols[0], 0].reshape(1,-1) # C -> reshape to row vector 
+                return G_linear_mem[offset+cols[0]][None, None] #.reshape(1,-1) # C -> reshape to row vector 
         else: # lc > 1 
             offset = a1*a1 + a1 + cols[0]
-            return G_linear_mem[offset:offset+lc, 0].reshape(1,-1) # C -> reshape to row vector 
+            return G_linear_mem[offset:offset+lc][None, :] #.reshape(1,-1) # C -> reshape to row vector 
     else: # lr > 1 
         offset = a1*a1 + rows[0]
-        return G_linear_mem[offset:offset+lr, 0].reshape(-1,1) # B -> reshape to column vector 
+        return G_linear_mem[offset:offset+lr][:, None] #.reshape(-1,1) # B -> reshape to column vector 
 
 
 def idx_linearly_stored_G_blockB(G_linear_mem, rows, cols, chunk, lr, lc):
@@ -87,11 +88,11 @@ def idx_linearly_stored_G_blockB(G_linear_mem, rows, cols, chunk, lr, lc):
     B_out = np.empty((lr, lc))
 
     offset = lr*lr
-    B_out[:,0] = G_linear_mem[offset:offset+lr,0]
+    B_out[:,0] = G_linear_mem[offset:offset+lr]
     for c in range(1, lc):
         stride = lr+2*c-1
         offset = offset + lr + stride
-        B_out[:,c] = G_linear_mem[offset:offset+lr,0]
+        B_out[:,c] = G_linear_mem[offset:offset+lr]
 
     return B_out 
 
@@ -107,7 +108,7 @@ def idx_linearly_stored_G_blockB1(G_linear_mem, rows, cols, chunk, lr, lc):
     assert col > lr 
     i = (col-lr)
     offset = lr*lr + 2*lr*i + i*i
-    return G_linear_mem[offset:offset+lr, 0].reshape(-1,1)
+    return G_linear_mem[offset:offset+lr][:, None] #.reshape(-1,1)
 
 
 

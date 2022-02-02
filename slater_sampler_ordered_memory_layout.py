@@ -107,7 +107,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         # helper variables for low-rank update
 
-    @profile
+    #@profile
     def get_cond_prob(self, k):
         r""" Conditional probability for the position x of the k-th particle.
 
@@ -310,7 +310,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         assert self.state_index == k-1
 
         probs = self.get_cond_prob(k)
-        pos = Categorical(torch.Tensor(probs)).sample().numpy()
+        pos = Categorical(probs).sample().numpy()
         # conditional prob in this sampling step 
         cond_prob_k = probs[pos]
 

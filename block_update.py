@@ -30,9 +30,9 @@ def block_update_inverse(Ainv, B, C, D):
 
     AinvB = torch.matmul(Ainv, B)
     S = D - torch.matmul(C, AinvB) # a scalar 
-    Sinv = 1.0/S.item()
+    Sinv = 1.0/S
     
-    Ablock = Ainv + torch.outer(AinvB[:,0], Sinv * AinvB[:,0])
+    Ablock = Ainv + torch.outer(AinvB[:,0], Sinv[0,0] * AinvB[:,0])
     Bblock = - AinvB * Sinv
     #Cblock = Bblock.transpose(-1,-2)
     Dblock = Sinv 
