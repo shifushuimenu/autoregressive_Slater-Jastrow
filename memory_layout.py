@@ -40,7 +40,8 @@ def idx_linearly_stored_G(G_linear_mem, rows, cols, chunk, lr, lc):
     assert lr == len(rows)
     assert lc == len(cols)
 
-    a1 = max(rows[-1], cols[-1])
+    x = rows[-1]; y = cols[-1]
+    a1 = x if x > y else y  # max(x, y)
 
     if lr == 1:
         if lc == 1:
