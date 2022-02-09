@@ -55,6 +55,13 @@ def corr_factor_remove_r(Ainv, r):
     """remove a particle at position r without adding any particle"""
     return (1 + Ainv[r,r])
 
+def adapt_Gdenom(Gnum, r, s):
+    assert s > r 
+    G = Gnum[np.ix_(list(range(0, s+1)), list(range(0, s+1)))]
+    G[r,r] = G[r,r] + 1
+    G[s,s] = G[s,s] - 1
+    return G
+
 
 # Calculate the conditional probabilities of the reference state
 Ns = 9; Np = 5
@@ -62,7 +69,10 @@ _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
 
+print("G_global=", G[0:4, 0:4])
+
 cond_prob_ref = np.zeros((Np, Ns))
+cond_prob_onehop = np.zeros((len(xs[1:]), Np, Ns))
 
 Ksites = []
 occ_vec = ref_conf
@@ -80,4 +90,29 @@ for k in range(Np):
 
         cond_prob_ref[k, i] = (-1) * np.linalg.det(Gnum) / np.linalg.det(Gdenom)
 
+        # Now calculate the conditional probabilities for all states related 
+        # to the reference state by one hop, using a low-rank update of `Gnum`
+        # and `Gdenom`.
+        r=0; s=1
+        if k > 0 and i > s: 
+            if not np.isclose(np.linalg.det(Gnum), 0.0):
+
+                print(k, ii, i, cond_prob_ref[k,i])
+                print("Gnum.shape=", Gnum.shape)
+                print("Gdenom.shape=", Gdenom.shape)
+                Gnum_inv = np.linalg.inv(Gnum)
+                if k==1:                     
+                    corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
+                                  * np.linalg.det(Gdenom)
+                    Gdenom_ = adapt_Gdenom(Gnum, r=r, s=s)
+                    corr_factor /= np.linalg.det(Gdenom_)
+                else:
+                    Gdenom_inv = np.linalg.inv(Gdenom)
+                    corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
+                                    / corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s) 
+                cond_prob_onehop[0, k, i] = corr_factor * cond_prob_ref[k, i]
+            else: 
+                cond_prob_onehop[0, k, i] = 0.0
+
 assert np.isclose(np.sum(cond_prob_ref, axis=1), np.ones((Np,1))).all()
+print("cond_prob_onehop[0, :, :]=", cond_prob_onehop[0, :, :])

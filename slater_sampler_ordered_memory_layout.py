@@ -485,12 +485,12 @@ if __name__ == "__main__":
         for _ in range(num_samples):
             occ_vec, _ = SDsampler2.sample()
         t1 = time()
-        print("block update, elapsed=", 25*(t1-t0) )
+        print("block update, elapsed=", (t1-t0) )
 
-        print("t_fetch_memory=", 25*SDsampler2.t_fetch_memory)
-        print("t_matmul(Schur complement)=", 25*SDsampler2.t_matmul)
-        print("t_det=", 25*SDsampler2.t_det)
-        print("t_update_Schur=", 25*SDsampler2.t_update_Schur)
+        print("t_fetch_memory=", SDsampler2.t_fetch_memory)
+        print("t_matmul(Schur complement)=", SDsampler2.t_matmul)
+        print("t_det=", SDsampler2.t_det)
+        print("t_update_Schur=", SDsampler2.t_update_Schur)
 
     # # Check that sampling the Slater determinant gives the correct average density. 
     # occ_vec = torch.zeros(Nsites)
