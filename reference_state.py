@@ -26,7 +26,8 @@ def calc_k_copy(hop_from_to, ref_state_I, ns):
 
         `k_copy` indicates the component up to which (inclusive)
         the conditional probabilities are identical to those 
-        of the reference state (such that they can be copied).
+        of the reference state (such that they can be copied). The index into 
+        k_copy is the reference state number. 
         For example: 
             k_copy = (  0, # The first component is conditionally independent, it can always be copied from the reference state. 
                         1, # copy conditional probs up to (inclusive) the second component 
@@ -149,7 +150,9 @@ ref_conf = int2bin(ref_I, ns=Ns)
 #                  (7,6) )
 
 l1d = Lattice1d(ns=Ns)
+# `states_I` are only the connecting states, the reference state is not included 
 rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l1d))
+num_connecting_states = len(states_I)
 # special case of 1d n.n. hopping matrix 
 assert np.all([abs(r-s) == 1 or abs(r-s) == Ns-1 for r,s in rs_pos])
 print("reference state=")
@@ -163,7 +166,7 @@ one_hop_info = list(zip(k_copy, rs_pos))
 
 
 cond_prob_ref = np.zeros((Np, Ns))
-cond_prob_onehop = np.zeros((len(states_I[1:]), Np, Ns))
+cond_prob_onehop = np.zeros((num_connecting_states, Np, Ns))
 
 Ksites = []
 occ_vec = list(ref_conf)
@@ -180,7 +183,6 @@ for k in range(Np):
         # reference state
         Ksites_add += [i]
         occ_vec_add = occ_vec[0:xmin] + [0]*ii + [1]
-        print("occ_vec_add=", occ_vec_add)
         Gnum = G[np.ix_(Ksites_add, Ksites_add)] - np.diag(occ_vec_add)
         Gdenom = G[np.ix_(Ksites, Ksites)] - np.diag(occ_vec[0:len(Ksites)])
 
@@ -189,8 +191,8 @@ for k in range(Np):
         # Now calculate the conditional probabilities for all states related 
         # to the reference state by one hop, using a low-rank update of `Gnum`
         # and `Gdenom`.
-        for state_nr, (k_copy, (r,s)) in enumerate(one_hop_info):
-            if k_copy >= k:
+        for state_nr, (k_copy_, (r,s)) in enumerate(one_hop_info):
+            if k_copy_ >= k:
                 break # copy conditional probabilities rather than calculating them 
             else: # k_copy < k
                 if s > r:
@@ -198,7 +200,7 @@ for k in range(Np):
                         if not np.isclose(np.linalg.det(Gnum), 0.0): # don't invert a singular matrix 
                             print(k, ii, i, cond_prob_ref[k,i])
                             Gnum_inv = np.linalg.inv(Gnum)
-                            if k==(k_copy+1):                     
+                            if k==(k_copy_+1):                     
                                 corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
                                             * np.linalg.det(Gdenom)
                                 Gdenom_ = adapt_Gdenom(Gnum, r=r, s=s)
@@ -218,11 +220,11 @@ for k in range(Np):
                         # The case i == r is special. 
                         if not np.isclose(np.linalg.det(Gnum), 0.0): # don't invert a singular matrix      
                             Gnum_inv = np.linalg.inv(Gnum)                                                   
-                            if k==(k_copy+1):
+                            if k==(k_copy_+1):
                                 print("i=", i)
                                 print("state_nr=", state_nr)
                                 print("r=", r, "s=", s, "k=", k)
-                                print("k_copy=", k_copy)
+                                print("k_copy=", k_copy_)
                                 print("Gdenom.shape=", Gdenom.shape)
                                 Gdenom_ = reduce_Gdenom(Gdenom, r=r, s=s)
                                 if i==(r+1):
@@ -246,7 +248,11 @@ for k in range(Np):
 
 
 assert np.isclose(np.sum(cond_prob_ref, axis=1), np.ones((Np,1))).all()
-for state_nr in range(6):
+for state_nr in range(num_connecting_states):
+    for k in range(Np):
+        if k > k_copy[state_nr]:
+            assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0)
+
     print("cond_prob_onehop[%d, :, :]="%(state_nr), cond_prob_onehop[state_nr, :, :])
     print(np.sum(cond_prob_onehop[state_nr, :, :], axis=1))
 
