@@ -166,7 +166,8 @@ cond_prob_ref = np.zeros((Np, Ns))
 cond_prob_onehop = np.zeros((len(states_I[1:]), Np, Ns))
 
 Ksites = []
-occ_vec = ref_conf
+occ_vec = list(ref_conf)
+assert type(occ_vec) == type(list()) # use a list, otherwise `occ_vec[0:xmin] + [1]` will result in `[]`. 
 pos_vec = bin2pos(ref_conf)
 
 for k in range(Np):
@@ -180,12 +181,8 @@ for k in range(Np):
         Ksites_add += [i]
         occ_vec_add = occ_vec[0:xmin] + [0]*ii + [1]
         print("occ_vec_add=", occ_vec_add)
-        print("occ_vec[0:xmin]=",occ_vec[0:xmin])
         Gnum = G[np.ix_(Ksites_add, Ksites_add)] - np.diag(occ_vec_add)
         Gdenom = G[np.ix_(Ksites, Ksites)] - np.diag(occ_vec[0:len(Ksites)])
-
-        print("pos_vec=", pos_vec)
-        print("initially, Gdenom.shape=", Gdenom.shape)
 
         cond_prob_ref[k, i] = (-1) * np.linalg.det(Gnum) / np.linalg.det(Gdenom)
 
