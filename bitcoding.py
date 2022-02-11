@@ -11,7 +11,6 @@ from utils import default_torch_device
 def bin2int(bin_array):
     """
         Accepts batches. 
-        Converts torch.Tensor to numpy.array. 
         
         Example:
         --------

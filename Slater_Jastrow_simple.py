@@ -131,15 +131,24 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
             M = np.zeros_like(I, dtype=np.int64)
             count += 1 
             j = neigh[i,d]
-            ii = min(i,j)
-            jj = max(i,j)
-            M[...] = 2**ii + 2**jj
+            M[...] = 2**i + 2**j
             K = np.bitwise_and(M, I)
             L = np.bitwise_xor(K, M)
             STATE_EXISTS = ((K != 0) & (L != 0) & (L != K))
             I_prime[..., count] = np.where(STATE_EXISTS, I - K + L, False)
+            ii = min(i,j)
+            jj = max(i,j)
             matrix_elem[..., count] = -t_hop * np.where(STATE_EXISTS, fermion_parity(ns, I, ii, jj), 0)
-            hop_from_to.append((i,j))
+            # hop_from_to.append((i,j))
+
+            # hop_from_to is only correct is the input is not batched.
+            if np.bitwise_and(I, 2**i) == 2**i and np.bitwise_xor(I, I+2**j) == 2**j:
+                r = i; s = j
+            elif np.bitwise_and(I, 2**j) == 2**j and np.bitwise_xor(I, I+2**i) == 2**i:
+                r = j; s = i 
+            else:
+                r = -1; s = -1
+            hop_from_to.append((r,s))
 
     # Set states in `I_prime` which were annihilated by the hopping operator to a valid value (i.e.
     # in the correct particle number sector) so that downstream subroutines don't crash. 
