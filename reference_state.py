@@ -167,29 +167,20 @@ cond_prob_onehop = np.zeros((len(states_I[1:]), Np, Ns))
 
 Ksites = []
 occ_vec = ref_conf
-print("occ_vec=", occ_vec)
 pos_vec = bin2pos(ref_conf)
-print("pos_vec=", pos_vec)
 
 for k in range(Np):
     xmin = 0 if k==0 else pos_vec[k-1] + 1 # half-open interval (xmin included, xmax not included)
     xmax = Ns - Np + k + 1
-    Ksites = [] if k==0 else list(range(0, pos_vec[k-1]+1))
+    Ksites = list(range(0, xmin))
     Ksites_add = Ksites.copy()
     for ii, i in enumerate(range(xmin, xmax)):
 
         # reference state
         Ksites_add += [i]
-        print("k=", k, "i=", i, "ii=", ii)
-        if k==0: 
-            test = 111
-        else:
-            print("test1=", occ_vec[0:pos_vec[k-1]+1])
-            test = occ_vec[0:pos_vec[k-1]+1] + [0]*ii + [1]
-        print("test ? ", test, [1] + [0]*0 + [1])
-        occ_vec_add = [0]*ii + [1] if k==0 else occ_vec[0:pos_vec[k-1]+1] + [0]*ii + [1]
-        print("Ksites_add=", Ksites_add)
+        occ_vec_add = occ_vec[0:xmin] + [0]*ii + [1]
         print("occ_vec_add=", occ_vec_add)
+        print("occ_vec[0:xmin]=",occ_vec[0:xmin])
         Gnum = G[np.ix_(Ksites_add, Ksites_add)] - np.diag(occ_vec_add)
         Gdenom = G[np.ix_(Ksites, Ksites)] - np.diag(occ_vec[0:len(Ksites)])
 
