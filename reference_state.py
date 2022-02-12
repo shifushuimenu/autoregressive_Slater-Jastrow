@@ -112,14 +112,19 @@ def reduce_Gdenom(Gdenom, r, s):
 def reduce_Gnum(Gdenom, r, s): # yes, Gdenom is the argument !
     assert r > s 
     assert Gdenom.shape == (r+1, r+1)
-    G = Gnum[np.ix_(list(range(0, r+1)), list(range(0, r+1)))]
+    G = Gdenom[np.ix_(list(range(0, r+1)), list(range(0, r+1)))]
     G[s,s] = G[s,s] - 1
     # G[r,r] = G[r,r] # Now, there is a particle both at position r and s. 
     return G
 
+def Gnum_from_Gdenom(Gdenom, r, s):
+    assert r > s 
+    assert Gdenom.shape == (r+1, r+1)
+    pass
+
 
 # Calculate the conditional probabilities of the reference state
-Ns = 9; Np = 5
+Ns = 12; Np = 3 # Ns=12; Np=2 -> problem with corr_factor_removeadd_rs() !!!!!!!!
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
@@ -153,12 +158,13 @@ l1d = Lattice1d(ns=Ns)
 # `states_I` are only the connecting states, the reference state is not included 
 rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l1d))
 num_connecting_states = len(states_I)
+xs = int2bin(states_I, ns=Ns)
 # special case of 1d n.n. hopping matrix 
 assert np.all([abs(r-s) == 1 or abs(r-s) == Ns-1 for r,s in rs_pos])
 print("reference state=")
 print(int2bin(ref_I, ns=Ns))
 print("connecting_states=")
-print(int2bin(states_I, ns=Ns))
+print(xs)
 print("rs_pos=", rs_pos)
 k_copy = calc_k_copy(rs_pos, ref_I, ns=Ns)
 print("k_copy=", k_copy)
@@ -187,6 +193,7 @@ for k in range(Np):
         Gdenom = G[np.ix_(Ksites, Ksites)] - np.diag(occ_vec[0:len(Ksites)])
 
         cond_prob_ref[k, i] = (-1) * np.linalg.det(Gnum) / np.linalg.det(Gdenom)
+        print("cond_prob_ref[k, i]=", i, cond_prob_ref[k, i])
 
         # Now calculate the conditional probabilities for all states related 
         # to the reference state by one hop, using a low-rank update of `Gnum`
@@ -198,34 +205,35 @@ for k in range(Np):
                 if s > r:
                     if i > s:
                         if not np.isclose(np.linalg.det(Gnum), 0.0): # don't invert a singular matrix 
-                            print(k, ii, i, cond_prob_ref[k,i])
                             Gnum_inv = np.linalg.inv(Gnum)
                             if k==(k_copy_+1):                     
                                 corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
                                             * np.linalg.det(Gdenom)
                                 Gdenom_ = adapt_Gdenom(Gnum, r=r, s=s)
-                                corr_factor /= np.linalg.det(Gdenom_)
+                                corr_factor /= np.linalg.det(Gdenom_)                            
                             else:
                                 Gdenom_inv = np.linalg.inv(Gdenom)
                                 corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
                                                 / corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s) 
                             cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
                         else: 
-                            cond_prob_onehop[state_nr, k, i] = 0.0
+                            # As the numerator is singular, the conditional probs of the connecting states 
+                            # should be calculated based on the matrix in the denominator, the inverse and determinant 
+                            # of which is assumed to be known. The matrix in the denominator cannot be negative. 
+
+                            if k==(k_copy_+1):
+                                print("Singular numerator 1 (k==k_copy+1), this case should not happen")                                
+                            else:
+                                print("Singular numerator 1 (k!=k_copy+1), this case should not happen")
+                            cond_prob_onehop[state_nr, k, i] = 0.0                                    
                 elif r > s: 
                         # The support is larger than in the reference state. One needs to calculate (r-s)
                         # more conditional probabilities than in the reference state. 
                         # In other words, here,  i not in (xmin, xmax). 
-                        # ... TODO ...
                         # The case i == r is special. 
                         if not np.isclose(np.linalg.det(Gnum), 0.0): # don't invert a singular matrix      
                             Gnum_inv = np.linalg.inv(Gnum)                                                   
                             if k==(k_copy_+1):
-                                print("i=", i)
-                                print("state_nr=", state_nr)
-                                print("r=", r, "s=", s, "k=", k)
-                                print("k_copy=", k_copy_)
-                                print("Gdenom.shape=", Gdenom.shape)
                                 Gdenom_ = reduce_Gdenom(Gdenom, r=r, s=s)
                                 if i==(r+1):
                                     # Actually we wish to calculate i==r, but since such an i is not in (xmin, xmax),
@@ -234,7 +242,6 @@ for k in range(Np):
                                     # is not calculated, instead the cond. prob. is calculated directly:
                                     Gnum_ = reduce_Gnum(Gdenom, r=r, s=s)
                                     cond_prob_onehop[state_nr, k, i-1] = (-1) * np.linalg.det(Gnum_) / np.linalg.det(Gdenom_)
-                                    pass
                                 if i > r:  
                                     corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
                                             * (np.linalg.det(Gdenom) / np.linalg.det(Gdenom_))
@@ -244,17 +251,26 @@ for k in range(Np):
                                                 / corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s) 
                             cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
                         else:
+                            # As the numerator is singular, the conditional probs of the connecting states 
+                            # should be calculated based on the matrix in the denominator, the inverse and determinant 
+                            # of which is assumed to be known. The matrix in the denominator cannot be negative. 
+
+                            if k==(k_copy_+1):
+                                print("Singular numerator 2 (k==k_copy+1), this case should not happen")                                
+                            else:
+                                print("Singular numerator 2 (k!=k_copy+1), this case should not happen")
                             cond_prob_onehop[state_nr, k, i] = 0.0
 
 
 assert np.isclose(np.sum(cond_prob_ref, axis=1), np.ones((Np,1))).all()
+print(np.sum(cond_prob_ref, axis=1))
 for state_nr in range(num_connecting_states):
     for k in range(Np):
         if k > k_copy[state_nr]:
+            print("state_nr=", state_nr, "k=", k)
+            print("cond_prob_onehop[%d, %d, :]=<"%(state_nr, k), cond_prob_onehop[state_nr, k, :])
+            print(np.sum(cond_prob_onehop[state_nr, k, :]))
             assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0)
-
-    print("cond_prob_onehop[%d, :, :]="%(state_nr), cond_prob_onehop[state_nr, :, :])
-    print(np.sum(cond_prob_onehop[state_nr, :, :], axis=1))
 
 
 def _test():
