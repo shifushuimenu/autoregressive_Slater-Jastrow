@@ -117,14 +117,38 @@ def reduce_Gnum(Gdenom, r, s): # yes, Gdenom is the argument !
     # G[r,r] = G[r,r] # Now, there is a particle both at position r and s. 
     return G
 
-def Gnum_from_Gdenom(Gdenom, r, s):
+# The following functions are for the case of a singular numerator.
+def Gdenom_from_Gdenom(Gdenom, r, s):
     assert r > s 
     assert Gdenom.shape == (r+1, r+1)
-    pass
+    G = Gdenom[np.ix_(list(range(0, r+1)), list(range(0, r+1)))]
+    G[s,s] = G[s,s] - 1
+    return G
+
+def Gnum_from_Gdenom_ieqrp1(Gdenom, r, s, i):
+    assert r > s 
+    assert Gdenom.shape == (r+1, r+1)
+    assert i==(r+1)
+    G = Gdenom[np.ix_(list(range(0, r+1)), list(range(0, r+1)))]        
+    G[s,s] = G[s,s] - 1
+    return G
+
+def Gnum_from_Gdenom(Gdenom, Gglobal, r, s, i):
+    assert r > s 
+    assert i > r
+    assert Gdenom.shape == (r+1, r+1)
+    Ablock = Gdenom[np.ix_(list(range(0, r+1)), list(range(0, r+1)))]
+    Bblock = Gglobal[np.ix_(list(range(0, r+1)), list(range(r+1, i+1)))]
+    Cblock = Bblock.transpose()
+    Dblock = Gglobal[np.ix_(list(range(r+1, i+1)), list(range(r+1, i+1)))]
+    G = np.block([[Ablock, Bblock],[Cblock, Dblock]])
+    G[s,s] = G[s,s] - 1
+    G[i,i] = G[i,i] - 1 
+    return G
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 12; Np = 3 # Ns=12; Np=2 -> problem with corr_factor_removeadd_rs() !!!!!!!!
+Ns = 33; Np = 10 # Ns=12; Np=2 -> problem with corr_factor_removeadd_rs() !!!!!!!!
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
@@ -254,12 +278,20 @@ for k in range(Np):
                             # As the numerator is singular, the conditional probs of the connecting states 
                             # should be calculated based on the matrix in the denominator, the inverse and determinant 
                             # of which is assumed to be known. The matrix in the denominator cannot be negative. 
-
                             if k==(k_copy_+1):
+                                Gdenom_ = Gdenom_from_Gdenom(Gdenom, r=r, s=s)
+                                if i==(r+1):
+                                    Gnum_ = Gnum_from_Gdenom_ieqrp1(Gdenom, r=r, s=s, i=i)           
+                                    cond_prob_onehop[state_nr, k, i-1] = (-1) * np.linalg.det(Gnum_) / np.linalg.det(Gdenom_)                                                             
+                                if i > r: 
+                                    Gnum_ = Gnum_from_Gdenom(Gdenom, Gglobal=G, r=r, s=s, i=i)
+                                    cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / np.linalg.det(Gdenom_)    
+                                
+                                print("!!!!!!!!!!!!!!!!!!!!!!!", cond_prob_onehop[state_nr, k, i])
                                 print("Singular numerator 2 (k==k_copy+1), this case should not happen")                                
                             else:
                                 print("Singular numerator 2 (k!=k_copy+1), this case should not happen")
-                            cond_prob_onehop[state_nr, k, i] = 0.0
+                            
 
 
 assert np.isclose(np.sum(cond_prob_ref, axis=1), np.ones((Np,1))).all()
