@@ -4,7 +4,7 @@ from test_suite import prepare_test_system_zeroT
 from bitcoding import *
 from Slater_Jastrow_simple import kinetic_term, Lattice1d
 
-#np.random.seed(422)
+np.random.seed(422)
 
 
 def exclude_invalid_connecting_states(hop_from_to, states_I, matrix_elem):
@@ -117,11 +117,11 @@ def reduce_Gnum(Gdenom, r, s): # yes, Gdenom is the argument !
     # G[r,r] = G[r,r] # Now, there is a particle both at position r and s. 
     return G
 
-# The following functions are for the case of a singular numerator.
+# The following three functions are for the case of a singular numerator.
 def Gdenom_from_Gdenom(Gdenom, r, s):
     assert r > s 
     assert Gdenom.shape == (r+1, r+1)
-    G = Gdenom[np.ix_(list(range(0, r+1)), list(range(0, r+1)))]
+    G = Gdenom[np.ix_(list(range(0, r)), list(range(0, r)))]
     G[s,s] = G[s,s] - 1
     return G
 
@@ -136,7 +136,7 @@ def Gnum_from_Gdenom_ieqrp1(Gdenom, r, s, i):
 def Gnum_from_Gdenom(Gdenom, Gglobal, r, s, i):
     assert r > s 
     assert i > r
-    assert Gdenom.shape == (r+1, r+1)
+    #assert Gdenom.shape == (r+1, r+1)
     Ablock = Gdenom[np.ix_(list(range(0, r+1)), list(range(0, r+1)))]
     Bblock = Gglobal[np.ix_(list(range(0, r+1)), list(range(r+1, i+1)))]
     Cblock = Bblock.transpose()
@@ -146,9 +146,41 @@ def Gnum_from_Gdenom(Gdenom, Gglobal, r, s, i):
     G[i,i] = G[i,i] - 1 
     return G
 
+def adapt_singular_Gnum(Gnum, r, s, i):
+    # THIS IS NOT USEFUL
+    assert s > r 
+    assert i > r
+    G = Gnum.copy()
+    G[r,r] = G[r,r] + 1
+    G[s,s] = G[s,s] - 1
+    return G
+
+def adapt_singular_Gnum2(Gnum, r, s, i):
+    # THIS IS NOT USEFUL
+    assert r > s
+    assert i > r
+    G = Gnum.copy()
+    G[r,r] = G[r,r] + 1 
+    G[s,s] = G[s,s] - 1
+    return G
+
+
+def Gnum_from_Gdenom3(Gdenom_, Gglobal, r, s, i):
+    assert s > r 
+    assert i > r
+    #assert Gdenom.shape == (r+1, r+1)
+    Ablock = Gdenom_[np.ix_(list(range(0, s+1)), list(range(0, s+1)))]
+    Bblock = Gglobal[np.ix_(list(range(0, s+1)), list(range(s+1, i+1)))]
+    Cblock = Bblock.transpose()
+    Dblock = Gglobal[np.ix_(list(range(s+1, i+1)), list(range(s+1, i+1)))]
+    G = np.block([[Ablock, Bblock],[Cblock, Dblock]])
+    G[i,i] = G[i,i] - 1 
+    return G
+
+
 
 # Calculate the conditional probabilities of the reference state
-Ns = 33; Np = 10 # Ns=12; Np=2 -> problem with corr_factor_removeadd_rs() !!!!!!!!
+Ns = 48; Np = 24   # Ns=12; Np=2 -> problem with corr_factor_removeadd_rs() !!!!!!!!
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
@@ -217,7 +249,6 @@ for k in range(Np):
         Gdenom = G[np.ix_(Ksites, Ksites)] - np.diag(occ_vec[0:len(Ksites)])
 
         cond_prob_ref[k, i] = (-1) * np.linalg.det(Gnum) / np.linalg.det(Gdenom)
-        print("cond_prob_ref[k, i]=", i, cond_prob_ref[k, i])
 
         # Now calculate the conditional probabilities for all states related 
         # to the reference state by one hop, using a low-rank update of `Gnum`
@@ -246,10 +277,23 @@ for k in range(Np):
                             # of which is assumed to be known. The matrix in the denominator cannot be negative. 
 
                             if k==(k_copy_+1):
+                                Gdenom_ = adapt_Gdenom(Gnum, r=r, s=s)
+                                Gnum_ = Gnum_from_Gdenom3(Gdenom_, Gglobal=G, r=r, s=s, i=i)
+                                cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / np.linalg.det(Gdenom_)
                                 print("Singular numerator 1 (k==k_copy+1), this case should not happen")                                
+                                print("state_nr, k, i=", state_nr, k, i)
+                                print("cond_prob_onehop[state_nr, k, i] = ", cond_prob_onehop[state_nr, k, i])
+                                #print("cond_prob_onehop[state_nr, k, i] = ", cond_prob_onehop[state_nr, k, i], np.linalg.det(Gnum_))
                             else:
-                                print("Singular numerator 1 (k!=k_copy+1), this case should not happen")
-                            cond_prob_onehop[state_nr, k, i] = 0.0                                    
+                                # connecting state and reference state have the same support in the denominator 
+                                Gdenom_inv = np.linalg.inv(Gdenom)
+                                corr_factor_Gdenom = corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)
+                                Gnum_ = adapt_singular_Gnum(Gnum, r=r, s=s, i=i) # not useful
+                                # IMPROVE: store numeric value of det(Gdenom)
+                                cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / (np.linalg.det(Gdenom) * corr_factor_Gdenom)                                
+                                print("Singular numerator 1 (k!=k_copy+1), this case should not happen")       
+                                print("state_nr, k, i=", state_nr, k, i)                              
+                                print("cond_prob_onehop[state_nr, k, i] = ", cond_prob_onehop[state_nr, k, i])
                 elif r > s: 
                         # The support is larger than in the reference state. One needs to calculate (r-s)
                         # more conditional probabilities than in the reference state. 
@@ -284,24 +328,29 @@ for k in range(Np):
                                     Gnum_ = Gnum_from_Gdenom_ieqrp1(Gdenom, r=r, s=s, i=i)           
                                     cond_prob_onehop[state_nr, k, i-1] = (-1) * np.linalg.det(Gnum_) / np.linalg.det(Gdenom_)                                                             
                                 if i > r: 
-                                    Gnum_ = Gnum_from_Gdenom(Gdenom, Gglobal=G, r=r, s=s, i=i)
-                                    cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / np.linalg.det(Gdenom_)    
-                                
-                                print("!!!!!!!!!!!!!!!!!!!!!!!", cond_prob_onehop[state_nr, k, i])
-                                print("Singular numerator 2 (k==k_copy+1), this case should not happen")                                
+                                    Gnum_ = adapt_singular_Gnum2(Gnum, r=r, s=s, i=i)# Gnum_from_Gdenom(Gdenom, Gglobal=G, r=r, s=s, i=i)
+                                    cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / np.linalg.det(Gdenom_)                  
+                                print("Singular numerator 2 (k==k_copy+1), this case should not happen") 
+                                print("state_nr, k, i=", state_nr, k, i)                               
+                                print("cond_prob_onehop[state_nr, k, i] = ", cond_prob_onehop[state_nr, k, i])
                             else:
-                                print("Singular numerator 2 (k!=k_copy+1), this case should not happen")
+                                Gdenom_inv = np.linalg.inv(Gdenom)
+                                corr_factor_Gdenom = corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s) 
+                                Gnum_ = adapt_singular_Gnum2(Gnum, r=r, s=s, i=i) #Gnum_from_Gdenom(Gdenom, Gglobal=G, r=r, s=s, i=i)
+                                cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / ( np.linalg.det(Gdenom) * corr_factor_Gdenom)
+                                print("Singular numerator 2 (k!=k_copy+1), this case should not happen")      
+                                print("state_nr, k, i=", state_nr, k, i)    
+                                print("cond_prob_onehop[state_nr, k, i] = ", cond_prob_onehop[state_nr, k, i])
                             
 
-
 assert np.isclose(np.sum(cond_prob_ref, axis=1), np.ones((Np,1))).all()
-print(np.sum(cond_prob_ref, axis=1))
+print("sum(cond_prob_ref=", np.sum(cond_prob_ref, axis=1))
 for state_nr in range(num_connecting_states):
     for k in range(Np):
         if k > k_copy[state_nr]:
             print("state_nr=", state_nr, "k=", k)
             print("cond_prob_onehop[%d, %d, :]=<"%(state_nr, k), cond_prob_onehop[state_nr, k, :])
-            print(np.sum(cond_prob_onehop[state_nr, k, :]))
+            print("sum(cond_prob_onehop=", np.sum(cond_prob_onehop[state_nr, k, :]))
             assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0)
 
 
