@@ -3,6 +3,8 @@ import numpy as np
 from test_suite import prepare_test_system_zeroT
 from bitcoding import *
 from Slater_Jastrow_simple import kinetic_term, Lattice1d
+from block_update_numpy import ( block_update_inverse,
+                           block_update_det_correction )
 
 np.random.seed(422)
 
@@ -102,6 +104,16 @@ def adapt_Gdenom(Gnum, r, s):
     G[s,s] = G[s,s] - 1
     return G
 
+def adapt_Gdenom_inv(Gdenom_inv, Gglobal, r, s):
+    assert s > r 
+    assert Gdenom_inv.shape == (s, s)
+    assert s == r +1 
+    # put an additional particle at position s 
+    Gdenom_inv_ = block_update_inverse(Ainv=Gdenom_inv, B=Gglobal[0:s, s][:, None], C=Gglobal[s,0:s][None, :], D=Gglobal[s,s][None, None] - 1)
+    corr = block_update_det_correction(Ainv=Gdenom_inv, B=Gglobal[0:s, s][:, None], C=Gglobal[s,0:s][None, :], D=Gglobal[s,s][None, None] - 1)
+    return Gdenom_inv_, corr 
+    pass
+
 def reduce_Gdenom(Gdenom, r, s):
     assert r > s 
     assert Gdenom.shape == (r+1, r+1)
@@ -168,7 +180,7 @@ def Gnum_from_Gdenom3(Gdenom_, Gglobal, r, s, i):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 48; Np = 24   # Ns=12; Np=2 -> problem with corr_factor_removeadd_rs() !!!!!!!!
+Ns = 48; Np = 17   # Ns=12; Np=2 -> problem with corr_factor_removeadd_rs() !!!!!!!!
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
@@ -235,6 +247,11 @@ for k in range(Np):
         occ_vec_add = occ_vec[0:xmin] + [0]*ii + [1]
         Gnum = G[np.ix_(Ksites_add, Ksites_add)] - np.diag(occ_vec_add)
         Gdenom = G[np.ix_(Ksites, Ksites)] - np.diag(occ_vec[0:len(Ksites)])
+        
+        # Internal state used during low-rank update of conditional probabilities 
+        # of the connnecting states. 
+        Gnum_inv = np.linalg.inv(Gnum)   # OK 
+        Gdenom_inv = np.linalg.inv(Gdenom) # OK
 
         cond_prob_ref[k, i] = (-1) * np.linalg.det(Gnum) / np.linalg.det(Gdenom)
 
@@ -248,16 +265,15 @@ for k in range(Np):
                 if s > r:
                     if i > s:
                         if not np.isclose(np.linalg.det(Gnum), 0.0): # don't invert a singular matrix 
-                            Gnum_inv = np.linalg.inv(Gnum)
                             if k==(k_copy_+1):                     
-                                corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
-                                            * np.linalg.det(Gdenom)
-                                Gdenom_ = adapt_Gdenom(Gnum, r=r, s=s)
-                                corr_factor /= np.linalg.det(Gdenom_)                            
+                                corr_factor_Gnum = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)
+                                Gdenom_inv_, corr1 = adapt_Gdenom_inv(Gdenom_inv, Gglobal=G, r=r, s=s)
+                                corr2 = corr_factor_remove_r(Gdenom_inv_, r=r)
+                                corr_factor_Gdenom = corr1 * corr2
+                                corr_factor = corr_factor_Gnum / corr_factor_Gdenom
                             else:
-                                Gdenom_inv = np.linalg.inv(Gdenom)
                                 corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
-                                                / corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s) 
+                                                / corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s) # OK
                             cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
                         else: 
                             # As the numerator is singular, the conditional probs of the connecting states 
@@ -298,9 +314,9 @@ for k in range(Np):
                                     corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
                                             * (np.linalg.det(Gdenom) / np.linalg.det(Gdenom_))
                             else:
-                                Gdenom_inv = np.linalg.inv(Gdenom)
+                                Gdenom_inv = np.linalg.inv(Gdenom) # OK
                                 corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
-                                                / corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s) 
+                                                / corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s) # OK
                             cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
                         else:
                             # As the numerator is singular, the conditional probs of the connecting states 

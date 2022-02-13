@@ -1,5 +1,4 @@
 import numpy as np
-import torch 
 
 from utils import default_dtype_torch
 
@@ -26,18 +25,18 @@ def block_update_inverse(Ainv, B, C, D):
     assert B.shape[0] == n and B.shape[1] == 1
     assert C.shape[0] == 1 and C.shape[1] == n
     assert D.shape[0] == D.shape[1] == 1 
-    assert torch.isclose(C, B.transpose(-1,-2)).all()
+    assert np.isclose(C, B.transpose(-1,-2)).all()
 
-    AinvB = torch.matmul(Ainv, B)
-    S = D - torch.matmul(C, AinvB) # a scalar 
+    AinvB = np.matmul(Ainv, B)
+    S = D - np.matmul(C, AinvB) # a scalar 
     Sinv = 1.0/S
     
-    Ablock = Ainv + torch.outer(AinvB[:,0], Sinv[0,0] * AinvB[:,0])
+    Ablock = Ainv + np.outer(AinvB[:,0], Sinv[0,0] * AinvB[:,0])
     Bblock = - AinvB * Sinv
     #Cblock = Bblock.transpose(-1,-2)
     Dblock = Sinv 
 
-    output = torch.empty(n+1, n+1, dtype=default_dtype_torch)
+    output = np.empty((n+1, n+1))
 
     output[0:n, 0:n] = Ablock
     output[0:n, n] = Bblock[:,0]
@@ -62,6 +61,6 @@ def block_update_det_correction(Ainv, B, C, D):
     assert C.shape[0] == 1 and C.shape[1] == n
     assert D.shape[0] == D.shape[1] == 1 
 
-    AinvB = torch.matmul(Ainv, B)
-    corr = D - torch.matmul(C, AinvB)
+    AinvB = np.matmul(Ainv, B)
+    corr = D - np.matmul(C, AinvB)
     return corr
