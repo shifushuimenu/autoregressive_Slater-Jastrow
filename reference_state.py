@@ -255,7 +255,7 @@ def Gnum_from_Gdenom3(Gdenom_, Gglobal, r, s, i):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 60; Np = 10   # Ns=12; Np=2 -> problem with corr_factor_removeadd_rs() !!!!!!!!
+Ns = 60; Np = 20   # Ns=12; Np=2 -> problem with corr_factor_removeadd_rs() !!!!!!!!
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
@@ -327,9 +327,8 @@ for k in range(Np):
     Ksites = list(range(0, xmin))
     Ksites_add = Ksites.copy()
     for ii, i in enumerate(range(xmin, xmax)):
-
         t0=time()
-        # reference state
+        # reference state        
         Ksites_add += [i]
         occ_vec_add = occ_vec[0:xmin] + [0]*ii + [1]
         Gnum = G[np.ix_(Ksites_add, Ksites_add)] - np.diag(occ_vec_add)
@@ -346,6 +345,7 @@ for k in range(Np):
         cond_prob_ref[k, i] = (-1) * det_Gnum / det_Gdenom
         t1 = time() 
         elapsed_ref += (t1 - t0)
+
         if (i,k) in S_connecting_states:
             det_Gnum_reuse.update({k : det_Gnum})
 
@@ -433,8 +433,15 @@ for k in range(Np):
                             if k==(k_copy_+1):
                                 det_Gdenom_ = det_Gnum_reuse.get(k-1)
                                 if i==(r+1):
+                                    # Actually we wish to calculate i==r, but since such an i is not in (xmin, xmax),
+                                    # it will never appear in the iteration. Therefore this case is treated explicitly 
+                                    # here. Since this case does not appear for the reference state, a "correction factor"
+                                    # is not calculated, instead the cond. prob. is calculated directly:
                                     #print("singular numerator, i==r+1")
                                     Gnum_ = Gnum_from_Gdenom_ieqrp1(Gdenom, r=r, s=s, i=i)           
+                                    det_Gnum_ = det_Gdenom * corr_factor_add_s(Gdenom_inv, s=s)
+                                    assert np.isclose(det_Gnum_, np.linalg.det(Gnum_))
+                                    print("passed assert")
                                     cond_prob_onehop[state_nr, k, i-1] = (-1) * np.linalg.det(Gnum_) / det_Gdenom_
                                 if i > r: 
                                     
@@ -467,9 +474,9 @@ assert np.isclose(np.sum(cond_prob_ref, axis=1), np.ones((Np,1))).all()
 for state_nr in range(num_connecting_states):
     for k in range(Np):
         if k > k_copy[state_nr]:
-            #print("state_nr=", state_nr, "k=", k)
-            #print("cond_prob_onehop[%d, %d, :]=<"%(state_nr, k), cond_prob_onehop[state_nr, k, :])
-            #print("sum(cond_prob_onehop=", np.sum(cond_prob_onehop[state_nr, k, :]))
+            print("state_nr=", state_nr, "k=", k)
+            print("cond_prob_onehop[%d, %d, :]=<"%(state_nr, k), cond_prob_onehop[state_nr, k, :])
+            print("sum(cond_prob_onehop=", np.sum(cond_prob_onehop[state_nr, k, :]))
             assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0)
 
 

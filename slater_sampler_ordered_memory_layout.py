@@ -41,9 +41,10 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         as columns, the first `Nparticles` columns are chosen to form the 
         Slater determinant.
     """
-    def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, naive=True):
+    def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, naive=True, eps_norm_probs=None):
         super(SlaterDetSampler_ordered, self).__init__()
         self.epsilon = 1e-5
+        self.eps_norm_probs = 1.0 - 1e-6 if eps_norm_probs is None else eps_norm_probs
         self.D = Nsites 
         self.N = Nparticles         
         assert(self.N<=self.D)  
@@ -109,7 +110,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         # helper variables for low-rank update
 
-    @profile
+    #@profile
     def get_cond_prob(self, k):
         r""" Conditional probability for the position x of the k-th particle.
 
@@ -119,6 +120,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.xmax = self.D - self.N + k + 1
 
         probs = torch.zeros(self.D) #np.zeros(len(range(self.xmin, self.xmax)))
+        cumul_probs = 0.0
 
         if self.naive_update:
             Ksites_tmp = self.Ksites[:]
@@ -136,6 +138,14 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         mm=-1
         for i_k in range(self.xmin, self.xmax):
+
+            #First check whether the conditional probabilities are already saturated.
+            # This gives significant speedup, most notably at low filling. 
+            if cumul_probs > self.eps_norm_probs: #0.99999999:
+                # LOG: print("skipping: sum(probs) already saturated (i.e. =1). xmax-1 - i_k = ", self.xmax-1 - i_k)
+                probs[i_k:] = 0.0
+                break
+
             mm += 1
             if self.naive_update:
                 Ksites_tmp.append(i_k)
@@ -293,7 +303,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 self.Schur_complement_reuse.append(Schur_complement)  
                 self.CCXinvBB_reuse.append(CCXinvBB[0:mm+1, 0:mm+1])       
                             
-                probs[i_k] = (-1) * detSC                                      
+                probs[i_k] = (-1) * detSC       
+                cumul_probs += probs[i_k]                               
 
 
         if not self.naive_update:
@@ -334,7 +345,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         
         return self.occ_vec, prob_sample
 
-    @profile
+    #@profile
     def update_state(self, pos_i):
 
         assert type(pos_i) == int 
@@ -468,10 +479,10 @@ if __name__ == "__main__":
 
     from time import time 
 
-    for L in (2000,): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
+    for L in (1000,): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
         (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=L, potential='none', PBC=False, HF=False)
-        Nparticles = L//2
-        num_samples = 4
+        Nparticles = 10 #L//2
+        num_samples = 10
 
         #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
         #SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
@@ -489,12 +500,12 @@ if __name__ == "__main__":
         for _ in range(num_samples):
             occ_vec, _ = SDsampler2.sample()
         t1 = time()
-        print("block update, elapsed=", 25*(t1-t0) )
+        print("block update, elapsed=", (t1-t0) )
 
-        print("t_fetch_memory=", 25*SDsampler2.t_fetch_memory)
-        print("t_matmul(Schur complement)=", 25*SDsampler2.t_matmul)
-        print("t_det=", 25*SDsampler2.t_det)
-        print("t_update_Schur=", 25*SDsampler2.t_update_Schur)
+        print("t_fetch_memory=", SDsampler2.t_fetch_memory)
+        print("t_matmul(Schur complement)=", SDsampler2.t_matmul)
+        print("t_det=", SDsampler2.t_det)
+        print("t_update_Schur=", SDsampler2.t_update_Schur)
 
     # # Check that sampling the Slater determinant gives the correct average density. 
     # occ_vec = torch.zeros(Nsites)
