@@ -46,6 +46,37 @@ def block_update_inverse(Ainv, B, C, D):
     return output 
 
 
+def block_update_inverse2(Ainv, B, C, D):
+    """The same as block_update_inverse(...) except that the
+       matrices B, C, and D are general nxm matrices rather than vectors.
+    """
+    assert Ainv.shape[0] == Ainv.shape[1]
+    n = Ainv.shape[0]
+    assert B.shape[0] == n
+    m = B.shape[1]
+    assert C.shape[0] == m and C.shape[1] == n
+    assert D.shape[0] == D.shape[1] == m
+    assert np.isclose(C, B.transpose(-1,-2)).all()
+
+    AinvB = np.matmul(Ainv, B)
+    S = D - np.matmul(C, AinvB) # a scalar 
+    Sinv = np.linalg.inv(S)
+    
+    Ablock = Ainv + np.matmul(np.matmul(AinvB, Sinv), AinvB.transpose())
+    Bblock = - np.matmul(AinvB, Sinv)
+    Cblock = Bblock.transpose(-1,-2)
+    Dblock = Sinv 
+
+    output = np.empty((n+m, n+m))
+
+    output[0:n, 0:n] = Ablock
+    output[0:n, n:n+m] = Bblock
+    output[n:n+m, 0:n] = Cblock
+    output[n:n+m, n:n+m] = Dblock 
+
+    return output     
+
+
 def block_update_det_correction(Ainv, B, C, D):
     """
         Let  M = [[ A , B ]
@@ -64,3 +95,20 @@ def block_update_det_correction(Ainv, B, C, D):
     AinvB = np.matmul(Ainv, B)
     corr = D - np.matmul(C, AinvB)
     return corr
+
+
+def block_update_det_correction2(Ainv, B, C, D):
+    """
+        The same as above except that B,C, and D are matrices rather than vectors. 
+    """
+    assert Ainv.shape[0] == Ainv.shape[1]
+    n = Ainv.shape[0]
+    assert B.shape[0] == n
+    m = B.shape[1]
+    assert C.shape[0] == m and C.shape[1] == n
+    assert D.shape[0] == D.shape[1] == m
+    assert np.isclose(C, B.transpose(-1,-2)).all()
+
+    AinvB = np.matmul(Ainv, B)
+    corr = D - np.matmul(C, AinvB)
+    return np.linalg.det(corr)    

@@ -4,7 +4,9 @@ from test_suite import prepare_test_system_zeroT
 from bitcoding import *
 from Slater_Jastrow_simple import kinetic_term, Lattice1d
 from block_update_numpy import ( block_update_inverse,
-                           block_update_det_correction )
+                           block_update_det_correction,
+                           block_update_inverse2,
+                           block_update_det_correction2 )
 
 from time import time 
 
@@ -114,10 +116,21 @@ def adapt_Gdenom_inv(Gdenom_inv, Gglobal, r, s):
     Gdenom_inv_ = block_update_inverse(Ainv=Gdenom_inv, B=Gglobal[0:s, s][:, None], C=Gglobal[s,0:s][None, :], D=Gglobal[s,s][None, None] - 1)
     corr = block_update_det_correction(Ainv=Gdenom_inv, B=Gglobal[0:s, s][:, None], C=Gglobal[s,0:s][None, :], D=Gglobal[s,s][None, None] - 1)
     return Gdenom_inv_, corr 
-    pass
+
+def adapt_Gnum_inv(Gnum_inv, Gglobal, r, s, i_last_nonsing, i):
+    assert r > s 
+    assert i_last_nonsing < i
+    Gnum_inv_ = block_update_inverse2(Ainv=Gnum_inv, B=Gglobal[0:i_last_nonsing+1, i_last_nonsing+1:i+1], 
+        C=Gglobal[i_last_nonsing+1:i+1, 0:i_last_nonsing+1], D=Gglobal[i_last_nonsing+1:i+1, i_last_nonsing+1:i+1])
+    corr = block_update_det_correction2(
+        Ainv=Gnum_inv, B=Gglobal[0:i_last_nonsing+1, i_last_nonsing+1:i+1], 
+        C=Gglobal[i_last_nonsing+1:i+1, 0:i_last_nonsing+1], D=Gglobal[i_last_nonsing+1:i+1, i_last_nonsing+1:i+1]
+        )
+    return Gnum_inv_, corr
 
 def reduce_Gdenom(Gdenom, r, s):
     assert r > s 
+
     assert Gdenom.shape == (r+1, r+1)
     G = Gdenom[np.ix_(list(range(0, s+1)), list(range(0, s+1)))]
     G[s,s] = G[s,s] - 1
@@ -165,6 +178,61 @@ def adapt_singular_Gnum2(Gnum, r, s, i):
     G[r,r] = G[r,r] + 1 
     G[s,s] = G[s,s] - 1
     return G
+
+def lowrank_update_inv(Gdenom_inv, r, s):
+    """
+        Remove a particle at `r` and add one at `s`. 
+        Calculate the inverse of A^{'} given the resulting low-rank update:
+            A^{'} = A  + U(r,s) * V(r,s)^{T}
+        and the correction to the determinant:
+            det(A^{'}) = det_corr * det(A).
+
+        Return:
+            inv(A^{'})
+            det_corr
+    """
+    m = Gdenom_inv.shape[0]
+    # capacitance matrix CC = id_2 + V_T*Ainv*U
+    CC = np.array([[1 + Gdenom_inv[r,r], Gdenom_inv[r,s]     ], 
+                   [   -Gdenom_inv[s,r], 1 - Gdenom_inv[s,s]]])
+
+    AinvU = np.zeros((m,2))
+    VtAinv = np.zeros((2,m))
+    AinvU[:,0] = Gdenom_inv[:,r]
+    AinvU[:,1] = Gdenom_inv[:,s]
+    VtAinv[0,:] = Gdenom_inv[r,:]
+    VtAinv[1,:] = - Gdenom_inv[s,:]
+
+    Gdenom_inv_ = Gdenom_inv - np.matmul(np.matmul(AinvU, np.linalg.inv(CC)), VtAinv)
+    det_corr = np.linalg.det(CC)
+    return Gdenom_inv_, det_corr
+
+
+def det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal, r, s, xmin, i):
+    assert r > s 
+    assert i > r 
+    assert Gdenom_inv.shape[0] == Gdenom_inv.shape[1] 
+    m = Gdenom_inv.shape[0]
+    assert m == xmin
+    assert i >= xmin 
+    
+    # 1. Calculate Gdenom_inv_ from Gdenom_inv using a low-rank update 
+    # where a particle is remove at position `r`` and one is added at position `s`. 
+    Gdenom_inv_, det_corr = lowrank_update_inv(Gdenom_inv, r, s)
+    det_Gdenom_ = det_Gdenom * det_corr
+
+    Ainv = Gdenom_inv_
+    B = Gglobal[0:xmin, xmin:i+1]
+    C = B.transpose()
+    D = Gglobal[xmin:i+1, xmin:i+1]
+    # Attention! B,C, and D are views into the original Green's function. 
+    Dcopy = D.copy()
+    Dcopy[-1,-1] = Dcopy[-1,-1] - 1 # add a particle here
+
+    S = Dcopy - np.matmul(np.matmul(C, Ainv), B)
+    det_Schur = np.linalg.det(S)
+
+    return det_Gdenom_ * det_Schur
 
 
 def Gnum_from_Gdenom3(Gdenom_, Gglobal, r, s, i):
@@ -261,14 +329,15 @@ for k in range(Np):
         occ_vec_add = occ_vec[0:xmin] + [0]*ii + [1]
         Gnum = G[np.ix_(Ksites_add, Ksites_add)] - np.diag(occ_vec_add)
         Gdenom = G[np.ix_(Ksites, Ksites)] - np.diag(occ_vec[0:len(Ksites)])
-        
+
+        det_Gnum = np.linalg.det(Gnum)
+        det_Gdenom = np.linalg.det(Gdenom)
+
         # Internal state used during low-rank update of conditional probabilities 
         # of the connnecting states. 
         Gnum_inv = np.linalg.inv(Gnum)   # OK 
         Gdenom_inv = np.linalg.inv(Gdenom) # OK
 
-        det_Gnum = np.linalg.det(Gnum)
-        det_Gdenom = np.linalg.det(Gdenom)
         cond_prob_ref[k, i] = (-1) * det_Gnum / det_Gdenom
         t1 = time() 
         elapsed_ref += (t1 - t0)
@@ -287,7 +356,7 @@ for k in range(Np):
                     if i > s:
                         if not np.isclose(det_Gnum, 0.0): # don't invert a singular matrix 
                             if k==(k_copy_+1):               
-                                # everythink OK      
+                                # everything OK      
                                 corr_factor_Gnum = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)
                                 Gdenom_inv_, corr1 = adapt_Gdenom_inv(Gdenom_inv, Gglobal=G, r=r, s=s)
                                 corr2 = corr_factor_remove_r(Gdenom_inv_, r=r)
@@ -301,13 +370,12 @@ for k in range(Np):
                             # As the numerator is singular, the conditional probabilities of the connecting states 
                             # should be calculated based on the matrix in the denominator, the inverse and determinant 
                             # of which are assumed to be known. The matrix in the denominator cannot be singular. 
-
+                            t0 = time()
                             # First check whether the conditional probabilities are already saturated.
                             if np.isclose(sum(cond_prob_onehop[state_nr, k, 0:i-1]), 1.0):  # CHECK: Why i-1 ? 
                                 cond_prob_onehop[state_nr, k, i-1:] = 0.0
                                 break
                             # print("numerator 1 singular, k=", k, " i=", i, "sum(cond_prob_ref)=", sum(cond_prob_ref[k, 0:i+1]), sum(cond_prob_onehop[state_nr, k, 0:i]))
-                            t0 = time()
                             if k==(k_copy_+1):
                                 Gdenom_ = adapt_Gdenom(Gnum, r=r, s=s)
                                 Gnum_ = Gnum_from_Gdenom3(Gdenom_, Gglobal=G, r=r, s=s, i=i)
@@ -346,24 +414,39 @@ for k in range(Np):
                         else:
                             # As the numerator is singular, the conditional probabilities of the connecting states 
                             # should be calculated based on the matrix in the denominator, the inverse and determinant 
-                            # of which are assumed to be known. The matrix in the denominator cannot be singular. 
+                            # of which are assumed to be known. The matrix in the denominator cannot be singular.                             
+                            t0 = time()
                             # First check whether the conditional probabilities are already saturated.
                             if np.isclose(sum(cond_prob_onehop[state_nr, k, 0:i-1]), 1.0): # CHECK: Why i-1 ? 
                                 cond_prob_onehop[state_nr, k, i-1:] = 0.0
                                 break                          
                             # print("numerator 2 singular, k=", k, " i=", i, "sum(cond_prob)=", sum(cond_prob_ref[k, 0:i+1]))
-                            t0 = time()
+
                             if k==(k_copy_+1):
-                                Gdenom_ = Gdenom_from_Gdenom(Gdenom, r=r, s=s)
+                                det_Gdenom_ = det_Gnum_reuse.get(k-1)
                                 if i==(r+1):
                                     Gnum_ = Gnum_from_Gdenom_ieqrp1(Gdenom, r=r, s=s, i=i)           
-                                    cond_prob_onehop[state_nr, k, i-1] = (-1) * np.linalg.det(Gnum_) / np.linalg.det(Gdenom_)                                                             
+                                    cond_prob_onehop[state_nr, k, i-1] = (-1) * np.linalg.det(Gnum_) / det_Gdenom_
                                 if i > r: 
+                                    
                                     Gnum_ = adapt_singular_Gnum2(Gnum, r=r, s=s, i=i)
-                                    cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / np.linalg.det(Gdenom_)                  
+                                    #print("Gnum_.shape=", Gnum_.shape)
+
+                                    #det_Gnum_ = det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal=G, r=r, s=s, xmin=xmin, i=i)
+                                    ##print("det_Gnum_=", det_Gnum_, "np.linalg.det(Gnum_)=", np.linalg.det(Gnum_))
+                                    #assert np.isclose(det_Gnum_, np.linalg.det(Gnum_) )
+                                    #cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / det_Gdenom_
+                                    
+                                    cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / det_Gdenom_  
                             else:
+                                #print("singular numerator, k != k_copy+1, k=", k, "i=", i)
                                 corr_factor_Gdenom = corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s) # OK
                                 Gnum_ = adapt_singular_Gnum2(Gnum, r=r, s=s, i=i) 
+                                
+                                #det_Gnum_ = det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal=G, r=r, s=s, xmin=xmin, i=i)
+                                #print("det_Gnum_=", det_Gnum_, "np.linalg.det(Gnum_)=", np.linalg.det(Gnum_))  
+                                #cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / ( det_Gdenom * corr_factor_Gdenom)                              
+
                                 cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / ( det_Gdenom * corr_factor_Gdenom)
                             t1 = time()
                             elapsed_singular += (t1 - t0)
@@ -371,13 +454,13 @@ for k in range(Np):
         elapsed_connecting_states += (t1_conn - t0_conn)                    
 
 assert np.isclose(np.sum(cond_prob_ref, axis=1), np.ones((Np,1))).all()
-print("sum(cond_prob_ref=", np.sum(cond_prob_ref, axis=1))
+#print("sum(cond_prob_ref=", np.sum(cond_prob_ref, axis=1))
 for state_nr in range(num_connecting_states):
     for k in range(Np):
         if k > k_copy[state_nr]:
-            print("state_nr=", state_nr, "k=", k)
-            print("cond_prob_onehop[%d, %d, :]=<"%(state_nr, k), cond_prob_onehop[state_nr, k, :])
-            print("sum(cond_prob_onehop=", np.sum(cond_prob_onehop[state_nr, k, :]))
+            #print("state_nr=", state_nr, "k=", k)
+            #print("cond_prob_onehop[%d, %d, :]=<"%(state_nr, k), cond_prob_onehop[state_nr, k, :])
+            #print("sum(cond_prob_onehop=", np.sum(cond_prob_onehop[state_nr, k, :]))
             assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0)
 
 
