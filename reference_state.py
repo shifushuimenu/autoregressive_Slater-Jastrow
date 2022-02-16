@@ -384,7 +384,8 @@ for k in range(Np):
                             if k==(k_copy_+1):
                                 Gdenom_ = adapt_Gdenom(Gnum, r=r, s=s)
                                 Gnum_ = Gnum_from_Gdenom3(Gdenom_, Gglobal=G, r=r, s=s, i=i)
-                                cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / np.linalg.det(Gdenom_)                            
+                                cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / np.linalg.det(Gdenom_)        
+                                print("sum=", sum(cond_prob_onehop[state_nr, k, :]))                    
                                 #print("cond_prob_onehop[state_nr, k, i] = ", cond_prob_onehop[state_nr, k, i], np.linalg.det(Gnum_))
                             else:
                                 # connecting state and reference state have the same support in the denominator 
@@ -476,10 +477,14 @@ assert np.isclose(np.sum(cond_prob_ref, axis=1), np.ones((Np,1))).all()
 for state_nr in range(num_connecting_states):
     for k in range(Np):
         if k > k_copy[state_nr]:
-            # print("state_nr=", state_nr, "k=", k)
-            # print("cond_prob_onehop[%d, %d, :]=<"%(state_nr, k), cond_prob_onehop[state_nr, k, :])
-            # print("sum(cond_prob_onehop=", np.sum(cond_prob_onehop[state_nr, k, :]))
-            assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0)
+            #print("state_nr=", state_nr, "k=", k)
+            #print("ref_conf=")
+            #print(ref_conf)
+            #print("one-hop-state=")
+            #print(xs[state_nr])
+            #print("cond_prob_onehop[%d, %d, :]=<"%(state_nr, k), cond_prob_onehop[state_nr, k, :])
+            print("sum(cond_prob_onehop=", np.sum(cond_prob_onehop[state_nr, k, :]))
+            #assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0)
 
 
 print("elapsed_ref=", elapsed_ref)
