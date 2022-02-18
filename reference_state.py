@@ -1,6 +1,6 @@
 # TODO:
 #     - corr3_Gnum_from_Gdenom(): What if the matrix S is singular ? linalg.inv(S) raises an error 
-#     - The case of a singular numerator matrix occurs very often. 
+#     - The case of a singular numerator matrix occurs very often (more than 50 %). 
 
 from curses import KEY_SCOPY
 import numpy as np
@@ -15,7 +15,7 @@ from block_update_numpy import ( block_update_inverse,
 from time import time 
 from profilehooks import profile
 
-#np.random.seed(422)
+np.random.seed(422)
 
 
 def exclude_invalid_connecting_states(hop_from_to, states_I, matrix_elem):
@@ -31,7 +31,7 @@ def exclude_invalid_connecting_states(hop_from_to, states_I, matrix_elem):
 valid_states = exclude_invalid_connecting_states 
 
 # Calculate k_copy
-def calc_k_copy(hop_from_to, ref_state_I, ns):
+def calc_k_copy(hop_from_to, ref_state, ns):
     """
         ONLY VALID FOR 1D N.N. HOPPING MATRIX.
 
@@ -52,10 +52,10 @@ def calc_k_copy(hop_from_to, ref_state_I, ns):
         >>> Ns=9; l1d = Lattice1d(ns=Ns); I = [2**8 + 2**7 + 2**4 + 2**2 + 2**0]
         >>> hop_from_to, states_I, matrix_elem = valid_states(*kinetic_term(I, l1d))
         >>> k_copy = (0, 1, 1, 2, 2, 3)
-        >>> k_copy == calc_k_copy(hop_from_to, I, Ns)
+        >>> k_copy == calc_k_copy(hop_from_to, int2bin(I, ns=Ns), Ns)
         True
     """
-    pos_ref_state = int2pos(ref_state_I, ns=ns)
+    pos_ref_state = bin2pos(ref_state)
     num_connecting_states = len(hop_from_to)
     k_copy = np.zeros((num_connecting_states,), dtype=int)
 
@@ -295,14 +295,14 @@ def Gnum_from_Gdenom3(Gdenom_, Gglobal, r, s, i):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 60; Np = 10   # Ns=50; Np=19 -> normalization only up to 10e-5. Are there numerical instabilities ? 
+Ns = 200; Np = 100    # Ns=50; Np=19 -> normalization only up to 10e-5. Are there numerical instabilities ? 
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
 
-eps_norm_probs = 1.0 - 1e-8 # Note: np.isclose(1.0 - 1e-5, 1.0) == True
+eps_norm_probs = 1.0 - 1e-7 # Note: np.isclose(1.0 - 1e-5, 1.0) == True
 
-def gen_random_config_I(Ns, Np):
+def gen_random_config(Ns, Np):
     """generate a random reference state of fixed particle number"""
     config = np.zeros((Ns,), dtype=int) 
     config[0] = 1; config[-1] = 1 # !!!!! REMOVE: Make sure no hopping across p.b.c can occur. 
@@ -312,11 +312,11 @@ def gen_random_config_I(Ns, Np):
         if config[pos] != 1:
             config[pos] = 1
             counter += 1 
-    return bin2int(config).numpy()
-
-ref_I = gen_random_config_I(Ns, Np)
+    return config
+    
+ref_conf = gen_random_config(Ns, Np)
+ref_I = bin2int(ref_conf).numpy() # ATTENTION: Wrong results for too large bitarrays !
 #ref_I = bin2int(np.array([1,0,1,0,1,0,0,1,1]))
-ref_conf = int2bin(ref_I, ns=Ns)
 
 # # The "one-hop" config is generated from the reference state by 
 # # removing a particle at position `r` and putting it 
@@ -330,17 +330,35 @@ ref_conf = int2bin(ref_I, ns=Ns)
 
 l1d = Lattice1d(ns=Ns)
 # `states_I` are only the connecting states, the reference state is not included 
-rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l1d))
-num_connecting_states = len(states_I)
-xs = int2bin(states_I, ns=Ns)
+# rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l1d))
+# num_connecting_states = len(states_I)
+# xs = int2bin(states_I, ns=Ns)
+
+# JUST FOR TESTING THE SCALING 
+# Find all connecting states 
+xs = []
+rs_pos = []
+for r in range(len(ref_conf)):
+    if r < len(ref_conf)-1 and r > 0:
+        for s in (r - 1, r + 1):
+            if ref_conf[r] == 1 and ref_conf[s] == 0:
+                x_temp = ref_conf.copy()
+                x_temp[r] = 0; x_temp[s] = 1
+                xs.append(x_temp)
+                rs_pos.append((r,s))
+
+num_connecting_states = len(xs)
+# # END: JUST FOR TESTING THE SCALING 
+
+
 # special case of 1d n.n. hopping matrix 
 assert np.all([abs(r-s) == 1 or abs(r-s) == Ns-1 for r,s in rs_pos])
 print("reference state=")
-print(int2bin(ref_I, ns=Ns))
+print("ref_conf=", ref_conf)
 print("connecting_states=")
 print(xs)
 print("rs_pos=", rs_pos)
-k_copy = calc_k_copy(rs_pos, ref_I, ns=Ns)
+k_copy = calc_k_copy(rs_pos, ref_conf, ns=Ns)
 print("k_copy=", k_copy)
 one_hop_info = list(zip(k_copy, rs_pos))
 
@@ -358,6 +376,7 @@ Ksites = []
 occ_vec = list(ref_conf)
 assert type(occ_vec) == type(list()) # use a list, otherwise `occ_vec[0:xmin] + [1]` will result in `[]`. 
 pos_vec = bin2pos(ref_conf)
+
 
 elapsed_ref = 0.0
 elapsed_connecting_states = 0.0
@@ -480,11 +499,12 @@ for k in range(Np):
                                     cumul_sum_cond_prob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i-1]
                                 if i > r:  
                                     corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
-                                            * (det_Gdenom / det_Gdenom_)   # OK                          
+                                            * (det_Gdenom / det_Gdenom_)   # OK    
+                                    cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]                      
                             else:
                                 corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
                                                 / corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s) # OK
-                            cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
+                                cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
                         else:
                             counter_nonsingular += 1
                             # As the numerator is singular, the conditional probabilities of the connecting states 
@@ -552,6 +572,7 @@ for k in range(Np):
 for state_nr, (k_copy_, (r,s)) in enumerate(one_hop_info):
     for k in range(Np):
         if k > k_copy_:
+            print("cumul=", cumul_sum_cond_prob_onehop[state_nr,k])
             assert np.isclose(cumul_sum_cond_prob_onehop[state_nr,k], 1.0)
 assert np.isclose(np.sum(cond_prob_ref, axis=1), np.ones((Np,1))).all()
 #print("sum(cond_prob_ref=", np.sum(cond_prob_ref, axis=1))
@@ -564,7 +585,7 @@ for state_nr in range(num_connecting_states):
             #print("one-hop-state=")
             #print(xs[state_nr])
             #print("cond_prob_onehop[%d, %d, :]=<"%(state_nr, k), cond_prob_onehop[state_nr, k, :])
-            #print("sum(cond_prob_onehop=", np.sum(cond_prob_onehop[state_nr, k, :]))
+            print("sum(cond_prob_onehop=", np.sum(cond_prob_onehop[state_nr, k, :]))
             assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0)
 
 
