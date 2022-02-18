@@ -141,7 +141,7 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
             matrix_elem[..., count] = -t_hop * np.where(STATE_EXISTS, fermion_parity(ns, I, ii, jj), 0)
             # hop_from_to.append((i,j))
 
-            # hop_from_to is only correct is the input is not batched.
+            # CAREFUL: hop_from_to is only correct if the input is not batched.
             if np.bitwise_and(I, 2**i) == 2**i and np.bitwise_xor(I, I+2**j) == 2**j:
                 r = i; s = j
             elif np.bitwise_and(I, 2**j) == 2**j and np.bitwise_xor(I, I+2**i) == 2**i:
