@@ -1,6 +1,7 @@
 # TODO:
 #     - corr3_Gnum_from_Gdenom(): What if the matrix S is singular ? linalg.inv(S) raises an error 
 #     - The case of a singular numerator matrix occurs very often (more than 50 %). 
+#     - The matrix CC in lowrank_update_inv_addremove_rs() sometimes has extremely high condition numbers. 
 
 from curses import KEY_SCOPY
 import numpy as np
@@ -15,7 +16,7 @@ from block_update_numpy import ( block_update_inverse,
 from time import time 
 from profilehooks import profile
 
-np.random.seed(422)
+#np.random.seed(422)
 
 
 def exclude_invalid_connecting_states(hop_from_to, states_I, matrix_elem):
@@ -96,7 +97,8 @@ def corr_factor_removeadd_rs(Ainv, r, s):
         with N_K = (n_0, n_1, ..., n_{K-1}) where n_r = 1 and n_s = 0
         and a particle is moved such that after the update n_r = 0 and n_s = 1.         
     """
-    return (1 + Ainv[r,r]) * (1 - Ainv[s,s]) + Ainv[r,s]*Ainv[s,r]
+    #return (1 + Ainv[r,r]) * (1 - Ainv[s,s]) + Ainv[r,s]*Ainv[s,r]
+    return 1 + Ainv[r,r] - Ainv[s,s] - Ainv[r,r] * Ainv[s,s] + Ainv[r,s]*Ainv[s,r]
 
 def corr_factor_add_s(Ainv, s):
     """add a particle at position s without removing any particle """
@@ -213,9 +215,28 @@ def lowrank_update_inv_addremove_rs(Gdenom_inv, r, s):
     AinvU[:,1] = Gdenom_inv[:,s]
     VtAinv[0,:] = Gdenom_inv[r,:]
     VtAinv[1,:] = - Gdenom_inv[s,:]
+    
+    # Calculate the determinant and inverse analytically because the condition number of CC can be extremely large. 
+    det_CC = 1.0 + (Gdenom_inv[r,r] - Gdenom_inv[s,s]) - Gdenom_inv[r,r] * Gdenom_inv[s,s] + Gdenom_inv[r,s] * Gdenom_inv[s,r]
 
-    Gdenom_inv_ = Gdenom_inv - np.matmul(np.matmul(AinvU, np.linalg.inv(CC)), VtAinv)
+    inv_CC = np.array([ [ 1.0 - Gdenom_inv[s,s], - Gdenom_inv[r,s]    ], 
+                        [ + Gdenom_inv[s,r]    , 1 + Gdenom_inv[r,r]  ] ]) / det_CC
+
+    Gdenom_inv_ = Gdenom_inv - np.matmul(np.matmul(AinvU, inv_CC), VtAinv)
     det_corr = np.linalg.det(CC)
+
+    # print("np.diag(Gdenom_inv)=", np.diag(Gdenom_inv))
+    # print("Gdenom_inv[r,r]=", Gdenom_inv[r,r])
+    # print("Gdenom_inv[s,s]=", Gdenom_inv[s,s])
+    # print("Gdenom_inv[r,s]=", Gdenom_inv[r,s])
+    # print("Gdenom_inv[s,r]=", Gdenom_inv[s,r])
+    # print("det_corr=", det_corr, "det_CC=", det_CC)
+
+    # print("condition number:", np.linalg.cond(CC), "det_corr=", det_corr)
+
+    # print("inv_CC=", inv_CC)
+    # print("np.linalg.inv(CC)=", np.linalg.inv(CC))
+
     return Gdenom_inv_, det_corr
 
 def det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal, r, s, xmin, i):
@@ -228,6 +249,7 @@ def det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal, r, s, xmin, i):
     
     # 1. Calculate Gdenom_inv_ from Gdenom_inv using a low-rank update 
     # where a particle is removed at position `r`` and one is added at position `s`. 
+    #print("xmin=", xmin, "i=", i, "r=", r, "s=", s)
     Gdenom_inv_, det_corr = lowrank_update_inv_addremove_rs(Gdenom_inv, r, s)
     det_Gdenom_ = det_Gdenom * det_corr
 
@@ -275,6 +297,7 @@ def corr3_Gnum_from_Gdenom(Gdenom_inv_, Gglobal, r, s, xmin, i):
 
     AinvB = np.matmul(Ainv, B)
     CAinv = AinvB.transpose()
+    # OK: condition number of S is in the range 10^0 to 10^2. 
     corr_factor_remove_r = 1 + (Ainv + np.matmul(AinvB, np.matmul(np.linalg.inv(S), CAinv)))[r,r]
 
     return det_Schur, corr_factor_remove_r
@@ -353,13 +376,13 @@ num_connecting_states = len(xs)
 
 # special case of 1d n.n. hopping matrix 
 assert np.all([abs(r-s) == 1 or abs(r-s) == Ns-1 for r,s in rs_pos])
-print("reference state=")
-print("ref_conf=", ref_conf)
-print("connecting_states=")
-print(xs)
-print("rs_pos=", rs_pos)
+#print("reference state=")
+#print("ref_conf=", ref_conf)
+#print("connecting_states=")
+#print(xs)
+#print("rs_pos=", rs_pos)
 k_copy = calc_k_copy(rs_pos, ref_conf, ns=Ns)
-print("k_copy=", k_copy)
+#print("k_copy=", k_copy)
 one_hop_info = list(zip(k_copy, rs_pos))
 
 s_pos = list(s for (r,s) in rs_pos if s < r)
@@ -384,7 +407,12 @@ elapsed_singular = 0.0
 elapsed_adapt = 0.0
 counter_nonsingular = 0
 counter_singular = 0
+counter_skip = 0
+counter_refskip = 0
+det_Gdenom_array = np.zeros((Np, Ns))
 
+# REMOVE
+Gdenom_cond_max = 0
 
 for k in range(Np):
     xmin = 0 if k==0 else pos_vec[k-1] + 1 # half-open interval (xmin included, xmax not included)
@@ -402,6 +430,8 @@ for k in range(Np):
         det_Gnum = np.linalg.det(Gnum)
         det_Gdenom = np.linalg.det(Gdenom)
 
+        det_Gdenom_array[k, i] = det_Gdenom
+
         # Internal state used during low-rank update of conditional probabilities 
         # of the connnecting states. 
         Gnum_inv = np.linalg.inv(Gnum)   # OK 
@@ -410,6 +440,11 @@ for k in range(Np):
         cond_prob_ref[k, i] = (-1) * det_Gnum / det_Gdenom
         t1 = time() 
         elapsed_ref += (t1 - t0)
+
+        REF_SKIP = False 
+        if np.isclose(cond_prob_ref[k,i], 0.0, atol=1e-8 / float(Ns)):
+            counter_refskip += 1
+            REF_SKIP = True 
 
         if (i,k) in S_connecting_states:
             det_Gnum_reuse.update({k : det_Gnum})
@@ -422,9 +457,16 @@ for k in range(Np):
             if k_copy_ >= k:
                 break # copy conditional probabilities rather than calculating them 
             else: # k_copy < k
+                #print("REF_SKIP")
                 if s > r:
                     if i > s:
-                        if not np.isclose(det_Gnum, 0.0): # don't invert a singular matrix 
+                        if not np.isclose(det_Gnum, 0.0, atol=1e-200): # don't invert a singular matrix 
+                            cond = np.linalg.cond(Gdenom)
+                            if cond > Gdenom_cond_max:
+                                Gdenom_cond_max = cond 
+                                print("Gdenom_cond_max=", Gdenom_cond_max)
+                                print("Gdenom.shape=", Gdenom.shape)
+
                             counter_nonsingular += 1
                             if k==(k_copy_+1):               
                                 # everything OK      
@@ -436,9 +478,21 @@ for k in range(Np):
                             else:
                                 corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
                                                 / corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s) # OK
-                            cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
+                            cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i] if not REF_SKIP else 0.0 
+                            if corr_factor < 0.0 and not REF_SKIP:
+                                print("cond(Gnum_inv)=", np.linalg.cond(Gnum_inv))
+                                print("cond(Gdenom_inv)=", np.linalg.cond(Gdenom_inv))
+                                print("cond_prob_ref[k, i]=", cond_prob_ref[k,i])
+                                print("corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)=", corr_factor_removeadd_rs(Gnum_inv, r=r, s=s))
+                                print("Ainv[r,r]=", Gnum_inv[r,r])
+                                print("Ainv[s,s]=", Gnum_inv[s,s])
+                                print("Ainv[r,s]=", Gnum_inv[r,s])
+                                print("corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)=", corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s))
+                                print("Ainv[r,r]=", Gdenom_inv[r,r])
+                                print("Ainv[s,s]=", Gdenom_inv[s,s])
+                                print("Ainv[r,s]=", Gdenom_inv[r,s])                            
+                            #print("NONSINGULAR, corr_factor=", corr_factor, REF_SKIP)
                         else: 
-                            counter_singular += 1
                             # As the numerator is singular, the conditional probabilities of the connecting states 
                             # should be calculated based on the matrix in the denominator, the inverse and determinant 
                             # of which are assumed to be known. The matrix in the denominator cannot be singular. 
@@ -450,6 +504,7 @@ for k in range(Np):
 
                             if cumul_sum_cond_prob_onehop[state_nr, k] > eps_norm_probs:
                                 cond_prob_onehop[state_nr, k, i-1:] = 0.0
+                                counter_skip += (xmax - i) 
                                 break
 
                             # print("numerator 1 singular, k=", k, " i=", i, "sum(cond_prob_ref)=", sum(cond_prob_ref[k, 0:i+1]), sum(cond_prob_onehop[state_nr, k, 0:i]))
@@ -461,13 +516,12 @@ for k in range(Np):
                                 corr_factor_Gdenom = corr1 * corr2                                
                                 #assert np.isclose(np.linalg.det(Gdenom_), corr_factor_Gdenom * det_Gdenom)
 
-
                                 #Gnum_ = Gnum_from_Gdenom3(Gdenom_, Gglobal=G, r=r, s=s, i=i)
                                 corr4, corr3 = corr3_Gnum_from_Gdenom(Gdenom_inv_, Gglobal=G, r=r, s=s, xmin=xmin, i=i)
                                 det_Gnum_ = corr4 * corr3 * corr1 * det_Gdenom
                                 #assert np.isclose(det_Gnum_, np.linalg.det(Gnum_))
                                 #cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / np.linalg.det(Gdenom_)   
-                                cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / (corr_factor_Gdenom * det_Gdenom)      
+                                cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / (corr_factor_Gdenom * det_Gdenom) if not REF_SKIP else 0.0      
                                 #print("cond_prob_onehop[state_nr, k, i] = ", cond_prob_onehop[state_nr, k, i], np.linalg.det(Gnum_))
                             else:
                                 # connecting state and reference state have the same support in the denominator 
@@ -476,8 +530,12 @@ for k in range(Np):
                                 #Gnum_ = adapt_singular_Gnum(Gnum, r=r, s=s, i=i) # not useful  
                                 det_Gnum_ = det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal=G, r=r, s=s, xmin=xmin, i=i)
                                 #assert np.isclose(det_Gnum_, np.linalg.det(Gnum_))
-                                cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / (det_Gdenom * corr_factor_Gdenom)
+                                cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / (det_Gdenom * corr_factor_Gdenom) if not REF_SKIP else 0.0 
                                 #cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / (det_Gdenom * corr_factor_Gdenom)
+                            counter_singular += 1
+                            #print("SSingular, detGnum=", det_Gnum, "detGdenom=", det_Gdenom, "cond_prob_ref[k, i]=", cond_prob_ref[k, i])
+                            #print("det_Gnum_=", det_Gnum_, "corr_factor_Gdenom=", corr_factor_Gdenom)
+
                             t1 = time()
                             elapsed_singular += (t1 - t0)
                 elif r > s: 
@@ -485,7 +543,22 @@ for k in range(Np):
                         # more conditional probabilities than in the reference state. 
                         # In other words, here,  i not in (xmin, xmax). 
                         # The case i == r is special. 
-                        if not np.isclose(det_Gnum, 0.0): # don't invert a singular matrix                                                  
+
+                        # if k == 90:
+                        #     uu,dd,vv = np.linalg.svd(Gdenom_inv)
+                        #     fh1 = open("svd_Gdenom_inv_k%d.dat"%(k), "w")
+                        #     for iii in range(len(dd)):
+                        #         fh1.write("%d %e \n" % (iii, dd[iii]))
+                        #     fh1.close()
+
+                        #     uu,dd,vv = np.linalg.svd(Gnum_inv)
+                        #     fh1 = open("svd_Gnum_inv_k%d.dat"%(k), "w")
+                        #     for iii in range(len(dd)):
+                        #         fh1.write("%d %e \n" % (iii, dd[iii]))
+                        #     fh1.close()
+
+
+                        if not np.isclose(det_Gnum, 0.0, atol=1e-200): # don't invert a singular matrix                                                  
                             counter_nonsingular += 1
                             if k==(k_copy_+1):
                                 det_Gdenom_ = det_Gnum_reuse.get(k-1)
@@ -496,17 +569,31 @@ for k in range(Np):
                                     # is not calculated, instead the cond. prob. is calculated directly:
                                     det_Gnum_ = det_Gdenom * corr_factor_add_s(Gdenom_inv, s=s) # OK
                                     cond_prob_onehop[state_nr, k, i-1] = (-1) * det_Gnum_ / det_Gdenom_ # OK
+                                    if cond_prob_onehop[state_nr, k, i-1] < 0:
+                                        print("cond_prob_onehop[state_nr, k, i-1]=", cond_prob_onehop[state_nr, k, i-1])
+                                        exit(1)
                                     cumul_sum_cond_prob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i-1]
                                 if i > r:  
                                     corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
                                             * (det_Gdenom / det_Gdenom_)   # OK    
-                                    cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]                      
+                                    #print("corr_factor=", corr_factor)
+                                    cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]  if not REF_SKIP else 0.0          
                             else:
                                 corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
-                                                / corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s) # OK
-                                cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
+                                                / corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s) # OK                                     
+                                cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i] if not REF_SKIP else 0.0 
+                                if corr_factor < 0.0 and not REF_SKIP:
+                                    print("cond_prob_ref[k, i]=", cond_prob_ref[k,i])
+                                    print("corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)=", corr_factor_removeadd_rs(Gnum_inv, r=r, s=s))
+                                    print("Ainv[r,r]=", Gnum_inv[r,r])
+                                    print("Ainv[s,s]=", Gnum_inv[s,s])
+                                    print("Ainv[r,s]=", Gnum_inv[r,s])
+                                    print("corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)=", corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s))
+                                    print("Ainv[r,r]=", Gdenom_inv[r,r])
+                                    print("Ainv[s,s]=", Gdenom_inv[s,s])
+                                    print("Ainv[r,s]=", Gdenom_inv[r,s])
+                            #print("NONSINGULAR, np.diag(Gdenom_inv)=", np.diag(Gdenom_inv))                                
                         else:
-                            counter_nonsingular += 1
                             # As the numerator is singular, the conditional probabilities of the connecting states 
                             # should be calculated based on the matrix in the denominator, the inverse and determinant 
                             # of which are assumed to be known. The matrix in the denominator cannot be singular.                             
@@ -518,8 +605,10 @@ for k in range(Np):
                             # First check whether the conditional probabilities are already saturated.
                             if cumul_sum_cond_prob_onehop[state_nr, k] > eps_norm_probs:
                                 cond_prob_onehop[state_nr, k, i-1:] = 0.0
+                                counter_skip += (xmax - i)
                                 break                                     
-                                     
+                            counter_singular += 1
+                            #print("SSingular")         
                             # print("numerator 2 singular, k=", k, " i=", i, "sum(cond_prob)=", sum(cond_prob_ref[k, 0:i+1]))
 
                             if k==(k_copy_+1):
@@ -538,24 +627,21 @@ for k in range(Np):
                                     cond_prob_onehop[state_nr, k, i-1] = (-1) * det_Gnum_ / det_Gdenom_
                                     cumul_sum_cond_prob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i-1]
                                     #cond_prob_onehop[state_nr, k, i-1] = (-1) * np.linalg.det(Gnum_) / det_Gdenom_
-                                if i > r: 
-                                    
+                                if i > r:                                     
                                     #Gnum_ = adapt_singular_Gnum2(Gnum, r=r, s=s, i=i)
                                     #print("Gnum_.shape=", Gnum_.shape)
-
                                     det_Gnum_ = det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal=G, r=r, s=s, xmin=xmin, i=i)
                                     ##print("det_Gnum_=", det_Gnum_, "np.linalg.det(Gnum_)=", np.linalg.det(Gnum_))
                                     #assert np.isclose(det_Gnum_, np.linalg.det(Gnum_) )
-                                    cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / det_Gdenom_
+                                    cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / det_Gdenom_ if not REF_SKIP else 0.0 
                                     #cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / det_Gdenom_  
                             else:
                                 #print("singular numerator, k != k_copy+1, k=", k, "i=", i)
                                 corr_factor_Gdenom = corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s) # OK
                                 #Gnum_ = adapt_singular_Gnum2(Gnum, r=r, s=s, i=i) 
-                                
                                 det_Gnum_ = det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal=G, r=r, s=s, xmin=xmin, i=i)
                                 #print("det_Gnum_=", det_Gnum_, "np.linalg.det(Gnum_)=", np.linalg.det(Gnum_))  
-                                cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / ( det_Gdenom * corr_factor_Gdenom)                              
+                                cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / ( det_Gdenom * corr_factor_Gdenom) if not REF_SKIP else 0.0                              
 
                                 #cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / ( det_Gdenom * corr_factor_Gdenom)
                                 
@@ -588,11 +674,29 @@ for state_nr in range(num_connecting_states):
             print("sum(cond_prob_onehop=", np.sum(cond_prob_onehop[state_nr, k, :]))
             assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0)
 
+fh = open("cond_prob_ref.dat", "w")
+fh2 = open("det_Gdenom_array.dat", "w")
+for k in range(cond_prob_ref.shape[0]):
+    for i in range(cond_prob_ref.shape[1]):
+        fh.write("%d %d %e\n" % (k, i, cond_prob_ref[k, i]))
+        fh2.write("%d %d %e\n" % (k, i, det_Gdenom_array[k,i]))
+fh.close()
+fh2.close()
+
+
+for state_nr in range(cond_prob_onehop.shape[0]):
+    fh = open("cond_prob_onehop%d.dat" % (state_nr), "w")
+    for k in range(cond_prob_onehop.shape[1]):
+        for i in range(cond_prob_onehop.shape[2]):
+            fh.write("%d %d %16.15f\n" % (k, i, cond_prob_onehop[state_nr, k, i]))
+    fh.close()
 
 print("elapsed_ref=", elapsed_ref)
 print("elapsed_connecting_states=", elapsed_connecting_states)
 print("elapsed_singular=", elapsed_singular)
 print("counter_singular=", counter_singular)
+print("counter_skip=", counter_skip)
+print("counter_refskip=", counter_refskip)
 print("counter_nonsingular=", counter_nonsingular)
 print("elapsed_adapt=", elapsed_adapt)
 

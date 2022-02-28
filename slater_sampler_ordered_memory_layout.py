@@ -22,6 +22,7 @@ from block_update import block_update_inverse
 from profilehooks import profile
 from time import time 
 
+
 class SlaterDetSampler_ordered(torch.nn.Module):
     """
         Sample a set of particle positions from a Slater determinant of 
@@ -99,6 +100,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.occ_vec = np.zeros(self.D, dtype=np.float64)
         self.occ_positions = np.zeros(self.N, dtype=np.int64)
         self.occ_positions[:] = -10^6 # set to invalid values 
+        self.cond_probs = np.zeros(self.N*self.D) # cond. probs. for all components (for monitoring purposes)
         # list of particle positions 
         self.Ksites = []
         self.len_Ksites = 0
@@ -109,6 +111,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.state_index = -1
 
         # helper variables for low-rank update
+
 
     #@profile
     def get_cond_prob(self, k):
@@ -139,7 +142,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         mm=-1
         for i_k in range(self.xmin, self.xmax):
 
-            #First check whether the conditional probabilities are already saturated.
+            # First check whether the conditional probabilities are already saturated.
             # This gives significant speedup, most notably at low filling. 
             if cumul_probs > self.eps_norm_probs: #0.99999999:
                 # LOG: print("skipping: sum(probs) already saturated (i.e. =1). xmax-1 - i_k = ", self.xmax-1 - i_k)
@@ -270,7 +273,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                       CCXinvBB[mm, 0:mm] = BB1[:,0]
                       CCXinvBB[mm, mm] = DD1
                       ###assert torch.isclose(CCXinvBB, torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1))))).all()
-                      Schur_complement = DD - CCXinvBB[0:mm+1, 0:mm+1]                      
+                      Schur_complement = DD - CCXinvBB[0:mm+1, 0:mm+1]           
                       t1 = time()                      
                       self.t_update_Schur += (t1 - t0)
                       assert torch.isclose(Schur_complement, DD - torch.matmul(torch.matmul(CC, self.Xinv), BB)).all()                      
@@ -325,6 +328,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         assert self.state_index == k-1
 
         probs = self.get_cond_prob(k)
+        self.cond_probs[k*self.D:(k+1)*self.D] = probs
+        print("sum=", sum(self.cond_probs[k*self.D:(k+1)*self.D]))
         pos = Categorical(probs).sample().numpy()
         # conditional prob in this sampling step 
         cond_prob_k = probs[pos]
@@ -343,6 +348,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
             _, cond_prob_k = self._sample_k(k)
             prob_sample *= cond_prob_k
         
+        np.savetxt("cond_probs_allk.dat", self.cond_probs.transpose())
+
         return self.occ_vec, prob_sample
 
     #@profile
@@ -479,10 +486,10 @@ if __name__ == "__main__":
 
     from time import time 
 
-    for L in (1000,): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
+    for L in (200,): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
         (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=L, potential='none', PBC=False, HF=False)
-        Nparticles = 10 #L//2
-        num_samples = 10
+        Nparticles = 100 #L//2
+        num_samples = 2
 
         #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
         #SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
