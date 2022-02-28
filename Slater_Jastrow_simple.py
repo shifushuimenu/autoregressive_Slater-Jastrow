@@ -82,6 +82,23 @@ class Lattice1d(object):
         # right neighbours 
         self.neigh[:-1,1] = range(1, self.ns)
         self.neigh[ns-1, 1] = 0
+
+
+class Lattice_rectangular(object):
+    def __init__(self, nx=4, ny=4):
+        self.nx = nx 
+        self.ny = ny 
+        self.ns = self.nx * self.ny
+        self.coord = 4
+
+        rectl = np.arange(self.ns).reshape(self.nx, self.ny) 
+        up    = np.roll(rectl, 1, axis=0).flatten()
+        right = np.roll(rectl, -1, axis=1).flatten()
+        down  = np.roll(rectl, -1, axis=0).flatten()
+        left  = np.roll(rectl, 1, axis=1).flatten()        
+
+        self.neigh = np.vstack((up, right, down, left)).transpose() # idxs: sitenr, direction (up=0, right=1, down=2, left=3)
+        
 ###############################
 
 #@profile        
@@ -159,7 +176,9 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
     I_prime[I_prime == 0] = 2**num_particles - 1
 
     return ( hop_from_to, I_prime, matrix_elem )
-               
+
+
+
 #@profile
 def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=5.0):
     '''
