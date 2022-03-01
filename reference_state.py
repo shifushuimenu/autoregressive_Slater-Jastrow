@@ -318,7 +318,7 @@ def Gnum_from_Gdenom3(Gdenom_, Gglobal, r, s, i):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 200; Np = 100    # Ns=50; Np=19 -> normalization only up to 10e-5. Are there numerical instabilities ? 
+Ns = 50; Np = 10    # Ns=50; Np=19 -> normalization only up to 10e-5. Are there numerical instabilities ? 
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))

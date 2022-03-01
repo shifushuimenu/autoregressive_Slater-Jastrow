@@ -36,12 +36,9 @@ def train(model, learning_rate, num_samples=10, use_cuda=False):
         sample_list = np.zeros((num_samples, Nsites)) 
         with torch.no_grad():
             for i in range(num_samples):
-                print("sample nr =", i)
                 sample_unfolded, sample_prob = SJA.sample_unfolded()
                 sample_list[i] = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
 
-        
-        print("after sampling and before calculating gradients")
         energy, grad, energy_grad, precision = vmc_measure(model.local_measure, sample_list, num_bin=50)
 
         # update variables using stochastic gradient descent
