@@ -46,7 +46,7 @@ def gen_random_config(Ns, Np):
     return config
 
 
-for jj in range(1):
+for jj in range(100):
     print("jj=", jj)
 
     ref_conf = gen_random_config(Ns, Np)
@@ -73,8 +73,6 @@ for jj in range(1):
 
     num_connecting_states = len(xs)
 
-    ###ZERO_PROB_STATES = np.empty(len(rs_pos), dtype=bool)
-    ###ZERO_PROB_STATES[:] = False
     #print(ref_conf)
     #for i in range(len(xs)):
     #   print(xs[i])
@@ -151,7 +149,7 @@ for jj in range(1):
             try:
                 Gnum_inv = np.linalg.inv(Gnum) 
             except np.linalg.LinAlgError as e:
-                print("det_Gnum=%16.12f\n" % (det_Gnum), e)
+                print("ERROR: det_Gnum=%16.12f\n" % (det_Gnum), e)
 
             Gdenom_inv = np.linalg.inv(Gdenom) # OK
 
@@ -171,7 +169,7 @@ for jj in range(1):
             # to the reference state by one hop, using a low-rank update of `Gnum`
             # and `Gdenom`.
             t0_conn = time()
-            for state_nr, (k_copy_, (r,s)) in enumerate(one_hop_info):   
+            for state_nr, (k_copy_, (r,s)) in enumerate(one_hop_info):
                 if k_copy_ >= k:
                     # copy conditional probabilities rather than calculating them 
                     # Exit the loop; it is assumed that one-hop states are ordered according to increasing values 
@@ -179,7 +177,6 @@ for jj in range(1):
                     break 
                 else: # k_copy < k  
                     # SOME SPECIAL CASES 
-                    ###if ZERO_PROB_STATES[state_nr]: break   # Assumes that cond. probs. have been initialized to zero.
                     xmin_onehop = xs_pos[state_nr, k-1] + 1; xmax_onehop = xmax
                     if xmin_onehop == xmax_onehop-1 and r < i and s < i: 
                     # Every subsequent empty site needs to be occupied to accomodate all particles both in the reference state 
@@ -373,9 +370,6 @@ for jj in range(1):
                                 elapsed_singular += (t1 - t0)
 
                     cumul_sum_cond_prob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i]
-                    ###if np.isclose(cond_prob_onehop[state_nr, k, i], 0.0, atol=1e-8):
-                    ###    ZERO_PROB_STATES[state_nr] = True
-
 
             t1_conn = time()
             elapsed_connecting_states += (t1_conn - t0_conn)                    
@@ -389,10 +383,8 @@ for jj in range(1):
                 fh.write("%d %d %16.15f\n" % (k, i, cond_prob_onehop[state_nr, k, i]))
         fh.close()
 
-    ###print("ZERO_PROB_STATES=", ZERO_PROB_STATES[:])
 
     for state_nr, (k_copy_, (r,s)) in enumerate(one_hop_info):
-        ###if ZERO_PROB_STATES[state_nr]: break
         for k in range(Np):
             if k > k_copy_:
                 print("k=", k, "state_nr=", state_nr, "cumul=", cumul_sum_cond_prob_onehop[state_nr,k])
