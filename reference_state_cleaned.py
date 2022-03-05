@@ -10,7 +10,7 @@ from k_copy import *
 
 from time import time 
 
-np.random.seed(479)
+np.random.seed(424)
 ATOL = 1e-2
 
 def Gnum_from_Gdenom3(Gdenom_, Gglobal, r, s, i):
@@ -26,7 +26,7 @@ def Gnum_from_Gdenom3(Gdenom_, Gglobal, r, s, i):
     return G
 
 # Calculate the conditional probabilities of the reference state
-Ns = 200; Np = 100    # Ns=20, Np=10: normlization problems with some cond. probs.  
+Ns = 50; Np = 25    # Ns=20, Np=10: normlization problems with some cond. probs.  
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
@@ -196,6 +196,7 @@ for jj in range(1):
                                 cond = np.linalg.cond(Gdenom)
                                 if cond > Gdenom_cond_max:
                                     Gdenom_cond_max = cond 
+                                    print("Gdenom_cond_max=", Gdenom_cond_max)
 
                                 if k==(k_copy_+1):               
                                     corr_factor_Gnum = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)
@@ -294,10 +295,6 @@ for jj in range(1):
                                         # is not calculated, instead the cond. prob. is calculated directly:
                                         det_Gnum_ = det_Gdenom * corr_factor_add_s(Gdenom_inv, s=s)
                                         cond_prob_onehop[state_nr, k, i-1] = (-1) * det_Gnum_ / det_Gdenom_
-        
-                                        if state_nr == 3:
-                                            print("state_nr=", state_nr, "k=", k, "i-1=", i-1, "cond_prob_onehop[state_nr, k, i-1]=", cond_prob_onehop[state_nr, k, i-1])
-
                                         cumul_sum_cond_prob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i-1]
                                     if i > r:  
                                         corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
@@ -305,10 +302,6 @@ for jj in range(1):
                                         print("corr_factor=", corr_factor)
                                         cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
     
-                                        if state_nr == 3:
-                                            print("state_nr=", state_nr, "k=", k, "i=", i, "cond_prob_onehop[state_nr, k, i]=", cond_prob_onehop[state_nr, k, i])
-
-
                                 else:
                                     print("state_nr=", state_nr, "k=", k)
                                     corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
