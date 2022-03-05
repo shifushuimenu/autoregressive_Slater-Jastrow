@@ -45,7 +45,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
     def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, naive=True, eps_norm_probs=None):
         super(SlaterDetSampler_ordered, self).__init__()
         self.epsilon = 1e-5
-        self.eps_norm_probs = 1.0 - 1e-6 if eps_norm_probs is None else eps_norm_probs
+        self.eps_norm_probs = 1.0 - 1e-8 if eps_norm_probs is None else eps_norm_probs
         self.D = Nsites 
         self.N = Nparticles         
         assert(self.N<=self.D)  
@@ -141,13 +141,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         mm=-1
         for i_k in range(self.xmin, self.xmax):
-
-            # First check whether the conditional probabilities are already saturated.
-            # This gives significant speedup, most notably at low filling. 
-            if cumul_probs > self.eps_norm_probs: #0.99999999:
-                # LOG: print("skipping: sum(probs) already saturated (i.e. =1). xmax-1 - i_k = ", self.xmax-1 - i_k)
-                probs[i_k:] = 0.0
-                break
 
             mm += 1
             if self.naive_update:
@@ -264,7 +257,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                       BtXinv_new[0:mm, :] = BtXinv
                       BtXinv_new[mm, :] = torch.matmul(self.Xinv, BB[:,-1])
                       assert torch.isclose(BtXinv_new[0:mm+1, :], torch.vstack((BtXinv, torch.matmul(self.Xinv, BB[:,-1][:,None]).transpose(-1,-2)))).all()
-                      BtXinv = BtXinv_new[0:mm+1, :]    
+                      BtXinv = BtXinv_new[0:mm+1, :]
                       ####BtXinv = torch.vstack((BtXinv, torch.matmul(CC[-1,:][None,:], self.Xinv)))
                       DD1 = torch.matmul(BtXinv[-1,:][None,:], BB[:,-1][:,None])
                       ###CCXinvBB = torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1))))
@@ -307,7 +300,19 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 self.CCXinvBB_reuse.append(CCXinvBB[0:mm+1, 0:mm+1])       
                             
                 probs[i_k] = (-1) * detSC       
-                cumul_probs += probs[i_k]                               
+                cumul_probs += probs[i_k]
+
+            # Finally, check whether the conditional probabilities are already saturated.
+            # This gives significant speedup, most notably at low filling. 
+            if cumul_probs > self.eps_norm_probs: #0.99999999:
+                # print("skipping: sum(probs) already saturated (i.e. =1). xmax-1 - i_k = ", self.xmax-1 - i_k)
+                probs[i_k+1:] = 0.0
+                break
+            #   
+            # UNCOMMENTED BECAUSE OF ERROR MESSAGE
+            # Error message: BB_ = self.BB_reuse[mm]      
+            # # select previously computed matrices for the sampled position (i.e. pos_i, which is the mm-th position of the current support)
+                               
 
 
         if not self.naive_update:
@@ -315,7 +320,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # IMPROVE: For large matrices the ratio of determinants leads to numerical
         # instabilities which results in not normalized probability distributions   
         # => use LOW-RANK UPDATE     
-        #print("probs[:]=", probs[:], "  np.sum(probs[:])=", np.sum(probs[:])) 
+        #print("probs[:].sum()=", probs[:].sum()) 
         assert torch.isclose(probs.sum(), torch.tensor([1.0])) # assert normalization 
         # clamp negative values which are in absolute magnitude below machine precision
         probs = torch.where(abs(probs) > 1e-15, probs, torch.tensor([0.0]))
@@ -382,8 +387,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 occ_vec_add = [0] * (pos_i - self.xmin) + [1] # IMPROVE: pos_i is a tensor here, which is not necessary 
                 NN = torch.diag(torch.tensor(occ_vec_add[:]))
 
-                mm = pos_i - self.xmin       # the m-th position on the current support of the conditional probs
-                BB_ = self.BB_reuse[mm]      # select previously computed matrices for the sampled position (i.e. pos_i, which is the m-th position of the current support)
+                mm = pos_i - self.xmin       # the mm-th position on the current support of the conditional probs
+                BB_ = self.BB_reuse[mm]      # select previously computed matrices for the sampled position (i.e. pos_i, which is the mm-th position of the current support)
                 Schur_complement_ = self.Schur_complement_reuse[mm]
                 # Note: The Schur complement is a symmetric matrix, therefore Sinv is also symmetric. 
                 XinvB = torch.matmul(self.Xinv, BB_) 
@@ -486,7 +491,7 @@ if __name__ == "__main__":
 
     from time import time 
 
-    for L in (200,): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
+    for L in (1000,): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
         (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=L, potential='none', PBC=False, HF=False)
         Nparticles = 100 #L//2
         num_samples = 2

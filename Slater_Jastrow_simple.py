@@ -5,6 +5,7 @@ import torch.nn.functional as F
 
 from physics import *
 from slater_sampler_ordered import *
+#from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 from utils import *
 from one_hot import occ_numbers_unfold, occ_numbers_collapse
 from bitcoding import *

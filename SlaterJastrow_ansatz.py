@@ -12,7 +12,8 @@ from itertools import permutations
 
 from selfMADE import selfMADE
 from slater_sampler import SlaterDetSampler
-from slater_sampler_ordered import SlaterDetSampler_ordered
+#from slater_sampler_ordered import SlaterDetSampler_ordered
+from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 
 from one_hot import occ_numbers_unfold, occ_numbers_collapse
 from bitcoding import int2bin, bin2pos
@@ -60,6 +61,7 @@ class SlaterJastrow_ansatz(selfMADE):
         self.D = kwargs['D']
         self.num_components = kwargs['num_components']
         self.net_depth = kwargs['net_depth']
+        print("isinstance(Sdet_Sampler, SlaterDetSampler_ordered)=", isinstance(slater_sampler, SlaterDetSampler_ordered))
         assert isinstance(slater_sampler, SlaterDetSampler_ordered) or slater_sampler is None 
         self.input_orbitals = (slater_sampler is not None) 
 
@@ -143,7 +145,7 @@ class SlaterJastrow_ansatz(selfMADE):
                 pos_one_hot = OneHotCategorical(probs).sample() 
                 k_i = torch.nonzero(pos_one_hot[0])[0][0].item()                         
 
-                prob_sample *= probs[0, k_i].item() # index 0: just one sample per batch
+                prob_sample *= probs[0, k_i].item() # index 0: just one sample per batch                
 
                 x_out[:,i*self.D:(i+1)*self.D] = pos_one_hot
 

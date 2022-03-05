@@ -1,4 +1,8 @@
+# IMPROVE: Organize imports globally in a better way
+#          when making a package with an  __init__.py file. 
+
 from Slater_Jastrow_simple import *
+from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 import time
 import matplotlib.pyplot as plt
 from test_suite import prepare_test_system_zeroT
@@ -14,8 +18,8 @@ if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 
 max_iter = 1000 # 1000 
-Nsites = 7 # 10
-Nparticles = 3 # 5
+Nsites = 15 # 10
+Nparticles = 7 # 5
 Vint = 5.0
 
 
@@ -34,11 +38,13 @@ def train(model, learning_rate, num_samples=10, use_cuda=False):
         # get expectation values for energy, gradient and their product,
         # as well as the precision of energy.        
         sample_list = np.zeros((num_samples, Nsites)) 
+        print("before sampling")
         with torch.no_grad():
             for i in range(num_samples):
                 sample_unfolded, sample_prob = SJA.sample_unfolded()
                 sample_list[i] = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
 
+        print("before vmc_measure")
         energy, grad, energy_grad, precision = vmc_measure(model.local_measure, sample_list, num_bin=50)
 
         # update variables using stochastic gradient descent
@@ -87,8 +93,8 @@ def _update_curve(energy, precision):
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
-(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, Nparticles=Nparticles, Vnnint=Vint)
-Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
+(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
+Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)
 
 model = VMCKernel(energy_loc=tVmodel_loc, ansatz=SJA)
