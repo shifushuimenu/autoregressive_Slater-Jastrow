@@ -110,7 +110,7 @@ def corr3_Gnum_from_Gdenom(Gdenom_inv_, Gglobal, r, s, xmin, i):
     assert i > r 
     assert Gdenom_inv_.shape[0] == Gdenom_inv_.shape[1] 
     m = Gdenom_inv_.shape[0]
-    assert m == xmin, "m=%d, xmin=%d" %(m, xmin)
+    assert m == s+1, "m=%d, s=%d" %(m, s)
     assert i >= xmin 
     
     # Calculate det(G_num_)  from G_denom_inv_
@@ -118,9 +118,9 @@ def corr3_Gnum_from_Gdenom(Gdenom_inv_, Gglobal, r, s, xmin, i):
     dd = s - r # = 1 
 
     Ainv = Gdenom_inv_
-    B = Gglobal[0:xmin, xmin:i+1]
+    B = Gglobal[0:s+1, s+1:i+1]
     C = B.transpose()
-    D = Gglobal[xmin:i+1, xmin:i+1]
+    D = Gglobal[s+1:i+1, s+1:i+1]
     # Attention! B,C, and D are views into the original Green's function. 
     Dcopy = D.copy()
     Dcopy[-1,-1] = Dcopy[-1,-1] - 1 # add a particle here

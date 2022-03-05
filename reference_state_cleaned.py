@@ -46,7 +46,7 @@ def gen_random_config(Ns, Np):
     return config
 
 
-for jj in range(100):
+for jj in range(1):
     print("jj=", jj)
 
     ref_conf = gen_random_config(Ns, Np)
@@ -245,12 +245,12 @@ for jj in range(100):
                                     corr_factor_Gdenom = corr1 * corr2                                
                                     #assert np.isclose(np.linalg.det(Gdenom_), corr_factor_Gdenom * det_Gdenom)
 
-                                    Gnum_ = Gnum_from_Gdenom3(Gdenom_, Gglobal=G, r=r, s=s, i=i)
-                                    #corr4, corr3 = corr3_Gnum_from_Gdenom(Gdenom_inv_, Gglobal=G, r=r, s=s, xmin=xmin, i=i)
-                                    #det_Gnum_ = corr4 * corr3 * corr1 * det_Gdenom
+                                    #Gnum_ = Gnum_from_Gdenom3(Gdenom_, Gglobal=G, r=r, s=s, i=i)
+                                    corr4, corr3 = corr3_Gnum_from_Gdenom(Gdenom_inv_, Gglobal=G, r=r, s=s, xmin=xmin, i=i)
+                                    det_Gnum_ = corr4 * corr3 * corr1 * det_Gdenom
                                     #assert np.isclose(det_Gnum_, np.linalg.det(Gnum_))
-                                    cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / np.linalg.det(Gdenom_)   
-                                    #cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / (corr_factor_Gdenom * det_Gdenom) 
+                                    #cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / np.linalg.det(Gdenom_)   
+                                    cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / (corr_factor_Gdenom * det_Gdenom) 
                                     #print("cond_prob_onehop[state_nr, k, i] = ", cond_prob_onehop[state_nr, k, i], np.linalg.det(Gnum_))
 
                                 else:
