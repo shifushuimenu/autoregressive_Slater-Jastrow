@@ -45,7 +45,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
     def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, naive=True, eps_norm_probs=None):
         super(SlaterDetSampler_ordered, self).__init__()
         self.epsilon = 1e-5
-        self.eps_norm_probs = 1.0 - 1e-8 if eps_norm_probs is None else eps_norm_probs
+        self.eps_norm_probs = 1.0 - 1e-6 if eps_norm_probs is None else eps_norm_probs
         self.D = Nsites 
         self.N = Nparticles         
         assert(self.N<=self.D)  
@@ -491,10 +491,10 @@ if __name__ == "__main__":
 
     from time import time 
 
-    for L in (1000,): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
+    for L in (20,): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
         (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=L, potential='none', PBC=False, HF=False)
-        Nparticles = 100 #L//2
-        num_samples = 2
+        Nparticles = 10 #L//2
+        num_samples = 10000
 
         #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
         #SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)

@@ -46,17 +46,6 @@ def adapt_Gdenom_inv(Gdenom_inv, Gglobal, r, s):
     return Gdenom_inv_, corr 
 
 
-def adapt_Gdenom_inv222(Gdenom_inv, Gglobal, r, s):
-    assert s > r 
-    assert Gdenom_inv.shape == (s, s)
-    assert s == r +1 
-    # Don't put an additional particle at position s 
-    Gdenom_inv_ = block_update_inverse(Ainv=Gdenom_inv, B=Gglobal[0:s, s][:, None], C=Gglobal[s,0:s][None, :], D=Gglobal[s,s][None, None])
-    corr = block_update_det_correction(Ainv=Gdenom_inv, B=Gglobal[0:s, s][:, None], C=Gglobal[s,0:s][None, :], D=Gglobal[s,s][None, None])
-    return Gdenom_inv_, corr 
-
-
-
 def adapt_Gnum_inv(Gnum_inv, Gglobal, r, s, i_last_nonsing, i):
     assert r > s 
     assert i_last_nonsing < i

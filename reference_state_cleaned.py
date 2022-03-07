@@ -3,15 +3,53 @@
 import numpy as np
 from test_suite import prepare_test_system_zeroT
 from bitcoding import *
+from one_hot import *
 from Slater_Jastrow_simple import kinetic_term, Lattice1d
+from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 
 
 from k_copy import *
 
 from time import time 
 
-np.random.seed(424)
-ATOL = 1e-2
+np.random.seed(42994)
+ATOL = 1e-8
+
+
+
+def copy_cond_probs(cond_prob_ref, cond_prob_onehop, one_hop_info):
+    """copy all conditional probabilities which are identical in the reference 
+    state and in the one-hop states"""
+    for state_nr, (k_copy, _) in enumerate(one_hop_info):
+        print("k_copy=", k_copy)
+        cond_prob_onehop[state_nr, 0:k_copy+1, :] = cond_prob_ref[0:k_copy+1, :]
+
+
+def cond_prob2log_prob(xs, cond_probs_allk):
+    """pick conditional probabilities at actually sampled positions so as to 
+    get the probability of the microconfiguration"""
+    xs = np.asarray(xs)
+    xs_unfolded = occ_numbers_unfold(xs, duplicate_entries = False)
+    xs_pos = bin2pos(xs)
+    Np = len(xs_pos[0]); Ns = len(xs[0]); num_states = xs.shape[0]    
+    mm = xs_unfolded * cond_probs_allk.reshape(-1, Np*Ns)
+    # CAREFUL: this may be wrong if a probability is accidentally zero !
+    # introduce a boolean array which indicates the valid support
+    # and use log-probabilities throughout.  
+    supp = np.empty((num_states, Np, Ns), dtype=bool)
+    supp[...] = False 
+    for l in range(num_states):
+        for k in range(Np):
+            xmin = 0 if k==0 else xs_pos[l, k-1] + 1
+            xmax = Ns - Np + k + 1
+            supp[l, k, xmin:xmax] = True
+    supp = supp.reshape(-1, Np*Ns)
+    assert mm.shape == supp.shape
+    # CAREFUL
+    log_probs = np.log(np.where(mm > 0, mm, 1.0)).sum(axis=-1)
+    #log_probs = np.log(np.where(supp, mm, 1.0)).sum(axis=-1)
+    return log_probs 
+
 
 def Gnum_from_Gdenom3(Gdenom_, Gglobal, r, s, i):
     assert s > r 
@@ -26,12 +64,16 @@ def Gnum_from_Gdenom3(Gdenom_, Gglobal, r, s, i):
     return G
 
 # Calculate the conditional probabilities of the reference state
-Ns = 50; Np = 25    # Ns=20, Np=10: normlization problems with some cond. probs.  
+Ns = 24; Np = 12    # Ns=20, Np=10: normlization problems with some cond. probs.  
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
 
-eps_norm_probs = 1.0 - 1e-6 # Note: np.isclose(1.0 - 1e-5, 1.0) == True
+
+SDsampler = SlaterDetSampler_ordered(Nsites=Ns, Nparticles=Np, single_particle_eigfunc=U, naive=False)
+
+
+eps_norm_probs = 1.0 - 1e-8 # Note: np.isclose(1.0 - 1e-5, 1.0) == True
 
 def gen_random_config(Ns, Np):
     """generate a random reference state of fixed particle number"""
@@ -78,6 +120,11 @@ for jj in range(1):
     #   print(xs[i])
     # END: JUST FOR TESTING THE SCALING 
 
+
+    # ref_conf = np.array([1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1])
+    # xs = list([[1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1]],)
+    # num_connecting_states = len(xs)
+    # rs_pos = ((2,3),)
 
     # special case of 1d n.n. hopping matrix 
     assert np.all([abs(r-s) == 1 or abs(r-s) == Ns-1 for r,s in rs_pos])
@@ -151,7 +198,7 @@ for jj in range(1):
             except np.linalg.LinAlgError as e:
                 print("ERROR: det_Gnum=%16.12f\n" % (det_Gnum), e)
 
-            Gdenom_inv = np.linalg.inv(Gdenom) # OK
+            Gdenom_inv = np.linalg.inv(Gdenom)
 
             cond_prob_ref[k, i] = (-1) * det_Gnum / det_Gdenom
             t1 = time() 
@@ -181,7 +228,6 @@ for jj in range(1):
                     if xmin_onehop == xmax_onehop-1 and r < i and s < i: 
                     # Every subsequent empty site needs to be occupied to accomodate all particles both in the reference state 
                     # and in the one-hop state. 
-                        print("deterministic state_nr=", state_nr, "k=", k)
                         cond_prob_onehop[state_nr, k, i] = 1.0
                         cumul_sum_cond_prob_onehop[state_nr, k] = 1.0
                         continue
@@ -193,32 +239,19 @@ for jj in range(1):
                                 cond = np.linalg.cond(Gdenom)
                                 if cond > Gdenom_cond_max:
                                     Gdenom_cond_max = cond 
-                                    print("Gdenom_cond_max=", Gdenom_cond_max)
 
-                                if k==(k_copy_+1):               
-                                    corr_factor_Gnum = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)
+                                if k==(k_copy_+1):                                                   
                                     Gdenom_inv_, corr1 = adapt_Gdenom_inv(Gdenom_inv, Gglobal=G, r=r, s=s)
                                     corr2 = corr_factor_remove_r(Gdenom_inv_, r=r)
                                     corr_factor_Gdenom = corr1 * corr2
-                                    corr_factor = corr_factor_Gnum / corr_factor_Gdenom
-                                    # if corr_factor < 0:
-                                        # print("NUMERICAL INSTABILITY: not exiting")   
-                                        # print("corr_factor (s>r)=", corr_factor) 
-                                        # print("cond_prob_ref[k, i]=", cond_prob_ref[k, i])                                                                       
+                                    corr_factor_Gnum = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)
+                                    corr_factor = corr_factor_Gnum / corr_factor_Gdenom                                                                      
                                 else:
                                     corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
                                                     / corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)
-                                    if np.isclose(cond_prob_ref[k, i], 0.0, atol=1e-12):
-                                        print("cond_prob_ref[k,i]=", cond_prob_ref[k,i])                                        
-                                        print("zero ref prob !")
-                                    if corr_factor < 0 and abs(corr_factor) > 1e-8:
-                                        print("corr_factor (s>r)=", corr_factor)       
-                                        print("cond_prob_ref[k, i]=", cond_prob_ref[k, i])
-                                        print("det_Gnum=", det_Gnum, "det_Gdenom=", det_Gdenom)
-                                        print("corr_factor_removeadd_rs(Gnum_inv, r=%d, s=%d)=" %(r,s), corr_factor_removeadd_rs(Gnum_inv, r=r, s=s))                        
-                                        print("corr_factor_removeadd_rs(Gdenom_inv, r=%d, s=%d)=" %(r,s), corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)) 
-                                        print("NUMERICAL INSTABILITY (r<s)")   
-                                        exit(1)        
+                                    print("corr_factor=", corr_factor)
+                                if corr_factor < 0 and -corr_factor < 1e-12: corr_factor = 0.0
+                                assert corr_factor >= 0, "state_nr=%d, k=%d, i=%i, corr_factor=%16.15f" % (state_nr, k, i, corr_factor)    
                                 cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i] 
 
                             else: 
@@ -281,7 +314,6 @@ for jj in range(1):
                                 cond = np.linalg.cond(Gdenom)
                                 if cond > Gdenom_cond_max:
                                     Gdenom_cond_max = cond 
-                                    print("Gdenom_cond_max=", Gdenom_cond_max)
 
                                 if k==(k_copy_+1):
                                     det_Gdenom_ = det_Gnum_reuse.get(k-1)
@@ -295,22 +327,14 @@ for jj in range(1):
                                         cumul_sum_cond_prob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i-1]
                                     if i > r:  
                                         corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
-                                                * (det_Gdenom / det_Gdenom_) 
-                                        print("corr_factor=", corr_factor)
+                                                * (det_Gdenom / det_Gdenom_)
                                         cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
     
                                 else:
-                                    print("state_nr=", state_nr, "k=", k)
                                     corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
-                                                    / corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)  
-                                    print("corr_factor=", corr_factor)                                                    
-                                    if corr_factor < 0 and abs(corr_factor) > 1e-8:
-                                        print("corr_factor (r>s)=", corr_factor) 
-                                        print("cond_prob_ref[k, i]=", cond_prob_ref[k, i])     
-                                        print("det_Gnum=", det_Gnum, "det_Gdenom=", det_Gdenom)
-                                        print("corr_factor_removeadd_rs(Gnum_inv, r=%d, s=%d)=" %(r,s), corr_factor_removeadd_rs(Gnum_inv, r=r, s=s))                        
-                                        print("NUMERICAL INSTABILITY (r>s)")
-                                        exit(1)
+                                                    / corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)     
+                                    if corr_factor < 0 and -corr_factor < 1e-8: corr_factor = 0.0
+                                    assert corr_factor >= 0, "state_nr=%d, k=%d, i=%i, corr_factor=%16.15f" % (state_nr, k, i, corr_factor)    
                                     cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]     
 
                             else:
@@ -369,26 +393,19 @@ for jj in range(1):
                                 t1 = time()
                                 elapsed_singular += (t1 - t0)
 
+                    if state_nr == 0 and k == 4:
+                        print("cond_prob_onehop[state_nr, k, i]=", cond_prob_onehop[state_nr, k, i], r, s, i, det_Gnum)
+
                     cumul_sum_cond_prob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i]
 
             t1_conn = time()
             elapsed_connecting_states += (t1_conn - t0_conn)                    
 
-    for state_nr in range(cond_prob_onehop.shape[0]):
-        fh = open("cond_prob_onehop%d.dat" % (state_nr), "w")
-        fh.write("ref_state ["+" ".join(str(item) for item in ref_conf)+"]\n")
-        fh.write("1hop      ["+" ".join(str(item) for item in xs[state_nr])+"]\n")
-        for k in range(cond_prob_onehop.shape[1]):
-            for i in range(cond_prob_onehop.shape[2]):
-                fh.write("%d %d %16.15f\n" % (k, i, cond_prob_onehop[state_nr, k, i]))
-        fh.close()
-
-
     for state_nr, (k_copy_, (r,s)) in enumerate(one_hop_info):
         for k in range(Np):
             if k > k_copy_:
                 print("k=", k, "state_nr=", state_nr, "cumul=", cumul_sum_cond_prob_onehop[state_nr,k])
-                print("ref_conf=", ref_conf)
+                #print("ref_conf=", ref_conf)
                 print("1hop sta=", xs[state_nr])
                 assert np.isclose(cumul_sum_cond_prob_onehop[state_nr,k], 1.0, atol=ATOL), "cumul_sum_cond_prob_onehop[state_nr=%d, k=%d]=%16.10f" % (state_nr, k, cumul_sum_cond_prob_onehop[state_nr,k])
 
@@ -401,6 +418,31 @@ for jj in range(1):
             fh2.write("%d %d %e\n" % (k, i, det_Gdenom_array[k, i]))
     fh.close()
     fh2.close()
+
+
+    # Check 
+    copy_cond_probs(cond_prob_ref, cond_prob_onehop, one_hop_info)
+
+    for state_nr in range(cond_prob_onehop.shape[0]):
+        fh = open("cond_prob_onehop%d.dat" % (state_nr), "w")
+        fh.write("# ref_state ["+" ".join(str(item) for item in ref_conf)+"]\n")
+        fh.write("# 1hop      ["+" ".join(str(item) for item in xs[state_nr])+"]\n")
+        for k in range(cond_prob_onehop.shape[1]):
+            for i in range(cond_prob_onehop.shape[2]):
+                fh.write("%d %d %20.19f\n" % (k, i, cond_prob_onehop[state_nr, k, i]))
+        fh.close()    
+
+    log_probs = cond_prob2log_prob(xs, cond_prob_onehop)
+    log_prob_ref = cond_prob2log_prob([ref_conf], cond_prob_ref[None,:])
+
+    print("log_prob_ref=", log_prob_ref)
+    print("ref_conf=", ref_conf)
+    for i in range(num_connecting_states):
+        print("state_nr=", i)
+        print("xs=      ", xs[i])
+        print(log_probs[i], SDsampler.log_prob([xs[i]]).item())
+        print(np.exp(log_probs[i] - log_prob_ref))
+        assert np.isclose( np.exp(log_probs[i] - log_prob_ref), np.exp(SDsampler.log_prob([xs[i]]).item()  - log_prob_ref))
 
 
     print("elapsed_ref=", elapsed_ref)

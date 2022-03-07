@@ -18,8 +18,8 @@ if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 
 max_iter = 1000 # 1000 
-Nsites = 15 # 10
-Nparticles = 7 # 5
+Nsites = 20 # 10
+Nparticles = 10 # 5
 Vint = 5.0
 
 
