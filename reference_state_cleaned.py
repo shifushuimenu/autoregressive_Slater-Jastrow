@@ -1,4 +1,7 @@
-# TODO:
+# TODO: - If the probability of the reference state is extremely low (1e-60), then 
+#         there are numerical inaccuracies in the log_probs of the one-hop states. 
+#         One could argue that in a VMC simulation this scenario should not occur.
+#
 
 import numpy as np
 from test_suite import prepare_test_system_zeroT
@@ -12,16 +15,17 @@ from k_copy import *
 
 from time import time 
 
-np.random.seed(42994)
-ATOL = 1e-8
+np.random.seed(4314)
+ATOL = 1e-2
 
 
-
+def log_cutoff(x):
+    return np.where(x > 0, np.log(x), -1000)
+ 
 def copy_cond_probs(cond_prob_ref, cond_prob_onehop, one_hop_info):
     """copy all conditional probabilities which are identical in the reference 
     state and in the one-hop states"""
     for state_nr, (k_copy, _) in enumerate(one_hop_info):
-        print("k_copy=", k_copy)
         cond_prob_onehop[state_nr, 0:k_copy+1, :] = cond_prob_ref[0:k_copy+1, :]
 
 
@@ -46,8 +50,8 @@ def cond_prob2log_prob(xs, cond_probs_allk):
     supp = supp.reshape(-1, Np*Ns)
     assert mm.shape == supp.shape
     # CAREFUL
-    log_probs = np.log(np.where(mm > 0, mm, 1.0)).sum(axis=-1)
-    #log_probs = np.log(np.where(supp, mm, 1.0)).sum(axis=-1)
+    log_probs = log_cutoff(np.where(mm > 0, mm, 1.0)).sum(axis=-1)
+    #log_probs = log_cutoff(np.where(supp, mm, 1.0)).sum(axis=-1)
     return log_probs 
 
 
@@ -91,7 +95,7 @@ def Gnum_from_Gdenom3(Gdenom_, Gglobal, r, s, i):
     return G
 
 # Calculate the conditional probabilities of the reference state
-Ns = 12; Np = 6    # Ns=20, Np=10: normlization problems with some cond. probs.  
+Ns = 20; Np = 10    # Ns=20, Np=10: normlization problems with some cond. probs.  
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
@@ -100,7 +104,7 @@ G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
 SDsampler = SlaterDetSampler_ordered(Nsites=Ns, Nparticles=Np, single_particle_eigfunc=U, naive=False)
 
 
-eps_norm_probs = 1.0 - 1e-8 # Note: np.isclose(1.0 - 1e-5, 1.0) == True
+eps_norm_probs = 1.0 - 1e-16 # Note: np.isclose(1.0 - 1e-5, 1.0) == True
 
 def gen_random_config(Ns, Np):
     """generate a random reference state of fixed particle number"""
@@ -184,7 +188,6 @@ for jj in range(100):
     pos_vec = bin2pos(ref_conf)
     xs = np.array(xs) # convert list of arrays into 2D array 
     xs_pos = bin2pos(xs)
-    print("xs_pos=", xs_pos)
 
 
     elapsed_ref = 0.0
@@ -230,7 +233,7 @@ for jj in range(100):
             Gdenom_inv = np.linalg.inv(Gdenom)
 
             cond_prob_ref[k, i] = (-1) * det_Gnum / det_Gdenom
-            cond_logprob_ref[k,i] = np.log(abs(det_Gnum)) - np.log(abs(det_Gdenom))
+            cond_logprob_ref[k,i] = log_cutoff(abs(det_Gnum)) - log_cutoff(abs(det_Gdenom))
             t1 = time() 
             elapsed_ref += (t1 - t0)
 
@@ -276,14 +279,14 @@ for jj in range(100):
                                     corr_factor_Gdenom = corr1 * corr2
                                     corr_factor_Gnum = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)
                                     corr_factor = corr_factor_Gnum / corr_factor_Gdenom 
-                                    log_corr_factor = np.log(abs(corr_factor_Gnum)) - np.log(abs(corr1)) - np.log(abs(corr2))                                                                      
+                                    log_corr_factor = log_cutoff(abs(corr_factor_Gnum)) - log_cutoff(abs(corr1)) - log_cutoff(abs(corr2))                                                                      
                                 else:
+                                    # Correction factor in the numerator is a problem if Gnum_inv[r,r] \approx 1. 
                                     corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
                                                     / corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)
-                                    log_corr_factor = ( np.log(abs(corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)))
-                                                       - np.log(abs(corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s))) )
-                                    print("corr_factor=", corr_factor)
-                                if corr_factor < 0 and -corr_factor < 1e-12: corr_factor = 0.0
+                                    log_corr_factor = ( log_cutoff(abs(corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)))
+                                                       - log_cutoff(abs(corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s))) )
+                                if corr_factor < 0 and -corr_factor < 1e-4: corr_factor = 0.0
                                 assert corr_factor >= 0, "state_nr=%d, k=%d, i=%i, corr_factor=%16.15f" % (state_nr, k, i, corr_factor)    
                                 cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i] 
                                 cond_logprob_onehop[state_nr, k, i] = cond_logprob_ref[k, i] + log_corr_factor 
@@ -319,8 +322,8 @@ for jj in range(100):
                                     #cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / np.linalg.det(Gdenom_)   
                                     cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / (corr_factor_Gdenom) 
                                     #print("cond_prob_onehop[state_nr, k, i] = ", cond_prob_onehop[state_nr, k, i], np.linalg.det(Gnum_))
-                                    cond_logprob_onehop[state_nr, k, i] = ( np.log(abs(corr4)) + np.log(abs(corr3)) + np.log(abs(corr1)) 
-                                                                            - np.log(abs(corr_factor_Gdenom)) )
+                                    cond_logprob_onehop[state_nr, k, i] = ( log_cutoff(abs(corr4)) + log_cutoff(abs(corr3)) + log_cutoff(abs(corr1)) 
+                                                                            - log_cutoff(abs(corr_factor_Gdenom)) )
 
                                 else:
                                     # connecting state and reference state have the same support in the denominator 
@@ -331,7 +334,7 @@ for jj in range(100):
                                     #assert np.isclose(det_Gnum_, np.linalg.det(Gnum_))
                                     cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / (det_Gdenom * corr_factor_Gdenom)
                                     #cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / (det_Gdenom * corr_factor_Gdenom)
-                                    cond_logprob_onehop[state_nr, k, i] = np.log(abs(det_Gnum_)) - np.log(abs(det_Gdenom)) - np.log(abs(corr_factor_Gdenom))
+                                    cond_logprob_onehop[state_nr, k, i] = log_cutoff(abs(det_Gnum_)) - log_cutoff(abs(det_Gdenom)) - log_cutoff(abs(corr_factor_Gdenom))
 
                                 counter_singular += 1
                                 #print("SSingular, detGnum=", det_Gnum, "detGdenom=", det_Gdenom, "cond_prob_ref[k, i]=", cond_prob_ref[k, i])
@@ -361,21 +364,21 @@ for jj in range(100):
                                         # is not calculated, instead the cond. prob. is calculated directly:
                                         det_Gnum_ = det_Gdenom * corr_factor_add_s(Gdenom_inv, s=s)
                                         cond_prob_onehop[state_nr, k, i-1] = (-1) * det_Gnum_ / det_Gdenom_
-                                        cond_logprob_onehop[state_nr, k, i-1] = np.log(abs(det_Gnum_)) - np.log(abs(det_Gdenom_))
+                                        cond_logprob_onehop[state_nr, k, i-1] = log_cutoff(abs(det_Gnum_)) - log_cutoff(abs(det_Gdenom_))
                                         cumul_sum_cond_prob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i-1]
                                     if i > r:  
                                         corr_factor1 = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)
                                         corr_factor  = corr_factor1 * (det_Gdenom / det_Gdenom_)
                                         cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
-                                        cond_logprob_onehop[state_nr, k, i] = ( np.log(abs(corr_factor1)) + np.log(abs(det_Gdenom)) 
-                                                                                - np.log(abs(det_Gdenom_)) + cond_logprob_ref[k, i] )
+                                        cond_logprob_onehop[state_nr, k, i] = ( log_cutoff(abs(corr_factor1)) + log_cutoff(abs(det_Gdenom)) 
+                                                                                - log_cutoff(abs(det_Gdenom_)) + cond_logprob_ref[k, i] )
     
                                 else:
                                     corr_factor = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s) \
                                                     / corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)     
-                                    log_corr_factor = ( np.log(corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)) 
-                                                       - np.log(corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)) )                                                    
-                                    if corr_factor < 0 and -corr_factor < 1e-8: corr_factor = 0.0
+                                    log_corr_factor = ( log_cutoff(abs(corr_factor_removeadd_rs(Gnum_inv, r=r, s=s))) 
+                                                       - log_cutoff(abs(corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)))                                                    )
+                                    if corr_factor < 0 and -corr_factor < 1e-4: corr_factor = 0.0
                                     assert corr_factor >= 0, "state_nr=%d, k=%d, i=%i, corr_factor=%16.15f" % (state_nr, k, i, corr_factor)    
                                     cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]     
                                     cond_logprob_onehop[state_nr, k, i] = log_corr_factor + cond_logprob_ref[k, i]
@@ -412,7 +415,7 @@ for jj in range(100):
                                         #assert np.isclose(det_Gnum_, np.linalg.det(Gnum_))
                                         #print("passed assert")                                    
                                         cond_prob_onehop[state_nr, k, i-1] = (-1) * det_Gnum_ / det_Gdenom_
-                                        cond_logprob_onehop[state_nr, k, i-1] = np.log(abs(det_Gdenom)) + np.log(abs(corr_factor_add_s(Gdenom_inv, s=s))) - np.log(abs(det_Gdenom_))
+                                        cond_logprob_onehop[state_nr, k, i-1] = log_cutoff(abs(det_Gdenom)) + log_cutoff(abs(corr_factor_add_s(Gdenom_inv, s=s))) - log_cutoff(abs(det_Gdenom_))
 
                                         cumul_sum_cond_prob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i-1]
                                         #cond_prob_onehop[state_nr, k, i-1] = (-1) * np.linalg.det(Gnum_) / det_Gdenom_
@@ -423,7 +426,7 @@ for jj in range(100):
                                         ##print("det_Gnum_=", det_Gnum_, "np.linalg.det(Gnum_)=", np.linalg.det(Gnum_))
                                         #assert np.isclose(det_Gnum_, np.linalg.det(Gnum_) )
                                         cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / det_Gdenom_
-                                        cond_logprob_onehop[state_nr, k, i] = np.log(abs(det_Gnum_)) - np.log(abs(det_Gdenom_))
+                                        cond_logprob_onehop[state_nr, k, i] = log_cutoff(abs(det_Gnum_)) - log_cutoff(abs(det_Gdenom_))
 
                                         #cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / det_Gdenom_  
                                 else:
@@ -433,7 +436,7 @@ for jj in range(100):
                                     det_Gnum_ = det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal=G, r=r, s=s, xmin=xmin, i=i)
                                     #print("det_Gnum_=", det_Gnum_, "np.linalg.det(Gnum_)=", np.linalg.det(Gnum_))  
                                     cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / ( det_Gdenom * corr_factor_Gdenom)      
-                                    cond_logprob_onehop[state_nr, k, i] = np.log(abs(det_Gnum_)) - np.log(abs(det_Gdenom)) - np.log(abs(corr_factor_Gdenom))
+                                    cond_logprob_onehop[state_nr, k, i] = log_cutoff(abs(det_Gnum_)) - log_cutoff(abs(det_Gdenom)) - log_cutoff(abs(corr_factor_Gdenom))
                                     #cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / ( det_Gdenom * corr_factor_Gdenom)
                                     
                                 t1 = time()
@@ -444,15 +447,6 @@ for jj in range(100):
             t1_conn = time()
             elapsed_connecting_states += (t1_conn - t0_conn)                    
 
-    for state_nr, (k_copy_, (r,s)) in enumerate(one_hop_info):
-        for k in range(Np):
-            if k > k_copy_:
-                print("k=", k, "state_nr=", state_nr, "cumul=", cumul_sum_cond_prob_onehop[state_nr,k])
-                #print("ref_conf=", ref_conf)
-                print("1hop sta=", xs[state_nr])
-                assert np.isclose(cumul_sum_cond_prob_onehop[state_nr,k], 1.0, atol=ATOL), "cumul_sum_cond_prob_onehop[state_nr=%d, k=%d]=%16.10f" % (state_nr, k, cumul_sum_cond_prob_onehop[state_nr,k])
-
-
     fh = open("cond_prob_ref.dat", "w")
     fh2 = open("det_Gdenom_array.dat", "w")
     for k in range(cond_prob_ref.shape[0]):
@@ -462,13 +456,10 @@ for jj in range(100):
     fh.close()
     fh2.close()
 
-    logarithmized_cond_probs = np.where(cond_prob_onehop > 0, np.log(cond_prob_onehop), 0.0)
-    a_vals = list(filter(lambda x: x!=0, logarithmized_cond_probs.flatten()))
-    b_vals = list(filter(lambda x: x!=0, cond_logprob_onehop.flatten()))
-    ab_vals = list(zip(a_vals, b_vals))
-    print(ab_vals)
-
     # Check 
+    # remove nan 
+    cond_logprob_onehop = np.where(cond_logprob_onehop == -np.inf, -1000, cond_logprob_onehop)
+
     copy_cond_probs(cond_prob_ref, cond_prob_onehop, one_hop_info)
     copy_cond_probs(cond_logprob_ref, cond_logprob_onehop, one_hop_info)
 
@@ -485,14 +476,26 @@ for jj in range(100):
     log_probs2 = cond_logprob2log_prob(xs, cond_logprob_onehop)
     log_prob_ref = cond_prob2log_prob([ref_conf], cond_prob_ref[None,:])
 
-    print("log_prob_ref=", log_prob_ref)
-    print("ref_conf=", ref_conf)
+
+    for state_nr, (k_copy_, (r,s)) in enumerate(one_hop_info):
+        for k in range(Np):
+            if k > k_copy_:
+                #print("k=", k, "state_nr=", state_nr, "cumul=", cumul_sum_cond_prob_onehop[state_nr,k])
+                #print("ref_conf=", ref_conf)
+                #print("1hop sta=", xs[state_nr])
+                print("cond_prob_onehop[state_nr, k, :]=", cond_prob_onehop[state_nr, k, :])
+                assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, atol=ATOL), "np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f ?= %16.10f" % (state_nr, k, cumul_sum_cond_prob_onehop[state_nr,k], np.sum(cond_prob_onehop[state_nr, k, :])) 
+                #assert np.isclose(cumul_sum_cond_prob_onehop[state_nr,k], 1.0, atol=ATOL), "cumul_sum_cond_prob_onehop[state_nr=%d, k=%d]=%16.10f" % (state_nr, k, cumul_sum_cond_prob_onehop[state_nr,k])
+
+
     for i in range(num_connecting_states):
         print("state_nr=", i)
+        print("log_prob_ref=", log_prob_ref)
+        print("ref_conf=", ref_conf)
         print("xs=      ", xs[i])
         print(log_probs[i], log_probs2[i], SDsampler.log_prob([xs[i]]).item())
-        print(np.exp(log_probs[i] - log_prob_ref))
-        assert np.isclose( np.exp(log_probs[i] - log_prob_ref), np.exp(SDsampler.log_prob([xs[i]]).item()  - log_prob_ref))
+        print("ratio=", np.exp(log_probs2[i] - log_prob_ref))
+        #assert np.isclose( log_probs2[i] - log_prob_ref, SDsampler.log_prob([xs[i]]).item()  - log_prob_ref, atol=1e-1)
 
 
     print("elapsed_ref=", elapsed_ref)
