@@ -95,7 +95,7 @@ def Gnum_from_Gdenom3(Gdenom_, Gglobal, r, s, i):
     return G
 
 # Calculate the conditional probabilities of the reference state
-Ns = 20; Np = 10    # Ns=20, Np=10: normlization problems with some cond. probs.  
+Ns = 40; Np = 20    # Ns=20, Np=10: normlization problems with some cond. probs.  
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
@@ -104,7 +104,7 @@ G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
 SDsampler = SlaterDetSampler_ordered(Nsites=Ns, Nparticles=Np, single_particle_eigfunc=U, naive=False)
 
 
-eps_norm_probs = 1.0 - 1e-16 # Note: np.isclose(1.0 - 1e-5, 1.0) == True
+eps_norm_probs = 1.0 - 1e-6
 
 def gen_random_config(Ns, Np):
     """generate a random reference state of fixed particle number"""
@@ -300,8 +300,9 @@ for jj in range(100):
                                 # if np.isclose(sum(cond_prob_onehop[state_nr, k, xmin:i-1]), 1.0):  # CHECK: Why i-1 ? 
                                 #     cond_prob_onehop[state_nr, k, i-1:] = 0.0
                                 #     break
-
-                                if cumul_sum_cond_prob_onehop[state_nr, k] > eps_norm_probs:
+                                # nOTE: The cond. prob. at the actually sampled positions needs to be computed before 
+                                #       saturation of the normalization can be exploited. 
+                                if cumul_sum_cond_prob_onehop[state_nr, k] > eps_norm_probs and i > xs_pos[state_nr, k]:  
                                     cond_prob_onehop[state_nr, k, i-1:] = 0.0
                                     counter_skip += (xmax - i) 
                                     continue
@@ -393,7 +394,7 @@ for jj in range(100):
                                 #     cond_prob_onehop[state_nr, k, i-1:] = 0.0
                                 #     break        
                                 # First check whether the conditional probabilities are already saturated.
-                                if cumul_sum_cond_prob_onehop[state_nr, k] > eps_norm_probs:
+                                if cumul_sum_cond_prob_onehop[state_nr, k] > eps_norm_probs and i > xs_pos[state_nr, k]:
                                     cond_prob_onehop[state_nr, k, i-1:] = 0.0
                                     counter_skip += (xmax - i)
                                     continue                                    
@@ -480,11 +481,12 @@ for jj in range(100):
     for state_nr, (k_copy_, (r,s)) in enumerate(one_hop_info):
         for k in range(Np):
             if k > k_copy_:
+                pass
                 #print("k=", k, "state_nr=", state_nr, "cumul=", cumul_sum_cond_prob_onehop[state_nr,k])
                 #print("ref_conf=", ref_conf)
                 #print("1hop sta=", xs[state_nr])
-                print("cond_prob_onehop[state_nr, k, :]=", cond_prob_onehop[state_nr, k, :])
-                assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, atol=ATOL), "np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f ?= %16.10f" % (state_nr, k, cumul_sum_cond_prob_onehop[state_nr,k], np.sum(cond_prob_onehop[state_nr, k, :])) 
+                #print("cond_prob_onehop[state_nr, k, :]=", cond_prob_onehop[state_nr, k, :])
+                #assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, atol=ATOL), "np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f ?= %16.10f" % (state_nr, k, cumul_sum_cond_prob_onehop[state_nr, k], np.sum(cond_prob_onehop[state_nr, k, :])) 
                 #assert np.isclose(cumul_sum_cond_prob_onehop[state_nr,k], 1.0, atol=ATOL), "cumul_sum_cond_prob_onehop[state_nr=%d, k=%d]=%16.10f" % (state_nr, k, cumul_sum_cond_prob_onehop[state_nr,k])
 
 
@@ -494,7 +496,7 @@ for jj in range(100):
         print("ref_conf=", ref_conf)
         print("xs=      ", xs[i])
         print(log_probs[i], log_probs2[i], SDsampler.log_prob([xs[i]]).item())
-        print("ratio=", np.exp(log_probs2[i] - log_prob_ref))
+        print("ratio=", np.exp(log_prob_ref - log_probs2[i]), xs[i], ref_conf)
         #assert np.isclose( log_probs2[i] - log_prob_ref, SDsampler.log_prob([xs[i]]).item()  - log_prob_ref, atol=1e-1)
 
 
