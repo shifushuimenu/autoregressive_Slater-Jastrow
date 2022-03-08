@@ -95,7 +95,7 @@ def Gnum_from_Gdenom3(Gdenom_, Gglobal, r, s, i):
     return G
 
 # Calculate the conditional probabilities of the reference state
-Ns = 40; Np = 20    # Ns=20, Np=10: normlization problems with some cond. probs.  
+Ns = 100; Np = 50    # Ns=20, Np=10: normlization problems with some cond. probs.  
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
@@ -300,7 +300,7 @@ for jj in range(100):
                                 # if np.isclose(sum(cond_prob_onehop[state_nr, k, xmin:i-1]), 1.0):  # CHECK: Why i-1 ? 
                                 #     cond_prob_onehop[state_nr, k, i-1:] = 0.0
                                 #     break
-                                # nOTE: The cond. prob. at the actually sampled positions needs to be computed before 
+                                # NOTE: The cond. prob. at the actually sampled positions needs to be computed before 
                                 #       saturation of the normalization can be exploited. 
                                 if cumul_sum_cond_prob_onehop[state_nr, k] > eps_norm_probs and i > xs_pos[state_nr, k]:  
                                     cond_prob_onehop[state_nr, k, i-1:] = 0.0
@@ -352,9 +352,9 @@ for jj in range(100):
                             if not np.isclose(det_Gnum, 0.0, atol=1e-16): # don't invert a singular matrix                                                  
                                 counter_nonsingular += 1
 
-                                cond = np.linalg.cond(Gdenom)
-                                if cond > Gdenom_cond_max:
-                                    Gdenom_cond_max = cond 
+                                # cond = np.linalg.cond(Gdenom)
+                                # if cond > Gdenom_cond_max:
+                                #     Gdenom_cond_max = cond 
 
                                 if k==(k_copy_+1):
                                     det_Gdenom_ = det_Gnum_reuse.get(k-1)
@@ -394,6 +394,8 @@ for jj in range(100):
                                 #     cond_prob_onehop[state_nr, k, i-1:] = 0.0
                                 #     break        
                                 # First check whether the conditional probabilities are already saturated.
+                                # NOTE: The cond. prob. at the actually sampled positions needs to be computed before 
+                                #       saturation of the normalization can be exploited.                                 
                                 if cumul_sum_cond_prob_onehop[state_nr, k] > eps_norm_probs and i > xs_pos[state_nr, k]:
                                     cond_prob_onehop[state_nr, k, i-1:] = 0.0
                                     counter_skip += (xmax - i)
@@ -459,7 +461,7 @@ for jj in range(100):
 
     # Check 
     # remove nan 
-    cond_logprob_onehop = np.where(cond_logprob_onehop == -np.inf, -1000, cond_logprob_onehop)
+    #cond_logprob_onehop = np.where(cond_logprob_onehop == -np.inf, -1000, cond_logprob_onehop)
 
     copy_cond_probs(cond_prob_ref, cond_prob_onehop, one_hop_info)
     copy_cond_probs(cond_logprob_ref, cond_logprob_onehop, one_hop_info)
