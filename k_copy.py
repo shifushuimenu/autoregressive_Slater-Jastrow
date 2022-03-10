@@ -72,11 +72,11 @@ def calc_k_copy(hop_from_to, ref_state):
 
 
 def monotonically_increasing(y):
-    r = True 
+    b = True 
     for i in range(len(y)-1):
-        r = r and (y[i] <= y[i+1])
-        if not r: return r 
-    return r 
+        b = b and (y[i] <= y[i+1])
+        if not b: return b 
+    return b 
 
 
 

@@ -36,9 +36,11 @@ def adapt_Gdenom(Gnum, r, s):
 
 
 def adapt_Gdenom_inv(Gdenom_inv, Gglobal, r, s):
-    assert s > r 
+    """Extend inverse of denominator matrix up to position `s` (inclusive)
+       and put an additional particle at position `s`."""
+    assert s > r or s == 0
     assert Gdenom_inv.shape == (s, s)
-    assert s == r +1 
+    assert s == r + 1 or s == 0
     # put an additional particle at position s 
     Gdenom_inv_ = block_update_inverse(Ainv=Gdenom_inv, B=Gglobal[0:s, s][:, None], C=Gglobal[s,0:s][None, :], D=Gglobal[s,s][None, None] - 1)
     corr = block_update_det_correction(Ainv=Gdenom_inv, B=Gglobal[0:s, s][:, None], C=Gglobal[s,0:s][None, :], D=Gglobal[s,s][None, None] - 1)
