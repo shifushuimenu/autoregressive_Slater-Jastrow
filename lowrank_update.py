@@ -35,6 +35,29 @@ def adapt_Gdenom(Gnum, r, s):
     return G
 
 
+# # NOTE: This function is also used for extending the numerator matrix. 
+
+def adapt_Ainv(Ainv, Gglobal, r, s, i_start, i_end):
+    """Extend inverse of numerator or denominator matrix from position `i_start` (inclusive)
+       up to position `i_end` (inclusive) and put a particle at position `i_end`."""
+    assert r == 0 # long-range hopping in 1D 
+    assert Ainv.shape == (i_start, i_start)
+    assert i_start <= i_end
+
+    # put a particle at position `i_end`
+    l = i_end+1-i_start
+    DD = np.zeros((l, l))
+    DD[-1, -1] = -1
+
+    Gnum_inv_ = block_update_inverse2(Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
+        C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD)
+    corr = block_update_det_correction2(
+        Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
+        C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD
+        )
+    return Gnum_inv_, corr
+    
+
 def adapt_Gdenom_inv(Gdenom_inv, Gglobal, r, s):
     """Extend inverse of denominator matrix up to position `s` (inclusive)
        and put an additional particle at position `s`."""

@@ -3,6 +3,7 @@
 #         One could argue that in a VMC simulation this scenario should not occur.
 #
 
+from asyncio.proactor_events import _ProactorBaseWritePipeTransport
 import numpy as np
 from test_suite import prepare_test_system_zeroT
 from bitcoding import *
@@ -137,12 +138,13 @@ for jj in range(1):
     # END: JUST FOR TESTING THE SCALING 
 
 
-    ref_conf = np.array([0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1])
-    xs = list(         [[1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0]],)
-    #ref_conf = np.array([1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0])
-    #xs = list(         [[1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0]],)    
-    num_connecting_states = len(xs)
-    rs_pos = ((11,0),)
+    #ref_conf = np.array([0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1])
+    #xs = list(         [[1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0]],)
+    #rs_pos = ((11,0),)
+    ref_conf = np.array( [1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0])
+    xs = list(          [[0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1]],)
+    rs_pos = ((0, 11),)    
+    num_connecting_states = len(xs)    
 
     # special case of 1d n.n. hopping matrix 
     assert np.all([abs(r-s) == 1 or abs(r-s) == Ns-1 for r,s in rs_pos])
@@ -272,7 +274,26 @@ for jj in range(1):
 
                     if abs(r-s) > 1: # long-range hopping in 1d
                         if r < s:
-                            pass 
+                            if k > 1: # k=0 can always be copied from the reference state 
+                                corr_factor_Gnum = corr_factor_remove_r(Gnum_inv_reuse[k][i], r=r)
+                                corr_factor_Gdenom = corr_factor_remove_r(Gdenom_inv_reuse[k], r=r)
+                                corr_factor = corr_factor_Gnum / corr_factor_Gdenom
+                                # NOTE: The cond. probs. for (k-1)-th particle are computed retroactively while the cond. probs. for k-th particle 
+                                # of the reference state are being computed. 
+                                cond_prob_onehop[state_nr, k-1, i] = corr_factor * cond_prob_ref[k, i]
+
+                            # additionally ...
+                            if k == Np-1: # Special case: cond. probs. for last particle. IMPROVE: adapt to 2D long-range hoppping 
+                                          # where more particles come after positions s.           
+                                if i > xs_pos[state_nr, k-1]: # support is smaller than in the reference state 
+                                    Gnum_inv_, corr1 = adapt_Ainv(Gnum_inv_reuse[k][xs_pos[state_nr, k-1]], Gglobal=G, r=r, s=s, i_start=xs_pos[state_nr, k-1]+1, i_end=i)   
+                                    corr2 = corr_factor_remove_r(Gnum_inv_, r=r)                                               
+                                    corr_factor_Gnum = corr1 * corr2                                     
+                                    Gdenom_inv_ = Gnum_inv_reuse[k][xs_pos[state_nr, k-1]]
+                                    corr_factor_Gdenom = corr_factor_remove_r(Gdenom_inv_, r=r) * ( det_Gnum / det_Gdenom )
+                                    corr_factor = corr_factor_Gnum / corr_factor_Gdenom 
+                                    cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
+
                         elif r > s:
                             if i > s and i <= r:
                                 if i==pos_vec[k-1]+1:
@@ -525,7 +546,7 @@ for jj in range(1):
                 #print("1hop sta=", xs[state_nr])
                 print("cond_prob_onehop[state_nr, k, :]=", cond_prob_onehop[state_nr, k, :])
                 assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, atol=ATOL), "np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f ?= %16.10f" % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :]), cumul_sum_cond_prob_onehop[state_nr, k]) 
-                assert np.isclose(cumul_sum_cond_prob_onehop[state_nr,k], 1.0, atol=ATOL), "cumul_sum_cond_prob_onehop[state_nr=%d, k=%d]=%16.10f" % (state_nr, k, cumul_sum_cond_prob_onehop[state_nr,k])
+                #assert np.isclose(cumul_sum_cond_prob_onehop[state_nr,k], 1.0, atol=ATOL), "cumul_sum_cond_prob_onehop[state_nr=%d, k=%d]=%16.10f" % (state_nr, k, cumul_sum_cond_prob_onehop[state_nr,k])
 
 
     for i in range(num_connecting_states):
