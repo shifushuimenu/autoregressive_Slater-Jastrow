@@ -35,8 +35,6 @@ def adapt_Gdenom(Gnum, r, s):
     return G
 
 
-# # NOTE: This function is also used for extending the numerator matrix. 
-
 def adapt_Ainv(Ainv, Gglobal, r, s, i_start, i_end):
     """Extend inverse of numerator or denominator matrix from position `i_start` (inclusive)
        up to position `i_end` (inclusive) and put a particle at position `i_end`."""
@@ -165,7 +163,6 @@ def det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal, r, s, xmin, i):
     
     # 1. Calculate Gdenom_inv_ from Gdenom_inv using a low-rank update 
     # where a particle is removed at position `r`` and one is added at position `s`. 
-    #print("xmin=", xmin, "i=", i, "r=", r, "s=", s)
     Gdenom_inv_, det_corr = lowrank_update_inv_addremove_rs(Gdenom_inv, r, s)
     det_Gdenom_ = det_Gdenom * det_corr
 

@@ -16,7 +16,7 @@ from k_copy import *
 
 from time import time 
 
-np.random.seed(4314)
+#np.random.seed(4314)
 ATOL = 1e-2
 
 
@@ -82,7 +82,7 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 12; Np = 5    # Ns=20, Np=10: normlization problems with some cond. probs.  
+Ns = 10; Np = 5    # Ns=20, Np=10: normlization problems with some cond. probs.  
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
@@ -95,9 +95,9 @@ eps_norm_probs = 1.0 - 1e-6
 def gen_random_config(Ns, Np):
     """generate a random reference state of fixed particle number"""
     config = np.zeros((Ns,), dtype=int) 
-    config[0] = 1; config[-1] = 1 # !!!!! REMOVE: Make sure no hopping across p.b.c can occur. 
+    #config[0] = 1; config[-1] = 1 # !!!!! REMOVE: Make sure no hopping across p.b.c can occur. 
     counter = 0
-    while counter < Np-2:
+    while counter < Np:
         pos = np.random.randint(low=0, high=Ns, size=1)
         if config[pos] != 1:
             config[pos] = 1
@@ -105,7 +105,7 @@ def gen_random_config(Ns, Np):
     return config
 
 
-for jj in range(1):
+for jj in range(100):
     print("jj=", jj)
 
     ref_conf = gen_random_config(Ns, Np)
@@ -113,9 +113,9 @@ for jj in range(1):
 
     l1d = Lattice1d(ns=Ns)
     # `states_I` are only the connecting states, the reference state is not included 
-    # rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l1d))
-    # num_connecting_states = len(states_I)
-    # xs = int2bin(states_I, ns=Ns)
+    rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l1d))
+    num_connecting_states = len(states_I)
+    xs = int2bin(states_I, ns=Ns)
 
     # # JUST FOR TESTING THE SCALING 
     # # Find all connecting states 
@@ -141,10 +141,10 @@ for jj in range(1):
     #ref_conf = np.array([0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1])
     #xs = list(         [[1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0]],)
     #rs_pos = ((11,0),)
-    ref_conf = np.array( [1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0])
-    xs = list(          [[0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1]],)
-    rs_pos = ((0, 11),)    
-    num_connecting_states = len(xs)    
+    #ref_conf = np.array( [1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0])
+    #xs = list(          [[0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1]],)
+    #rs_pos = ((0, 11),)    
+    #num_connecting_states = len(xs)    
 
     # special case of 1d n.n. hopping matrix 
     assert np.all([abs(r-s) == 1 or abs(r-s) == Ns-1 for r,s in rs_pos])
@@ -286,6 +286,7 @@ for jj in range(1):
                             if k == Np-1: # Special case: cond. probs. for last particle. IMPROVE: adapt to 2D long-range hoppping 
                                           # where more particles come after positions s.           
                                 if i > xs_pos[state_nr, k-1]: # support is smaller than in the reference state 
+                                    # !!!!!!!!!!! Problem: np.linalg.inv() sometimes throws error due to singular matrix 
                                     Gnum_inv_, corr1 = adapt_Ainv(Gnum_inv_reuse[k][xs_pos[state_nr, k-1]], Gglobal=G, r=r, s=s, i_start=xs_pos[state_nr, k-1]+1, i_end=i)   
                                     corr2 = corr_factor_remove_r(Gnum_inv_, r=r)                                               
                                     corr_factor_Gnum = corr1 * corr2                                     
