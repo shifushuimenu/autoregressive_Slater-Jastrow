@@ -7,18 +7,18 @@ from profilehooks import profile
 #@profile
 def block_update_inverse(Ainv, B, C, D):
     """
-        Inputs are torch tensors. 
+    Inputs are torch tensors. 
 
-        Use the update formula for the inverse of a block matrix
-            M = [[ A , B ]
-                 [ C ,  D]]
-        taking into account that A^{-1} = Ainv is already known. 
-        A is an nxn matrix and B and C are assumed to be nx1 and 1xn matrices,
-        respectively. D is assumed to be a 1x1 matrix.
-        Furthermore, C = B.transpose().
+    Use the update formula for the inverse of a block matrix
+        M = [[ A , B ]
+                [ C ,  D]]
+    taking into account that A^{-1} = Ainv is already known. 
+    A is an nxn matrix and B and C are assumed to be nx1 and 1xn matrices,
+    respectively. D is assumed to be a 1x1 matrix.
+    Furthermore, C = B.transpose().
 
-        Minv =  [[ Ablock , Bblock ]
-                 [ Cblock , Dblock ]]
+    Minv =  [[ Ablock , Bblock ]
+                [ Cblock , Dblock ]]
     """
     assert Ainv.shape[0] == Ainv.shape[1]
     n = Ainv.shape[0]
@@ -47,8 +47,9 @@ def block_update_inverse(Ainv, B, C, D):
 
 
 def block_update_inverse2(Ainv, B, C, D):
-    """The same as block_update_inverse(...) except that the
-       matrices B, C, and D are general nxm matrices rather than vectors.
+    """
+    The same as block_update_inverse(...) except that the
+    matrices B, C, and D are general nxm matrices rather than vectors.
     """
     assert Ainv.shape[0] == Ainv.shape[1]
     n = Ainv.shape[0]
@@ -59,9 +60,10 @@ def block_update_inverse2(Ainv, B, C, D):
     assert np.isclose(C, B.transpose(-1,-2)).all()
 
     AinvB = np.matmul(Ainv, B)
-    S = D - np.matmul(C, AinvB) # a scalar 
+    S = D - np.matmul(C, AinvB)
+    print("S=", S)
     Sinv = np.linalg.inv(S)
-    
+
     Ablock = Ainv + np.matmul(np.matmul(AinvB, Sinv), AinvB.transpose())
     Bblock = - np.matmul(AinvB, Sinv)
     Cblock = Bblock.transpose(-1,-2)
@@ -79,12 +81,12 @@ def block_update_inverse2(Ainv, B, C, D):
 
 def block_update_det_correction(Ainv, B, C, D):
     """
-        Let  M = [[ A , B ]
-                  [ C ,  D]]
-        and A^{-1} = Ainv is already known. Then: 
-            det(M) = det(A) * det(D - C A^{-1} B)
-        This function returns the correction factor 
-            corr = det(D - C A^{-1} B)
+    Let  M = [[ A , B ]
+                [ C ,  D]]
+    and A^{-1} = Ainv is already known. Then: 
+        det(M) = det(A) * det(D - C A^{-1} B)
+    This function returns the correction factor 
+        corr = det(D - C A^{-1} B)
     """
     assert Ainv.shape[0] == Ainv.shape[1]
     n = Ainv.shape[0]
@@ -99,7 +101,7 @@ def block_update_det_correction(Ainv, B, C, D):
 
 def block_update_det_correction2(Ainv, B, C, D):
     """
-        The same as above except that B,C, and D are matrices rather than vectors. 
+    The same as above except that B,C, and D are matrices rather than vectors. 
     """
     assert Ainv.shape[0] == Ainv.shape[1]
     n = Ainv.shape[0]

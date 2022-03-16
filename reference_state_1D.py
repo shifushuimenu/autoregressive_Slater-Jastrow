@@ -16,11 +16,14 @@ from k_copy import *
 
 from time import time 
 
-#np.random.seed(4314)
+#np.random.seed(45514)
 ATOL = 1e-2
 
 
 def log_cutoff(x):
+    """
+    Replace -inf by a very small, but finite value.
+    """
     return np.where(x > 0, np.log(x), -1000)
  
 def copy_cond_probs(cond_prob_ref, cond_prob_onehop, one_hop_info):
@@ -82,7 +85,7 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 10; Np = 5    # Ns=20, Np=10: normlization problems with some cond. probs.  
+Ns = 12; Np = 5    # Ns=12, Np=5: singular matrix
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
@@ -105,17 +108,17 @@ def gen_random_config(Ns, Np):
     return config
 
 
-for jj in range(100):
+for jj in range(1):
     print("jj=", jj)
 
     ref_conf = gen_random_config(Ns, Np)
     ref_I = bin2int(ref_conf).numpy() # ATTENTION: Wrong results for too large bitarrays !
 
     l1d = Lattice1d(ns=Ns)
-    # `states_I` are only the connecting states, the reference state is not included 
-    rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l1d))
-    num_connecting_states = len(states_I)
-    xs = int2bin(states_I, ns=Ns)
+    # # #  `states_I` are only the connecting states, the reference state is not included 
+    #rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l1d))
+    #num_connecting_states = len(states_I)
+    #xs = int2bin(states_I, ns=Ns)
 
     # # JUST FOR TESTING THE SCALING 
     # # Find all connecting states 
@@ -137,14 +140,21 @@ for jj in range(100):
     #   print(xs[i])
     # END: JUST FOR TESTING THE SCALING 
 
+    #ref_conf = np.array([1, 0, 1, 1, 0, 0])
+    #xs = list(         [[0, 0, 1, 1, 0, 1]],)
+    #rs_pos = ((0, 5),)
+
+    #ref_conf = np.array([0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1])
+    #xs = list(         [[1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0]],)
+    #rs_pos = ((11, 0),)
 
     #ref_conf = np.array([0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1])
     #xs = list(         [[1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0]],)
     #rs_pos = ((11,0),)
-    #ref_conf = np.array( [1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0])
-    #xs = list(          [[0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1]],)
-    #rs_pos = ((0, 11),)    
-    #num_connecting_states = len(xs)    
+    ref_conf = np.array( [1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0])
+    xs = list(          [[0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1]],)
+    rs_pos = ((0, 11),)    
+    num_connecting_states = len(xs)    
 
     # special case of 1d n.n. hopping matrix 
     assert np.all([abs(r-s) == 1 or abs(r-s) == Ns-1 for r,s in rs_pos])
@@ -286,14 +296,37 @@ for jj in range(100):
                             if k == Np-1: # Special case: cond. probs. for last particle. IMPROVE: adapt to 2D long-range hoppping 
                                           # where more particles come after positions s.           
                                 if i > xs_pos[state_nr, k-1]: # support is smaller than in the reference state 
+                                    
+                                    print("k=", k, "i=",  i)
+                                    print("ref_conf=      ", ref_conf)                                    
+                                    print("xs[state_nr=%d]="%(state_nr), xs[state_nr])
+
+                                    # In this special case, calculate the ratio of determinants from scratch.
+                                    base = list(range(0, xs_pos[state_nr, k-1]+1))
+                                    occ_vec_base = list(xs[state_nr, 0:xs_pos[state_nr, k-1]+1])
+                                    Gdenom_special = G[np.ix_(base, base)] - np.diag(occ_vec_base)
+                                    extend = list(range(0, i+1))
+                                    occ_vec_add = [1] if (i - xs_pos[state_nr, k-1] == 1) else [0] * (i - xs_pos[state_nr, k-1] - 1) + [1]
+                                    occ_vec_extend = occ_vec_base + occ_vec_add
+                                    print("occ_vec_base=", occ_vec_base)
+                                    print("occ_vec_extend=", occ_vec_extend)
+                                    Gnum_special = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
+
+                                    cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_special) / np.linalg.det(Gdenom_special)
+
                                     # !!!!!!!!!!! Problem: np.linalg.inv() sometimes throws error due to singular matrix 
-                                    Gnum_inv_, corr1 = adapt_Ainv(Gnum_inv_reuse[k][xs_pos[state_nr, k-1]], Gglobal=G, r=r, s=s, i_start=xs_pos[state_nr, k-1]+1, i_end=i)   
-                                    corr2 = corr_factor_remove_r(Gnum_inv_, r=r)                                               
-                                    corr_factor_Gnum = corr1 * corr2                                     
-                                    Gdenom_inv_ = Gnum_inv_reuse[k][xs_pos[state_nr, k-1]]
-                                    corr_factor_Gdenom = corr_factor_remove_r(Gdenom_inv_, r=r) * ( det_Gnum / det_Gdenom )
-                                    corr_factor = corr_factor_Gnum / corr_factor_Gdenom 
-                                    cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
+                                    # try:
+                                    #     Gnum_inv_, corr1 = adapt_Ainv(Gnum_inv_reuse[k][xs_pos[state_nr, k-1]], Gglobal=G, r=r, s=s, i_start=xs_pos[state_nr, k-1]+1, i_end=i)                                       
+                                    # except np.linalg.LinAlgError as e :
+                                    #     Gnum_inv_2, corr1 = adapt_Ainv_sing(Gdenom_inv_reuse[k], Gglobal=G, r=r, s=s, i_start=xs_pos[state_nr, k-2]+1, i_end=i, pos1=xs_pos[state_nr, k-1], pos2=i)
+                                    # corr2 = corr_factor_remove_r(Gnum_inv_, r=r)                                               
+
+                                    # corr_factor_Gnum = corr1 * corr2               
+                                    # print("corr_factor_Gnum=", corr_factor_Gnum)                      
+                                    # Gdenom_inv_ = Gnum_inv_reuse[k][xs_pos[state_nr, k-1]]
+                                    # corr_factor_Gdenom = corr_factor_remove_r(Gdenom_inv_, r=r) * ( det_Gnum / det_Gdenom )
+                                    # corr_factor = corr_factor_Gnum / corr_factor_Gdenom 
+                                    # cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
 
                         elif r > s:
                             if i > s and i <= r:
@@ -509,6 +542,7 @@ for jj in range(100):
             elapsed_connecting_states += (t1_conn - t0_conn)                    
 
     fh = open("cond_prob_ref.dat", "w")
+    fh.write("ref conf =["+" ".join(str(item) for item in ref_conf)+"]\n\n")
     fh2 = open("det_Gdenom_array.dat", "w")
     for k in range(cond_prob_ref.shape[0]):
         for i in range(cond_prob_ref.shape[1]):

@@ -56,6 +56,37 @@ def adapt_Ainv(Ainv, Gglobal, r, s, i_start, i_end):
     return Gnum_inv_, corr
     
 
+def adapt_Ainv_sing(Gdenom_inv, Gglobal, r, s, i_start, i_end, pos1, pos2):
+    """
+        This routine is used if `adapt_Ainv` throws a "Singular matrix" exception. 
+
+        Extends inverse of denominator matrix from `i_start` (inclusive) up to position `i_end` (inclusive)
+        and puts particles both at position `pos1` and `pos2`. `pos1` < `pos2` are 
+        required to lie in the closed interval [i_start, i_end].
+    """
+    assert r == 0
+    assert Gdenom_inv.shape == (i_start, i_start)
+    assert i_start <= i_end 
+    assert i_start <= pos1 < pos2 <= i_end 
+
+    # put particles at positions `pos1` and `pos2`.
+    l = i_end+1-i_start 
+    DD = np.zeros(l)
+    print("i_start=", i_start)
+    print("pos1-i_start=", pos1-i_start, "pos2-i_start=", pos2-i_start)
+    DD[pos1-i_start] = -1; DD[pos2-i_start] = -1
+    DD = np.diag(DD)
+
+    Gnum_inv_ = block_update_inverse2(Ainv=Gdenom_inv, B=Gglobal[0:i_start, i_start:i_end+1], 
+        C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD)
+    corr = block_update_det_correction2(
+        Ainv=Gdenom_inv, B=Gglobal[0:i_start, i_start:i_end+1], 
+        C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD
+        )
+    return Gnum_inv_, corr
+
+
+
 def adapt_Gdenom_inv(Gdenom_inv, Gglobal, r, s):
     """Extend inverse of denominator matrix up to position `s` (inclusive)
        and put an additional particle at position `s`."""
