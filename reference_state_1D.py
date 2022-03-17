@@ -42,6 +42,7 @@ def cond_prob2log_prob(xs, cond_probs_allk):
     """
     Pick conditional probabilities at actually sampled positions so as to 
     get the probability of the microconfiguration.
+
     Inputs are conditional probs.
     """
     xs = np.asarray(xs)
@@ -71,6 +72,7 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
     """
     Pick conditional probabilities at actually sampled positions so as to 
     get the probability of the microconfiguration.
+
     Inputs are conditional log-probs.
     """
     xs = np.asarray(xs)
@@ -96,14 +98,12 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 50; Np = 25    # Ns=12, Np=5: singular matrix
+Ns = 100; Np = 50    # Ns=12, Np=5: singular matrix
+l1d = Lattice1d(ns=Ns)
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
-
-
 SDsampler = SlaterDetSampler_ordered(Nsites=Ns, Nparticles=Np, single_particle_eigfunc=U, naive=False)
-
 
 for jj in range(100):
     print("jj=", jj)
@@ -112,31 +112,10 @@ for jj in range(100):
     ref_I = bin2int(ref_conf) # ATTENTION: Wrong results for too large bitarrays !
     print("ref_I=", ref_I)
 
-    l1d = Lattice1d(ns=Ns)
     # # #  `states_I` are only the connecting states, the reference state is not included 
     rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l1d))
     num_connecting_states = len(states_I)
     xs = int2bin(states_I, ns=Ns)
-
-    # # JUST FOR TESTING THE SCALING 
-    # # Find all connecting states 
-    # xs = []
-    # rs_pos = []
-    # for r in range(len(ref_conf)):
-    #     if r < len(ref_conf)-1 and r > 0:
-    #         for s in (r - 1, r + 1):
-    #             if ref_conf[r] == 1 and ref_conf[s] == 0:
-    #                 x_temp = ref_conf.copy()
-    #                 x_temp[r] = 0; x_temp[s] = 1
-    #                 xs.append(x_temp)
-    #                 rs_pos.append((r,s))
-
-    # num_connecting_states = len(xs)
-
-    #print(ref_conf)
-    #for i in range(len(xs)):
-    #   print(xs[i])
-    # END: JUST FOR TESTING THE SCALING 
 
     #ref_conf = np.array([1, 0, 1, 1, 0, 0])
     #xs = list(         [[0, 0, 1, 1, 0, 1]],)
@@ -156,8 +135,8 @@ for jj in range(100):
 
     # special case of 1d n.n. hopping matrix 
     assert np.all([abs(r-s) == 1 or abs(r-s) == Ns-1 for r,s in rs_pos])
+
     k_copy = calc_k_copy(rs_pos, ref_conf)
-    #print("k_copy=", k_copy)
     one_hop_info = list(zip(k_copy, rs_pos))
 
 
@@ -201,11 +180,11 @@ for jj in range(100):
     counter_skip = 0
     counter_refskip = 0
     det_Gdenom_array = np.zeros((Np, Ns))
-
-    # REMOVE
     Gdenom_cond_max = 0
 
     for k in range(Np):
+        # Calculate the conditional probabilities for the k-th particle (for all connecting states 
+        # simultaneously using a low-rank update).
         xmin = 0 if k==0 else pos_vec[k-1] + 1 # half-open interval (xmin included, xmax not included)
         xmax = Ns - Np + k + 1
         Ksites = list(range(0, xmin))
@@ -238,6 +217,7 @@ for jj in range(100):
                 Gnum_inv = np.linalg.inv(Gnum) 
             except np.linalg.LinAlgError as e:
                 print("ERROR: det_Gnum=%16.12f\n" % (det_Gnum), e)
+                exit(1)
             Gdenom_inv = np.linalg.inv(Gdenom)
 
             # Needed for low-rank update for onehop states differing from the reference 
@@ -360,6 +340,7 @@ for jj in range(100):
                                     cond = np.linalg.cond(Gdenom)
                                     if cond > Gdenom_cond_max:
                                         Gdenom_cond_max = cond 
+                                        print("Gdenom_cond_max=", Gdenom_cond_max)
 
                                     if k==(k_copy_+1):                                                   
                                         Gdenom_inv_, corr1 = adapt_Gdenom_inv(Gdenom_inv, Gglobal=G, r=r, s=s)

@@ -31,24 +31,24 @@ valid_states = exclude_invalid_connecting_states
 
 def calc_k_copy(hop_from_to, ref_state):
     """
-        `k_copy` indicates the component up to which (inclusive)
-        the conditional probabilities are identical to those 
-        of the reference state (such that they can be copied). The index into 
-        k_copy is the reference state number.
+    `k_copy` indicates the component up to which (inclusive)
+    the conditional probabilities are identical to those 
+    of the reference state (such that they can be copied). The index into 
+    k_copy is the reference state number.
 
-        For example:
-            k_copy = (  0, # The first component is conditionally independent, it can always be copied from the reference state. 
-                        1, # copy conditional probs up to (inclusive) the second component 
-                        1,
-                        2, # copy conditional probs up to (inclusive) the third component
-                        2, 
-                        3 )        
-        >>> 
-        >>> Ns=9; rctl = Lattice_rectangular(3,3); I = [2**8 + 2**4 + 2**1]
-        >>> hop_from_to, states_I, matrix_elem = valid_states(*kinetic_term(I, rctl))
-        >>> k_copy = (0, 0, 0, 1, 1, 1, 1, 2, 2, 2)
-        >>> k_copy == calc_k_copy(hop_from_to, int2bin(I, ns=Ns))
-        True
+    For example:
+        k_copy = (  0, # The first component is conditionally independent, it can always be copied from the reference state. 
+                    1, # copy conditional probs up to (inclusive) the second component 
+                    1,
+                    2, # copy conditional probs up to (inclusive) the third component
+                    2, 
+                    3 )        
+    >>> 
+    >>> Ns=9; rctl = Lattice_rectangular(3,3); I = [2**8 + 2**4 + 2**1]
+    >>> hop_from_to, states_I, matrix_elem = valid_states(*kinetic_term(I, rctl))
+    >>> k_copy = (0, 0, 0, 1, 1, 1, 1, 2, 2, 2)
+    >>> k_copy == calc_k_copy(hop_from_to, int2bin(I, ns=Ns))
+    True
     """
     pos_ref_state = bin2pos(ref_state)
     num_connecting_states = len(hop_from_to)
