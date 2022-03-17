@@ -25,13 +25,13 @@ for s in range(2**Ns):
     if np.count_nonzero(config) == Np:
         ii += 1 
         basis_dict[ii] = config
-        invbasis_dict[bin2int(config).item()] = ii
+        invbasis_dict[int(bin2int(config))] = ii
 
 assert ii == dimH-1, "ii={}, dimH-1={}".format(ii, dimH-1)
 
 #print("basis_dict=", basis_dict)
 #print("invbasis_dict=", invbasis_dict)
-assert(np.all([ invbasis_dict[bin2int(basis_dict[ii]).item()] == ii for ii in range(dimH) ]))
+assert(np.all([ invbasis_dict[int(bin2int(basis_dict[ii]))] == ii for ii in range(dimH) ]))
 
 
 # build the Hamiltonian 
@@ -43,7 +43,7 @@ V_par = 5.0
 # kinetic term
 H_kin = np.zeros((dimH, dimH))
 for s1 in range(dimH):
-    I1 = bin2int(basis_dict[s1]).item()
+    I1 = bin2int(basis_dict[s1])
     _, I_primes, matrix_elems = kinetic_term([I1], lattice) # kinetic_term() requires batch dim
     # remove batch dimension
     I_primes = I_primes[0]; matrix_elems = matrix_elems[0]

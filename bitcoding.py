@@ -1,4 +1,8 @@
-"""Routines for bitcoded fermionic occupation number states."""
+"""
+Routines for bitcoded fermionic occupation number states.
+
+dtype='object'  ensures that integers can be as large as memory allows.
+"""
 # TODO: - Replace numpy routines by torch routines (The default argument is requires_grad=False.)
 #         everywhere and not just in places where a TypeError shows up.
 #       - Bit are ordered frmo left to right. Oringinally, they were ordered from right to left. 
@@ -10,19 +14,20 @@ from utils import default_torch_device
 
 def bin2int(bin_array):
     """
-        Accepts batches. 
+        First dimension is batch dimension (obligatory).
         
         Example:
         --------
         >>> s = np.array([[1,0,0,1],[0,0,1,1]])
         >>> bin2int(s)
-        tensor([ 9, 12])
+        array([9, 12], dtype=object)
     """
-    bin_array = np.array(bin_array[...,::-1], dtype=np.compat.long)   # hack
-    int_ = np.zeros(bin_array.shape[0:-1], dtype=np.compat.long)
+    bin_array = np.array(bin_array[...,::-1], dtype='object') #)   # hack
+    int_ = np.zeros(bin_array.shape[0:-1], dtype='object') #np.compat.long)
     for i in range(bin_array.shape[-1]):
         int_[...] = ( np.left_shift(int_[...], 1) ) | bin_array[..., i]
-    return torch.as_tensor(int_, device=default_torch_device)
+    return int_
+    #return torch.as_tensor(int_, device=default_torch_device)
 
 def int2bin(I, ns):
     """
@@ -48,12 +53,12 @@ def int2bin(I, ns):
                 [1, 1, 0, 0]],
         <BLANKLINE>
                [[1, 1, 0, 0],
-                [0, 1, 0, 1]]])
+                [0, 1, 0, 1]]], dtype=object)
 
     """
     # Hack. Is this fast enough ? 
-    I = np.array(I, dtype=np.compat.long)
-    bin_array = np.zeros(I.shape + (ns,), dtype=np.compat.long)
+    I = np.array(I, dtype='object')
+    bin_array = np.zeros(I.shape + (ns,), dtype='object')
     scan = np.ones_like(I)
     for i in range(ns):
         bin_array[..., ns-i-1] = np.bitwise_and(I[...], np.left_shift(scan[...], i)) // np.left_shift(scan[...], i)
@@ -77,7 +82,7 @@ def int2pos(I, ns):
         
         Example:
         --------
-        >>> I = np.array([[3,12,5],[5,6,6]], dtype=np.compat.long)
+        >>> I = np.array([[3,12,5],[5,6,6]], dtype='object')
         >>> int2pos(I, 5)
         array([[[0, 1],
                 [2, 3],
@@ -89,7 +94,7 @@ def int2pos(I, ns):
 
 
     """
-    I = np.array(I, dtype=np.compat.long)
+    I = np.array(I, dtype='object')
     bin_array = int2bin(I, ns)
     return bin2pos(bin_array)
      
@@ -111,10 +116,8 @@ def bin2pos(bin_array):
                [[1, 2],
                 [0, 1],
                 [1, 3]]])
-
-
     """    
-    bin_array = np.array(bin_array, dtype=np.compat.long)
+    bin_array = np.array(bin_array, dtype='object')
     B0 = bin_array.reshape(-1, bin_array.shape[-1])
     # All occupation number states must be in the same particle number sector.
     Np = np.count_nonzero(B0[0,:])

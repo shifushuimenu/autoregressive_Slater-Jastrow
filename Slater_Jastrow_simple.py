@@ -19,46 +19,43 @@ from profilehooks import profile
 #@profile
 def fermion_parity( n, state_idx, i, j ):
     """
-        Starting from the occupation number state encoded by the integer 
-        `state_idx`, let a particle hop from position `i` to position `j`
-        (or the backward process, i<j), which may result in a new state. If the new 
-        state does not vanish, fermion_parity() returns its sign. 
+    Starting from the occupation number state encoded by the integer 
+    `state_idx`, let a particle hop from position `i` to position `j`
+    (or the backward process, i<j), which may result in a new state. If the new 
+    state does not vanish, fermion_parity() returns its sign. 
+
+    So this functions counts the number of ones in the bit representation of 
+    integer `state_idx` between sites i and j, i.e. in the closed interval [i+1, j-1]. 
     
-        So this functions counts the number of ones in the bit representation of 
-        integer `state_idx` between sites i and j, i.e. in the closed interval [i+1, j-1]. 
+    Parameters:
+    -----------
+        n: number of sites   
+        state_idx: int or 1d array_like of ints 
+            bitcoded occupation number state 
+        i, j: ints
+            0 <= i < j < n. The particle is assumed to hop from i to j or from j to i,
+            irrespective of whether such a hopping process is possible for the given 
+            occupation number states. 
         
-        Parameters:
-        -----------
-            n: number of sites   
-            state_idx: int or 1d array_like of ints 
-                bitcoded occupation number state 
-            i, j: ints
-                0 <= i < j < n. The particle is assumed to hop from i to j or from j to i,
-                irrespective of whether such a hopping process is possible for the given 
-                occupation number states. 
-            
-        Returns:
-        --------
-            parity: \in [+1, -1]
-            
-        Example:
-        --------
-        >>> l = [7, 10, 0] # accepts list 
-        >>> fermion_parity( 4, l, 0, 3 )
-        array([ 1, -1,  1])
-        >>> a = np.array([6, 10, 0]) # accepts numpy array 
-        >>> fermion_parity( 4, a, 0, 3 )
-        array([ 1, -1,  1])
-        >>> t = torch.Tensor([6, 10, 0]) # accepts torch tensor
-        >>> fermion_parity( 4, t, 0, 3 )
-        array([ 1, -1,  1])
+    Returns:
+    --------
+        parity: \in [+1, -1]
+        
+    Example:
+    --------
+    >>> l = [7, 10, 0] # accepts list 
+    >>> fermion_parity( 4, l, 0, 3 )
+    array([ 1, -1,  1])
+    >>> a = np.array([6, 10, 0]) # accepts numpy array 
+    >>> fermion_parity( 4, a, 0, 3 )
+    array([ 1, -1,  1])
         
     """
-    state_idx = np.array(state_idx, dtype=np.int64)
-    assert(np.all(state_idx < np.power(2,n)))
+    state_idx = np.array(state_idx, dtype='object')
+    assert(np.all(state_idx < pow(2,n)))
     assert(0 <= i < j < n)
     # count number of particles between site i and j 
-    mask = np.zeros((state_idx.shape + (n,)), dtype=np.int64)
+    mask = np.zeros((state_idx.shape + (n,)), dtype='object')
     mask[..., slice(i+1, j)] = 1
     mask = bin2int(mask)
     num_exchanges = np.array(
@@ -76,7 +73,7 @@ class Lattice1d(object):
     def __init__(self, ns=4):
         self.ns = ns 
         self.coord = 2 
-        self.neigh = np.zeros((self.ns, self.coord), dtype=np.int64)
+        self.neigh = np.zeros((self.ns, self.coord), dtype='object')
         # left neighbours 
         self.neigh[0, 0] = self.ns-1
         self.neigh[1:, 0] = range(0, self.ns-1)
@@ -134,22 +131,23 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
         Example:
         --------
     """
-    I = np.array(I, dtype=np.int64)
+    I = np.array(I, dtype='object')  # Note: python bigintegers are slower than actual ints.
     neigh = lattice.neigh
     ns = lattice.ns
     coord = neigh.shape[-1]
     max_num_connect = ns*(coord//2)
     
-    I_prime = np.empty(I.shape + (max_num_connect,), dtype=np.int64)
+    I_prime = np.empty(I.shape + (max_num_connect,), dtype='object')
     matrix_elem = np.empty_like(I_prime)
     hop_from_to = []
     count = -1
     for d in range((coord//2)): ####### Replace this error-prone hack by a sum over hopping-bonds. 
         for i in range(ns):     #######
-            M = np.zeros_like(I, dtype=np.int64)
+            M = np.zeros_like(I, dtype='object')
             count += 1 
-            j = neigh[i,d]
-            M[...] = 2**i + 2**j
+            j = neigh[i, d]
+            M[...] = pow(2, i) + pow(2, j)
+            aa = pow(2, i) + pow(2, j)
             K = np.bitwise_and(M, I)
             L = np.bitwise_xor(K, M)
             STATE_EXISTS = ((K != 0) & (L != 0) & (L != K))

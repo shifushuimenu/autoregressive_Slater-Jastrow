@@ -2,22 +2,24 @@
 #         there are numerical inaccuracies in the log_probs of the one-hop states. 
 #         One could argue that in a VMC simulation this scenario should not occur.
 #
-
-from asyncio.proactor_events import _ProactorBaseWritePipeTransport
 import numpy as np
-from test_suite import prepare_test_system_zeroT
+from time import time 
+
+from test_suite import ( prepare_test_system_zeroT,
+                         generate_random_config )
 from bitcoding import *
 from one_hot import *
 from Slater_Jastrow_simple import kinetic_term, Lattice1d
 from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
-
-
 from k_copy import *
 
-from time import time 
+np.random.seed(45514)
 
-#np.random.seed(45514)
-ATOL = 1e-2
+# absolute tolerance in comparisons (e.g. normalization)
+ATOL = 1e-8
+# normalization needs to be satisfied up to 
+#     \sum_i p(i)  > `eps_norm_probs``
+eps_norm_probs = 1.0 - 1e-10
 
 
 def log_cutoff(x):
@@ -26,16 +28,22 @@ def log_cutoff(x):
     """
     return np.where(x > 0, np.log(x), -1000)
  
+
 def copy_cond_probs(cond_prob_ref, cond_prob_onehop, one_hop_info):
-    """copy all conditional probabilities which are identical in the reference 
-    state and in the one-hop states"""
+    """
+    Copy all conditional probabilities which are identical in the reference 
+    state and in the one-hop states.
+    """
     for state_nr, (k_copy, _) in enumerate(one_hop_info):
         cond_prob_onehop[state_nr, 0:k_copy+1, :] = cond_prob_ref[0:k_copy+1, :]
 
 
 def cond_prob2log_prob(xs, cond_probs_allk):
-    """pick conditional probabilities at actually sampled positions so as to 
-    get the probability of the microconfiguration"""
+    """
+    Pick conditional probabilities at actually sampled positions so as to 
+    get the probability of the microconfiguration.
+    Inputs are conditional probs.
+    """
     xs = np.asarray(xs)
     xs_unfolded = occ_numbers_unfold(xs, duplicate_entries = False)
     xs_pos = bin2pos(xs)
@@ -60,8 +68,11 @@ def cond_prob2log_prob(xs, cond_probs_allk):
 
 
 def cond_logprob2log_prob(xs, cond_logprobs_allk):
-    """pick conditional probabilities at actually sampled positions so as to 
-    get the probability of the microconfiguration"""
+    """
+    Pick conditional probabilities at actually sampled positions so as to 
+    get the probability of the microconfiguration.
+    Inputs are conditional log-probs.
+    """
     xs = np.asarray(xs)
     xs_unfolded = occ_numbers_unfold(xs, duplicate_entries = False)
     xs_pos = bin2pos(xs)
@@ -85,7 +96,7 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 12; Np = 5    # Ns=12, Np=5: singular matrix
+Ns = 50; Np = 25    # Ns=12, Np=5: singular matrix
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
@@ -93,32 +104,19 @@ G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
 
 SDsampler = SlaterDetSampler_ordered(Nsites=Ns, Nparticles=Np, single_particle_eigfunc=U, naive=False)
 
-eps_norm_probs = 1.0 - 1e-6
 
-def gen_random_config(Ns, Np):
-    """generate a random reference state of fixed particle number"""
-    config = np.zeros((Ns,), dtype=int) 
-    #config[0] = 1; config[-1] = 1 # !!!!! REMOVE: Make sure no hopping across p.b.c can occur. 
-    counter = 0
-    while counter < Np:
-        pos = np.random.randint(low=0, high=Ns, size=1)
-        if config[pos] != 1:
-            config[pos] = 1
-            counter += 1 
-    return config
-
-
-for jj in range(1):
+for jj in range(100):
     print("jj=", jj)
 
-    ref_conf = gen_random_config(Ns, Np)
-    ref_I = bin2int(ref_conf).numpy() # ATTENTION: Wrong results for too large bitarrays !
+    ref_conf = generate_random_config(Ns, Np)
+    ref_I = bin2int(ref_conf) # ATTENTION: Wrong results for too large bitarrays !
+    print("ref_I=", ref_I)
 
     l1d = Lattice1d(ns=Ns)
     # # #  `states_I` are only the connecting states, the reference state is not included 
-    #rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l1d))
-    #num_connecting_states = len(states_I)
-    #xs = int2bin(states_I, ns=Ns)
+    rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l1d))
+    num_connecting_states = len(states_I)
+    xs = int2bin(states_I, ns=Ns)
 
     # # JUST FOR TESTING THE SCALING 
     # # Find all connecting states 
@@ -151,9 +149,9 @@ for jj in range(1):
     #ref_conf = np.array([0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1])
     #xs = list(         [[1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0]],)
     #rs_pos = ((11,0),)
-    ref_conf = np.array( [1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0])
-    xs = list(          [[0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1]],)
-    rs_pos = ((0, 11),)    
+    #ref_conf = np.array( [1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0])
+    #xs = list(          [[0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1]],)
+    #rs_pos = ((0, 11),)    
     num_connecting_states = len(xs)    
 
     # special case of 1d n.n. hopping matrix 
@@ -297,9 +295,9 @@ for jj in range(1):
                                           # where more particles come after positions s.           
                                 if i > xs_pos[state_nr, k-1]: # support is smaller than in the reference state 
                                     
-                                    print("k=", k, "i=",  i)
-                                    print("ref_conf=      ", ref_conf)                                    
-                                    print("xs[state_nr=%d]="%(state_nr), xs[state_nr])
+                                    #print("k=", k, "i=",  i)
+                                    #print("ref_conf=      ", ref_conf)                                    
+                                    #print("xs[state_nr=%d]="%(state_nr), xs[state_nr])
 
                                     # In this special case, calculate the ratio of determinants from scratch.
                                     base = list(range(0, xs_pos[state_nr, k-1]+1))
@@ -308,11 +306,10 @@ for jj in range(1):
                                     extend = list(range(0, i+1))
                                     occ_vec_add = [1] if (i - xs_pos[state_nr, k-1] == 1) else [0] * (i - xs_pos[state_nr, k-1] - 1) + [1]
                                     occ_vec_extend = occ_vec_base + occ_vec_add
-                                    print("occ_vec_base=", occ_vec_base)
-                                    print("occ_vec_extend=", occ_vec_extend)
                                     Gnum_special = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
 
                                     cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_special) / np.linalg.det(Gdenom_special)
+                                    print("special=", cond_prob_onehop[state_nr, k, i])
 
                                     # !!!!!!!!!!! Problem: np.linalg.inv() sometimes throws error due to singular matrix 
                                     # try:
@@ -575,11 +572,13 @@ for jj in range(1):
     for state_nr, (k_copy_, (r,s)) in enumerate(one_hop_info):
         for k in range(Np):
             if k > k_copy_:
-                pass
-                #print("k=", k, "state_nr=", state_nr, "cumul=", cumul_sum_cond_prob_onehop[state_nr,k])
-                #print("ref_conf=", ref_conf)
-                #print("1hop sta=", xs[state_nr])
+                # pass
+                print("k=", k, "state_nr=", state_nr, "cumul=", cumul_sum_cond_prob_onehop[state_nr,k])
+                print("ref_conf=", ref_conf)
+                print("1hop sta=", xs[state_nr])
                 print("cond_prob_onehop[state_nr, k, :]=", cond_prob_onehop[state_nr, k, :])
+                print("sum=", np.sum(cond_prob_onehop[state_nr, k, :]))
+                print("cumul_sum_cond_prob_onehop[state_nr, k]=", cumul_sum_cond_prob_onehop[state_nr, k])
                 assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, atol=ATOL), "np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f ?= %16.10f" % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :]), cumul_sum_cond_prob_onehop[state_nr, k]) 
                 #assert np.isclose(cumul_sum_cond_prob_onehop[state_nr,k], 1.0, atol=ATOL), "cumul_sum_cond_prob_onehop[state_nr=%d, k=%d]=%16.10f" % (state_nr, k, cumul_sum_cond_prob_onehop[state_nr,k])
 

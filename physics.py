@@ -77,30 +77,30 @@ class Lattice1d(object):
         
 def kinetic_matrix_elem( I, lattice ):
     """
-        Parameters:
-        -----------
-            I: batch of integers
-               Bitcoded integer representing occupation numbers 
-               of spinless fermions.
-            lattice: Lattice object 
-                Provides nearest neighbour matrix which defines the possible 
-                hopping terms. 
-            
-        Returns:
-        --------
-            I_prime: list of ints of length `max_num_connect`
-                List of states connected to I by the application of the kinetic operator K_kin.
-                `max_num_connect` is the number of distinct hopping terms in the kinetic
-                operator. If a given hopping term annihilates state |I>, the "connecting state" is still recorded, 
-                however with matrix element zero. This is to ensure that, given a batch of samples, 
-                I_prime has the same shape for every sample, although different occupation number 
-                states are connected to a different number of other states by action of the hopping operator.
-                            
-            matrix_elem: list of floats             
-                <I| K_kin |I_prime> for all possible I_prime given the lattice structure. 
+    Parameters:
+    -----------
+        I: batch of integers
+           Bitcoded integer representing occupation numbers 
+           of spinless fermions.
+        lattice: Lattice object 
+           Provides nearest neighbour matrix which defines the possible 
+           hopping terms. 
+        
+    Returns:
+    --------
+        I_prime: list of ints of length `max_num_connect`
+           List of states connected to I by the application of the kinetic operator K_kin.
+           `max_num_connect` is the number of distinct hopping terms in the kinetic
+           operator. If a given hopping term annihilates state |I>, the "connecting state" is still recorded, 
+           however with matrix element zero. This is to ensure that, given a batch of samples, 
+           I_prime has the same shape for every sample, although different occupation number 
+           states are connected to a different number of other states by action of the hopping operator.
+                        
+        matrix_elem: list of floats             
+           <I| K_kin |I_prime> for all possible I_prime given the lattice structure. 
 
-        Example:
-        --------
+    Example:
+    --------
     """
     I = np.array(I, dtype=np.int64)
     neigh = lattice.neigh

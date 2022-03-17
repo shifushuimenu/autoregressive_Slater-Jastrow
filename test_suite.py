@@ -1,7 +1,7 @@
 #!/usr/bin/python3.5
 """
-    Routines for benchmarking the scheme of direct sampling of 
-    free fermion pseudo density matrices. 
+Routines for benchmarking the scheme of direct sampling of 
+free fermion pseudo density matrices. 
 """
 
 import numpy as np
@@ -10,11 +10,11 @@ from bitcoding import bin2pos
 
 def occ2int_spinless(occ_vector):
     """
-        Map a spinless fermion occupation vector to an integer by interpreting 
-        the occupation vector as the binary prepresentation of 
-        an integer with the most significant bit to the right. 
-        
-            occ_vector = [1, 0, 1, 0]   ->   integer = 5
+    Map a spinless fermion occupation vector to an integer by interpreting 
+    the occupation vector as the binary prepresentation of 
+    an integer with the most significant bit to the right. 
+    
+        occ_vector = [1, 0, 1, 0]   ->   integer = 5
     """
     occ_vector = np.array(occ_vector, dtype=np.int8)
     s = 0
@@ -30,15 +30,15 @@ def occ2int_spinless(occ_vector):
 
 def occ2int_spinful(occ_vector_up, occ_vector_dn, debug=False):
     """
-        Combine the occupation vectors for spin up and spin down 
-        and map the resulting combined occupation vector to 
-        an integer. The most significant bit is to the right.
+    Combine the occupation vectors for spin up and spin down 
+    and map the resulting combined occupation vector to 
+    an integer. The most significant bit is to the right.
 
-        Example:
-        ========
-            occ_vector_up = [1, 0, 0, 1]
-            occ_vector_dn = [0, 1, 1, 0]
-            [occ_vector_up, occ_vector_dn] = [1, 0, 0, 1; 0, 1, 1, 0]  -> integer = 105
+    Example:
+    ========
+        occ_vector_up = [1, 0, 0, 1]
+        occ_vector_dn = [0, 1, 1, 0]
+        [occ_vector_up, occ_vector_dn] = [1, 0, 0, 1; 0, 1, 1, 0]  -> integer = 105
     """
     assert(len(occ_vector_up) == len(occ_vector_dn))
     occ_vector_up = np.array(occ_vector_up)
@@ -53,14 +53,14 @@ def occ2int_spinful(occ_vector_up, occ_vector_dn, debug=False):
 
 def int2occ_spinful(integer, Nsites):
     """
-        Convert the integer representing an occupation number vector
-        for spin up and spin down into a bitstring. 
+    Convert the integer representing an occupation number vector
+    for spin up and spin down into a bitstring. 
 
-        Example:
-        ========
-            occ_vector_up = [1, 0, 0, 1]
-            occ_vector_dn = [0, 1, 1, 0]
-            integer = 105 -> [occ_vector_up, occ_vector_dn] = [1, 0, 0, 1; 0, 1, 1, 0]     
+    Example:
+    ========
+        occ_vector_up = [1, 0, 0, 1]
+        occ_vector_dn = [0, 1, 1, 0]
+        integer = 105 -> [occ_vector_up, occ_vector_dn] = [1, 0, 0, 1; 0, 1, 1, 0]     
     """
     Nspecies = 2
 
@@ -80,11 +80,26 @@ def int2occ_spinful(integer, Nsites):
     return bitstring 
 
 
+def generate_random_config(Ns, Np):
+    """
+    Generate a random occupation number state (fixed particle number).
+    """
+    config = np.zeros((Ns,), dtype=int) 
+    #config[0] = 1; config[-1] = 1 # !!!!! REMOVE: Make sure no hopping across periodic boundaries can occur. 
+    counter = 0
+    while counter < Np:
+        pos = np.random.randint(low=0, high=Ns, size=1)
+        if config[pos] != 1:
+            config[pos] = 1
+            counter += 1 
+    return config
+
+
 def prepare_test_system_zeroT(Nsites=21, potential='parabolic', PBC=True, HF=True, Nparticles=0, Vnnint=0.0):
     """
-        One-dimensional system of free fermions with Nsites sites
-        in an external trapping potential.
-        Return the matrix of single-particle eigenstates. 
+    One-dimensional system of free fermions with Nsites sites
+    in an external trapping potential.
+    Return the matrix of single-particle eigenstates. 
     """
     i0=int(Nsites/2)
     V_pot = np.zeros(Nsites)
