@@ -13,10 +13,13 @@ from Slater_Jastrow_simple import kinetic_term, Lattice1d
 from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 from k_copy import *
 
+from monitoring import logger
+
 np.random.seed(45514)
 
 # absolute tolerance in comparisons (e.g. normalization)
 ATOL = 1e-8
+
 # normalization needs to be satisfied up to 
 #     \sum_i p(i)  > `eps_norm_probs``
 eps_norm_probs = 1.0 - 1e-10
@@ -31,7 +34,7 @@ def log_cutoff(x):
 
 def copy_cond_probs(cond_prob_ref, cond_prob_onehop, one_hop_info):
     """
-    Copy all conditional probabilities which are identical in the reference 
+    Copy all conditional probabilities for k <= k_copy_, which are identical in the reference 
     state and in the one-hop states.
     """
     for state_nr, (k_copy, _) in enumerate(one_hop_info):
@@ -98,14 +101,14 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 100; Np = 50    # Ns=12, Np=5: singular matrix
+Ns = 20; Np = 10    # Ns=12, Np=5: singular matrix
 l1d = Lattice1d(ns=Ns)
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
 SDsampler = SlaterDetSampler_ordered(Nsites=Ns, Nparticles=Np, single_particle_eigfunc=U, naive=False)
 
-for jj in range(100):
+for jj in range(1):
     print("jj=", jj)
 
     ref_conf = generate_random_config(Ns, Np)
@@ -155,7 +158,7 @@ for jj in range(100):
     cond_logprob_ref = np.zeros((Np, Ns))
     cond_prob_onehop = np.zeros((num_connecting_states, Np, Ns))
     cond_logprob_onehop = np.zeros((num_connecting_states, Np, Ns))
-    cumul_sum_cond_prob_onehop = np.zeros((num_connecting_states, Np))
+    cumsum_condprob_onehop = np.zeros((num_connecting_states, Np))
 
     # The following variables are needed for low-rank update for onehop states differing 
     # from the reference state by long-range hopping between positions r and s.
@@ -170,17 +173,6 @@ for jj in range(100):
     xs = np.array(xs) # convert list of arrays into 2D array 
     xs_pos = bin2pos(xs)
 
-
-    elapsed_ref = 0.0
-    elapsed_connecting_states = 0.0
-    elapsed_singular = 0.0
-    elapsed_adapt = 0.0
-    counter_nonsingular = 0
-    counter_singular = 0
-    counter_skip = 0
-    counter_refskip = 0
-    det_Gdenom_array = np.zeros((Np, Ns))
-    Gdenom_cond_max = 0
 
     for k in range(Np):
         # Calculate the conditional probabilities for the k-th particle (for all connecting states 
@@ -207,8 +199,6 @@ for jj in range(100):
             det_Gnum = np.linalg.det(Gnum)
             det_Gdenom = np.linalg.det(Gdenom)
 
-            det_Gdenom_array[k, i] = det_Gdenom
-
             # Internal state used during low-rank update of conditional probabilities 
             # of the connnecting states. 
 
@@ -229,12 +219,7 @@ for jj in range(100):
             cond_prob_ref[k, i] = (-1) * det_Gnum / det_Gdenom
             cond_logprob_ref[k,i] = log_cutoff(abs(det_Gnum)) - log_cutoff(abs(det_Gdenom))
             t1 = time() 
-            elapsed_ref += (t1 - t0)
-
-            REF_SKIP = False 
-            if np.isclose(cond_prob_ref[k,i], 0.0, atol=1e-8 / float(Ns)):
-                counter_refskip += 1
-                REF_SKIP = True 
+            logger.info_refstate.elapsed_ref += (t1 - t0)
 
             if (i,k) in S_connecting_states:
                 det_Gnum_reuse.update({k : det_Gnum})
@@ -246,9 +231,9 @@ for jj in range(100):
             t0_conn = time()
             for state_nr, (k_copy_, (r,s)) in enumerate(one_hop_info):
                 if k_copy_ >= k:
-                    # copy conditional probabilities rather than calculating them 
+                    # Copy conditional probabilities rather than calculating them.
                     # Exit the loop; it is assumed that one-hop states are ordered according to increasing values 
-                    # of k_copy_, i.e. the condition is also fulfilled for all subsequent states.
+                    # of k_copy_, i.e. this condition is also fulfilled for all subsequent one-hop states.
                     break 
                 else: # k_copy < k  
                     # SOME SPECIAL CASES 
@@ -257,7 +242,7 @@ for jj in range(100):
                     # Every subsequent empty site needs to be occupied to accomodate all particles both in the reference state 
                     # and in the one-hop state. 
                         cond_prob_onehop[state_nr, k, i] = 1.0
-                        cumul_sum_cond_prob_onehop[state_nr, k] = 1.0
+                        cumsum_condprob_onehop[state_nr, k] = 1.0
                         continue
 
                     if abs(r-s) > 1: # long-range hopping in 1d
@@ -320,7 +305,7 @@ for jj in range(100):
                                         corr_factor = corr_factor_Gnum / corr_factor_Gdenom
                                         cond_prob_onehop[state_nr, k, j_add] = corr_factor * cond_prob_ref[k-1, j_add]
                                         # update cumul. probs. explicitly because this is inside the body of an extra loop
-                                        cumul_sum_cond_prob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, j_add]
+                                        cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, j_add]
 
                                 if k == k_copy_ + 1:       
                                     Gdenom_inv_, corr_factor_Gdenom = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s)
@@ -336,11 +321,11 @@ for jj in range(100):
                         if r < s:
                             if i > s:
                                 if not np.isclose(det_Gnum, 0.0, atol=1e-16): # don't invert a singular matrix 
-                                    counter_nonsingular += 1
+                                    logger.info_refstate.counter_nonsingular += 1
                                     cond = np.linalg.cond(Gdenom)
-                                    if cond > Gdenom_cond_max:
-                                        Gdenom_cond_max = cond 
-                                        print("Gdenom_cond_max=", Gdenom_cond_max)
+                                    if cond > logger.info_refstate.Gdenom_cond_max:
+                                        logger.info_refstate.Gdenom_cond_max = cond 
+                                        print("Gdenom_cond_max=", logger.info_refstate.Gdenom_cond_max)
 
                                     if k==(k_copy_+1):                                                   
                                         Gdenom_inv_, corr1 = adapt_Gdenom_inv(Gdenom_inv, Gglobal=G, r=r, s=s)
@@ -371,9 +356,9 @@ for jj in range(100):
                                     #     break
                                     # NOTE: The cond. prob. at the actually sampled positions needs to be computed before 
                                     #       saturation of the normalization can be exploited. 
-                                    if cumul_sum_cond_prob_onehop[state_nr, k] > eps_norm_probs and i > xs_pos[state_nr, k]:  
+                                    if cumsum_condprob_onehop[state_nr, k] > eps_norm_probs and i > xs_pos[state_nr, k]:  
                                         cond_prob_onehop[state_nr, k, i-1:] = 0.0
-                                        counter_skip += (xmax - i) 
+                                        logger.info_refstate.counter_skip += (xmax - i) 
                                         continue
 
                                     # print("numerator 1 singular, k=", k, " i=", i, "sum(cond_prob_ref)=", sum(cond_prob_ref[k, 0:i+1]), sum(cond_prob_onehop[state_nr, k, 0:i]))
@@ -406,12 +391,12 @@ for jj in range(100):
                                         #cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / (det_Gdenom * corr_factor_Gdenom)
                                         cond_logprob_onehop[state_nr, k, i] = log_cutoff(abs(det_Gnum_)) - log_cutoff(abs(det_Gdenom)) - log_cutoff(abs(corr_factor_Gdenom))
 
-                                    counter_singular += 1
+                                    logger.info_refstate.counter_singular += 1
                                     #print("SSingular, detGnum=", det_Gnum, "detGdenom=", det_Gdenom, "cond_prob_ref[k, i]=", cond_prob_ref[k, i])
                                     #print("det_Gnum_=", det_Gnum_, "corr_factor_Gdenom=", corr_factor_Gdenom)
 
                                     t1 = time()
-                                    elapsed_singular += (t1 - t0)
+                                    logger.info_refstate.elapsed_singular += (t1 - t0)
                         elif r > s: 
                                 # The support is larger than in the reference state. One needs to calculate (r-s)
                                 # more conditional probabilities than in the reference state. 
@@ -419,7 +404,7 @@ for jj in range(100):
                                 # The case i == r is special. 
 
                                 if not np.isclose(det_Gnum, 0.0, atol=1e-16): # don't invert a singular matrix                                                  
-                                    counter_nonsingular += 1
+                                    logger.info_refstate.counter_nonsingular += 1
 
                                     # cond = np.linalg.cond(Gdenom)
                                     # if cond > Gdenom_cond_max:
@@ -435,7 +420,7 @@ for jj in range(100):
                                             det_Gnum_ = det_Gdenom * corr_factor_add_s(Gdenom_inv, s=s)
                                             cond_prob_onehop[state_nr, k, i-1] = (-1) * det_Gnum_ / det_Gdenom_
                                             cond_logprob_onehop[state_nr, k, i-1] = log_cutoff(abs(det_Gnum_)) - log_cutoff(abs(det_Gdenom_))
-                                            cumul_sum_cond_prob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i-1]
+                                            cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i-1]
                                         if i > r:  
                                             corr_factor1 = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)
                                             corr_factor  = corr_factor1 * (det_Gdenom / det_Gdenom_)
@@ -465,11 +450,11 @@ for jj in range(100):
                                     # First check whether the conditional probabilities are already saturated.
                                     # NOTE: The cond. prob. at the actually sampled positions needs to be computed before 
                                     #       saturation of the normalization can be exploited.                                 
-                                    if cumul_sum_cond_prob_onehop[state_nr, k] > eps_norm_probs and i > xs_pos[state_nr, k]:
+                                    if cumsum_condprob_onehop[state_nr, k] > eps_norm_probs and i > xs_pos[state_nr, k]:
                                         cond_prob_onehop[state_nr, k, i-1:] = 0.0
-                                        counter_skip += (xmax - i)
+                                        logger.info_refstate.counter_skip += (xmax - i)
                                         continue                                    
-                                    counter_singular += 1
+                                    logger.info_refstate.counter_singular += 1
                                     #print("SSingular")         
                                     # print("numerator 2 singular, k=", k, " i=", i, "sum(cond_prob)=", sum(cond_prob_ref[k, 0:i+1]))
 
@@ -489,7 +474,7 @@ for jj in range(100):
                                             cond_prob_onehop[state_nr, k, i-1] = (-1) * det_Gnum_ / det_Gdenom_
                                             cond_logprob_onehop[state_nr, k, i-1] = log_cutoff(abs(det_Gdenom)) + log_cutoff(abs(corr_factor_add_s(Gdenom_inv, s=s))) - log_cutoff(abs(det_Gdenom_))
 
-                                            cumul_sum_cond_prob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i-1]
+                                            cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i-1]
                                             #cond_prob_onehop[state_nr, k, i-1] = (-1) * np.linalg.det(Gnum_) / det_Gdenom_
                                         if i > r:                                     
                                             #Gnum_ = adapt_singular_Gnum2(Gnum, r=r, s=s, i=i)
@@ -512,26 +497,20 @@ for jj in range(100):
                                         #cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_) / ( det_Gdenom * corr_factor_Gdenom)
                                         
                                     t1 = time()
-                                    elapsed_singular += (t1 - t0)
+                                    logger.info_refstate.elapsed_singular += (t1 - t0)
 
-                    cumul_sum_cond_prob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i]
+                    cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i]
 
             t1_conn = time()
-            elapsed_connecting_states += (t1_conn - t0_conn)                    
+            logger.info_refstate.elapsed_connecting_states += (t1_conn - t0_conn)                    
+
 
     fh = open("cond_prob_ref.dat", "w")
     fh.write("ref conf =["+" ".join(str(item) for item in ref_conf)+"]\n\n")
-    fh2 = open("det_Gdenom_array.dat", "w")
     for k in range(cond_prob_ref.shape[0]):
         for i in range(cond_prob_ref.shape[1]):
             fh.write("%d %d %e\n" % (k, i, cond_prob_ref[k, i]))
-            fh2.write("%d %d %e\n" % (k, i, det_Gdenom_array[k, i]))
     fh.close()
-    fh2.close()
-
-    # Check 
-    # remove nan 
-    #cond_logprob_onehop = np.where(cond_logprob_onehop == -np.inf, -1000, cond_logprob_onehop)
 
     copy_cond_probs(cond_prob_ref, cond_prob_onehop, one_hop_info)
     copy_cond_probs(cond_logprob_ref, cond_logprob_onehop, one_hop_info)
@@ -554,14 +533,13 @@ for jj in range(100):
         for k in range(Np):
             if k > k_copy_:
                 # pass
-                print("k=", k, "state_nr=", state_nr, "cumul=", cumul_sum_cond_prob_onehop[state_nr,k])
+                print("k=", k, "state_nr=", state_nr, "cumul=", cumsum_condprob_onehop[state_nr,k])
                 print("ref_conf=", ref_conf)
                 print("1hop sta=", xs[state_nr])
                 print("cond_prob_onehop[state_nr, k, :]=", cond_prob_onehop[state_nr, k, :])
                 print("sum=", np.sum(cond_prob_onehop[state_nr, k, :]))
-                print("cumul_sum_cond_prob_onehop[state_nr, k]=", cumul_sum_cond_prob_onehop[state_nr, k])
-                assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, atol=ATOL), "np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f ?= %16.10f" % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :]), cumul_sum_cond_prob_onehop[state_nr, k]) 
-                #assert np.isclose(cumul_sum_cond_prob_onehop[state_nr,k], 1.0, atol=ATOL), "cumul_sum_cond_prob_onehop[state_nr=%d, k=%d]=%16.10f" % (state_nr, k, cumul_sum_cond_prob_onehop[state_nr,k])
+                print("cumsum_condprob_onehop[state_nr, k]=", cumsum_condprob_onehop[state_nr, k])
+                assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, atol=ATOL), "np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f ?= %16.10f" % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :]), cumsum_condprob_onehop[state_nr, k])               
 
 
     for i in range(num_connecting_states):
@@ -574,14 +552,8 @@ for jj in range(100):
         #assert np.isclose( log_probs2[i] - log_prob_ref, SDsampler.log_prob([xs[i]]).item()  - log_prob_ref, atol=1e-1)
 
 
-    print("elapsed_ref=", elapsed_ref)
-    print("elapsed_connecting_states=", elapsed_connecting_states)
-    print("elapsed_singular=", elapsed_singular)
-    print("counter_singular=", counter_singular)
-    print("counter_skip=", counter_skip)
-    print("counter_refskip=", counter_refskip)
-    print("counter_nonsingular=", counter_nonsingular)
-    print("elapsed_adapt=", elapsed_adapt)
+    logger.info_refstate.print_summary()
+
 
 def _test():
     import doctest
