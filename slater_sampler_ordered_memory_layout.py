@@ -336,6 +336,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.cond_probs[k*self.D:(k+1)*self.D] = probs
         #print("sum=", sum(self.cond_probs[k*self.D:(k+1)*self.D]))
         pos = Categorical(probs).sample().numpy()
+
         # conditional prob in this sampling step 
         cond_prob_k = probs[pos]
 
@@ -491,10 +492,10 @@ if __name__ == "__main__":
 
     from time import time 
 
-    for L in (20,): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
-        (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=L, potential='none', PBC=False, HF=False)
-        Nparticles = 10 #L//2
-        num_samples = 1000
+    for L in (50,): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
+        (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=L, potential='none', PBC=True, HF=True)
+        Nparticles = 4 #L//2
+        num_samples = 1 # 1000
 
         #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
         #SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)

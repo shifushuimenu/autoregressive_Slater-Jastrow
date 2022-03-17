@@ -18,7 +18,7 @@ from monitoring import logger
 np.random.seed(45514)
 
 # absolute tolerance in comparisons (e.g. normalization)
-ATOL = 1e-8
+ATOL = 1e-2
 
 # normalization needs to be satisfied up to 
 #     \sum_i p(i)  > `eps_norm_probs``
@@ -108,7 +108,7 @@ P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
 SDsampler = SlaterDetSampler_ordered(Nsites=Ns, Nparticles=Np, single_particle_eigfunc=U, naive=False)
 
-for jj in range(1):
+for jj in range(100):
     print("jj=", jj)
 
     ref_conf = generate_random_config(Ns, Np)
@@ -176,7 +176,7 @@ for jj in range(1):
 
     for k in range(Np):
         # Calculate the conditional probabilities for the k-th particle (for all connecting states 
-        # simultaneously using a low-rank update).
+        # simultaneously, using a low-rank update).
         xmin = 0 if k==0 else pos_vec[k-1] + 1 # half-open interval (xmin included, xmax not included)
         xmax = Ns - Np + k + 1
         Ksites = list(range(0, xmin))
@@ -203,7 +203,7 @@ for jj in range(1):
             # of the connnecting states. 
 
             # In case a cond. prob. of the reference state is zero:
-            try:
+            try:    
                 Gnum_inv = np.linalg.inv(Gnum) 
             except np.linalg.LinAlgError as e:
                 print("ERROR: det_Gnum=%16.12f\n" % (det_Gnum), e)

@@ -79,15 +79,6 @@ def monotonically_increasing(y):
     return b 
 
 
-def copy_cond_probs(cond_prob_ref, cond_prob_onehop, one_hop_info):
-    """
-    Copy all conditional probabilities for k <= k_copy_, which are identical in the reference 
-    state and in the one-hop states.
-    """
-    for state_nr, (k_copy, _) in enumerate(one_hop_info):
-        cond_prob_onehop[state_nr, 0:k_copy+1, :] = cond_prob_ref[0:k_copy+1, :]
-
-
 def _test():
     import doctest
     doctest.testmod(verbose=True)
