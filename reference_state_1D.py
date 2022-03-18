@@ -136,9 +136,22 @@ for jj in range(1):
     #xs = list(         [[1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0]],)
     #rs_pos = ((11,0),)
 
-    ref_conf = np.array( [1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1])
-    xs = list(          [[1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1]],)
-    rs_pos = ((8, 3),)    
+    # ===============================================================
+    # test case 1 
+    #ref_conf = np.array( [1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1])
+    #xs = list(          [[1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1]],)
+    #rs_pos = ((3, 8),)    
+
+    # test case 2 
+    #ref_conf = np.array( [1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1])
+    #xs = list(          [[1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1]],)
+    #rs_pos = ((8, 3),)    
+
+    # The conditional probs of ref_conf for test case 1 must be the same 
+    # as the conditional probs. of onehop_state for test case 2. 
+    # IMPROVE: Convert this into a doctest or create a test case in a
+    # separate file. 
+    # ===============================================================
 
     #ref_conf = np.array( [0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1])
     #xs = list(          [[0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1]],)
