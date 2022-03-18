@@ -36,10 +36,12 @@ def adapt_Gdenom(Gnum, r, s):
 
 
 def adapt_Ainv(Ainv, Gglobal, r, s, i_start, i_end):
-    """Extend inverse of numerator or denominator matrix from position `i_start` (inclusive)
-       up to position `i_end` (inclusive) and put a particle at position `i_end`."""
-    assert r == 0 # long-range hopping in 1D 
-    assert Ainv.shape == (i_start, i_start)
+    """
+    Extend inverse of numerator or denominator matrix from position `i_start` (inclusive)
+    up to position `i_end` (inclusive) and put a particle at position `i_end`.
+    """
+    #assert r == 0 # long-range hopping in 1D 
+    assert Ainv.shape == (i_start, i_start), "Ainv.shape=(%d, %d) and i_start = %d" % (*Ainv.shape, i_start)
     assert i_start <= i_end
 
     # put a particle at position `i_end`
@@ -47,13 +49,13 @@ def adapt_Ainv(Ainv, Gglobal, r, s, i_start, i_end):
     DD = np.zeros((l, l))
     DD[-1, -1] = -1
 
-    Gnum_inv_ = block_update_inverse2(Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
+    Ainv_extended = block_update_inverse2(Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
         C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD)
     corr = block_update_det_correction2(
         Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
         C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD
         )
-    return Gnum_inv_, corr
+    return Ainv_extended, corr
     
 
 def adapt_Ainv_sing(Gdenom_inv, Gglobal, r, s, i_start, i_end, pos1, pos2):
@@ -88,11 +90,13 @@ def adapt_Ainv_sing(Gdenom_inv, Gglobal, r, s, i_start, i_end, pos1, pos2):
 
 
 def adapt_Gdenom_inv(Gdenom_inv, Gglobal, r, s):
-    """Extend inverse of denominator matrix up to position `s` (inclusive)
-       and put an additional particle at position `s`."""
-    assert s > r or s == 0
-    assert Gdenom_inv.shape == (s, s)
-    assert s == r + 1 or s == 0
+    """
+    Extend inverse of denominator matrix up to position `s` (inclusive)
+    and put an additional particle at position `s`.
+    """
+    #assert s > r or s == 0
+    assert Gdenom_inv.shape == (s, s), "Gdenom_inv.shape= (%d, %d)" %(Gdenom_inv.shape)
+    #assert s == r + 1 or s == 0
     # put an additional particle at position s 
     Gdenom_inv_ = block_update_inverse(Ainv=Gdenom_inv, B=Gglobal[0:s, s][:, None], C=Gglobal[s,0:s][None, :], D=Gglobal[s,s][None, None] - 1)
     corr = block_update_det_correction(Ainv=Gdenom_inv, B=Gglobal[0:s, s][:, None], C=Gglobal[s,0:s][None, :], D=Gglobal[s,s][None, None] - 1)

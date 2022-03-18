@@ -2,6 +2,10 @@
 #         there are numerical inaccuracies in the log_probs of the one-hop states. 
 #         One could argue that in a VMC simulation this scenario should not occur.
 #
+#       - Add meaningful tests (in a different file).
+#
+#       - Correct cumsum. Problem occurs when probs at k are used to calculate probs at k-1.
+
 import numpy as np
 from time import time 
 
@@ -15,10 +19,10 @@ from k_copy import *
 
 from monitoring import logger
 
-np.random.seed(45514)
+np.random.seed(43514)
 
 # absolute tolerance in comparisons (e.g. normalization)
-ATOL = 1e-2
+ATOL = 1e-8
 
 # normalization needs to be satisfied up to 
 #     \sum_i p(i)  > `eps_norm_probs``
@@ -101,14 +105,14 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 20; Np = 10    # Ns=12, Np=5: singular matrix
+Ns = 18; Np = 8    # Ns=12, Np=5: singular matrix
 l1d = Lattice1d(ns=Ns)
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
 SDsampler = SlaterDetSampler_ordered(Nsites=Ns, Nparticles=Np, single_particle_eigfunc=U, naive=False)
 
-for jj in range(100):
+for jj in range(1):
     print("jj=", jj)
 
     ref_conf = generate_random_config(Ns, Np)
@@ -131,15 +135,23 @@ for jj in range(100):
     #ref_conf = np.array([0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1])
     #xs = list(         [[1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0]],)
     #rs_pos = ((11,0),)
-    #ref_conf = np.array( [1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0])
-    #xs = list(          [[0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1]],)
-    #rs_pos = ((0, 11),)    
+
+    ref_conf = np.array( [1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1])
+    xs = list(          [[1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1]],)
+    rs_pos = ((9, 3),)    
+
+    #ref_conf = np.array( [0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1])
+    #xs = list(          [[0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1]],)
+    #rs_pos = ((9, 3),)    
+
+
     num_connecting_states = len(xs)    
 
-    # special case of 1d n.n. hopping matrix 
-    assert np.all([abs(r-s) == 1 or abs(r-s) == Ns-1 for r,s in rs_pos])
+    # special case of 1d n.n. hopping matrix
+    # assert np.all([abs(r-s) == 1 or abs(r-s) == Ns-1 for r,s in rs_pos])
 
     k_copy = calc_k_copy(rs_pos, ref_conf)
+    print("k_copy=", k_copy)
     one_hop_info = list(zip(k_copy, rs_pos))
 
 
@@ -166,13 +178,19 @@ for jj in range(100):
     det_Gdenom_reuse = dict()
     Gnum_inv_reuse = dict()
 
+
     Ksites = []
     occ_vec = list(ref_conf)
     assert type(occ_vec) == type(list()) # use a list, otherwise `occ_vec[0:xmin] + [1]` will result in `[]`. 
     pos_vec = bin2pos(ref_conf)
+
     xs = np.array(xs) # convert list of arrays into 2D array 
     xs_pos = bin2pos(xs)
 
+    # Needed for long-range hopping in 2D. 
+    # At position `s` (`r`) sits the `k_s[state_nr]`-th (`k_r[state_nr]`-th) particle. 
+    k_s = [np.searchsorted(xs_pos[state_nr, :], rs_pos[state_nr][1]) for state_nr in range(num_connecting_states)]
+    k_r = [np.searchsorted(xs_pos[state_nr, :], rs_pos[state_nr][0]) for state_nr in range(num_connecting_states)]
 
     for k in range(Np):
         # Calculate the conditional probabilities for the k-th particle (for all connecting states 
@@ -247,7 +265,7 @@ for jj in range(100):
 
                     if abs(r-s) > 1: # long-range hopping in 1d
                         if r < s:
-                            if k > 1: # k=0 can always be copied from the reference state 
+                            if k > 1 and k <= k_s[state_nr]: # k=0 can always be copied from the reference state 
                                 corr_factor_Gnum = corr_factor_remove_r(Gnum_inv_reuse[k][i], r=r)
                                 corr_factor_Gdenom = corr_factor_remove_r(Gdenom_inv_reuse[k], r=r)
                                 corr_factor = corr_factor_Gnum / corr_factor_Gdenom
@@ -256,14 +274,13 @@ for jj in range(100):
                                 cond_prob_onehop[state_nr, k-1, i] = corr_factor * cond_prob_ref[k, i]
 
                             # additionally ...
-                            if k == Np-1: # Special case: cond. probs. for last particle. IMPROVE: adapt to 2D long-range hoppping 
+                            if k == Np-1 or k == k_s[state_nr]: 
+                                          # Special case: cond. probs. for last particle (for 1D system with pbc) or 
+                                          # last particle whose support involves position `s` (for 2D system).
+                                          # IMPROVE: adapt to 2D long-range hoppping 
                                           # where more particles come after positions s.           
                                 if i > xs_pos[state_nr, k-1]: # support is smaller than in the reference state 
                                     
-                                    #print("k=", k, "i=",  i)
-                                    #print("ref_conf=      ", ref_conf)                                    
-                                    #print("xs[state_nr=%d]="%(state_nr), xs[state_nr])
-
                                     # In this special case, calculate the ratio of determinants from scratch.
                                     base = list(range(0, xs_pos[state_nr, k-1]+1))
                                     occ_vec_base = list(xs[state_nr, 0:xs_pos[state_nr, k-1]+1])
@@ -289,33 +306,87 @@ for jj in range(100):
                                     # corr_factor_Gdenom = corr_factor_remove_r(Gdenom_inv_, r=r) * ( det_Gnum / det_Gdenom )
                                     # corr_factor = corr_factor_Gnum / corr_factor_Gdenom 
                                     # cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
+                            
+                            # Yet another special case 
+                            if k == k_s[state_nr] and i > s:
+                                # Again, calculate the ratio of determinants from scratch. 
+                                # (same code as above, combine it with the previous case)
+                                base = list(range(0, xs_pos[state_nr, k-1]+1))
+                                occ_vec_base = list(xs[state_nr, 0:xs_pos[state_nr, k-1]+1])
+                                Gdenom_special = G[np.ix_(base, base)] - np.diag(occ_vec_base)
+                                extend = list(range(0, i+1))
+                                occ_vec_add = [1] if (i - xs_pos[state_nr, k-1] == 1) else [0] * (i - xs_pos[state_nr, k-1] - 1) + [1]
+                                occ_vec_extend = occ_vec_base + occ_vec_add
+                                Gnum_special = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
+
+                                cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_special) / np.linalg.det(Gdenom_special)
+
+
+                            if k > k_s[state_nr] + 1 and i > s:
+                                corr_factor_Gnum = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)
+                                corr_factor_Gdenom = corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)
+                                corr_factor = corr_factor_Gnum / corr_factor_Gdenom
+                                cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
+
 
                         elif r > s:
-                            if i > s and i <= r:
-                                if i==pos_vec[k-1]+1:
-                                # need to calculate some additional cond. probs. along the way 
-                                    for j_add in range(xmin_onehop, pos_vec[k-1]+1):
-                                        # reuse all information from (k-1) cond. probs. of reference state
-                                        if k == k_copy_ + 1:                                            
-                                            Gdenom_inv_, corr = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=xs_pos[state_nr, k-1])
-                                            corr_factor_Gdenom = corr
-                                        else:
-                                            corr_factor_Gdenom = corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s)
-                                        corr_factor_Gnum = corr_factor_add_s(Gnum_inv_reuse[k-1][j_add], s=s)
-                                        corr_factor = corr_factor_Gnum / corr_factor_Gdenom
-                                        cond_prob_onehop[state_nr, k, j_add] = corr_factor * cond_prob_ref[k-1, j_add]
-                                        # update cumul. probs. explicitly because this is inside the body of an extra loop
-                                        cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, j_add]
+                            if i > s:
+                                if k <= k_r[state_nr]:
+                                    if i==pos_vec[k-1]+1:
+                                    # need to calculate some additional cond. probs. along the way 
+                                        for j_add in range(xmin_onehop, pos_vec[k-1]+1):
+                                            print("s=", s, "k=", k, "i=", i, "j_add=", j_add, "xmin_onehop=", xmin_onehop)
+                                            # reuse all information from (k-1) cond. probs. of reference state
+                                            if k == k_copy_ + 1 and s == 0: # 1D long-range hopping                                             
+                                                Gdenom_inv_, corr = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=xs_pos[state_nr, k-1])
+                                                corr_factor_Gdenom = corr
+                                            elif k == k_copy_ + 1 and s > 0: # 2D long-range hopping: There are particles or empty sites to the left of s.                                            
+                                                # 1. No particle to the left of position `s`. (Of course, this is so both in the reference state and in the onhop
+                                                # state since they differ only in the occupancies of the positions `s` and `r`.)
+                                                if k_s[state_nr] == 0:
+                                                    print("special case 1")
+                                                    Gdenom_inv_, corr = adapt_Ainv(np.array([]).reshape(0,0), Gglobal=G, r=r, s=s, i_start=0, i_end=s)
+                                                    corr_factor_Gdenom = corr
+                                                    #print("exiting...")
+                                                    #exit(1)
+                                                # 2. There is at least one particle to the left of position `s`. Numerator and denominator 
+                                                # matrices can be extended from that position. 
+                                                elif k_s[state_nr] > 0:
+                                                    print("special case 2")
+                                                    print("xs_pos[state_nr,:]=", xs_pos[state_nr,:])
+                                                    print("pos_vec[:]        =", pos_vec[:])
+                                                    # We are calculation cond. probs. for the k-th particle. For the reference state low-rank updates 
+                                                    # are based on the sampled position of the (k-1)-th particle. For the onehop state they are based 
+                                                    # on the position of the (k-2)-th particle. 
+                                                    Gdenom_inv_, corr = adapt_Ainv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s, i_start=pos_vec[k-2]+1, i_end=s)
+                                                    corr_factor_Gdenom = corr
+                                                    #print("exiting ...")
+                                                    #exit(1)
+                                            else:
+                                                corr_factor_Gdenom = corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s)
+                                            corr_factor_Gnum = corr_factor_add_s(Gnum_inv_reuse[k-1][j_add], s=s)
+                                            corr_factor = corr_factor_Gnum / corr_factor_Gdenom
+                                            cond_prob_onehop[state_nr, k, j_add] = corr_factor * cond_prob_ref[k-1, j_add]
+                                            # update cumul. probs. explicitly because this is inside the body of an extra loop
+                                            cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, j_add]
 
-                                if k == k_copy_ + 1:       
-                                    Gdenom_inv_, corr_factor_Gdenom = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s)
-                                else:                 
-                                    corr_factor_Gdenom= corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s)
-                                corr_factor_Gnum = corr_factor_removeadd_rs(Gnum_inv, r=pos_vec[k-1], s=s)                                    
-                                corr_factor = corr_factor_Gnum / corr_factor_Gdenom
-                                cond_prob_onehop[state_nr, k, i] = corr_factor * (det_Gdenom / det_Gdenom_reuse[k-1]) * cond_prob_ref[k, i]
+                                    if k == k_copy_ + 1 and s==0:       
+                                        pass # Gdenom_inv_ and corr_factor_Gdenom has already been computed and is still up to date 
+                                        #Gdenom_inv_, corr_factor_Gdenom = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s)
+                                    elif k == k_copy_ + 1 and s > 0:
+                                        pass # Gdenom_inv_ and corr_factor_Gdenom has already been computed and is still up to date 
+                                    else:                 
+                                        corr_factor_Gdenom= corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s)
+                                    corr_factor_Gnum = corr_factor_removeadd_rs(Gnum_inv, r=pos_vec[k-1], s=s)                                    
+                                    corr_factor = corr_factor_Gnum / corr_factor_Gdenom
+                                    cond_prob_onehop[state_nr, k, i] = corr_factor * (det_Gdenom / det_Gdenom_reuse[k-1]) * cond_prob_ref[k, i]
+
+                                elif k > k_r[state_nr]:
+                                    corr_factor_Gnum = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)
+                                    corr_factor_Gdenom = corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)
+                                    corr_factor = corr_factor_Gnum / corr_factor_Gdenom
+                                    cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
                                 
-
                     elif abs(r-s) == 1: # 1d nearest neighbour hopping 
                         pass
                         if r < s:
@@ -500,13 +571,14 @@ for jj in range(100):
                                     logger.info_refstate.elapsed_singular += (t1 - t0)
 
                     cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i]
+                    print("k=", k, "running cumsum=", cumsum_condprob_onehop[state_nr, k])
 
             t1_conn = time()
             logger.info_refstate.elapsed_connecting_states += (t1_conn - t0_conn)                    
 
 
     fh = open("cond_prob_ref.dat", "w")
-    fh.write("ref conf =["+" ".join(str(item) for item in ref_conf)+"]\n\n")
+    fh.write("# ref_state ["+" ".join(str(item) for item in ref_conf)+"]\n\n")
     for k in range(cond_prob_ref.shape[0]):
         for i in range(cond_prob_ref.shape[1]):
             fh.write("%d %d %e\n" % (k, i, cond_prob_ref[k, i]))
@@ -539,7 +611,7 @@ for jj in range(100):
                 print("cond_prob_onehop[state_nr, k, :]=", cond_prob_onehop[state_nr, k, :])
                 print("sum=", np.sum(cond_prob_onehop[state_nr, k, :]))
                 print("cumsum_condprob_onehop[state_nr, k]=", cumsum_condprob_onehop[state_nr, k])
-                assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, atol=ATOL), "np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f ?= %16.10f" % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :]), cumsum_condprob_onehop[state_nr, k])               
+                assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, atol=ATOL), "np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f ?= %16.10f = cumsum" % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :]), cumsum_condprob_onehop[state_nr, k])               
 
 
     for i in range(num_connecting_states):
