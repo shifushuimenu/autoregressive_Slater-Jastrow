@@ -19,7 +19,7 @@ from k_copy import *
 
 from monitoring import logger
 
-np.random.seed(43514)
+#np.random.seed(43514)
 
 # absolute tolerance in comparisons (e.g. normalization)
 ATOL = 1e-8
@@ -105,7 +105,7 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 18; Np = 8    # Ns=12, Np=5: singular matrix
+Ns = 12; Np = 7    # Ns=12, Np=5: singular matrix
 l1d = Lattice1d(ns=Ns)
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
@@ -136,9 +136,9 @@ for jj in range(1):
     #xs = list(         [[1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0]],)
     #rs_pos = ((11,0),)
 
-    ref_conf = np.array( [1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1])
-    xs = list(          [[1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1]],)
-    rs_pos = ((9, 3),)    
+    ref_conf = np.array( [1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1])
+    xs = list(          [[1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1]],)
+    rs_pos = ((8, 3),)    
 
     #ref_conf = np.array( [0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1])
     #xs = list(          [[0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1]],)
@@ -570,8 +570,7 @@ for jj in range(1):
                                     t1 = time()
                                     logger.info_refstate.elapsed_singular += (t1 - t0)
 
-                    cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i]
-                    print("k=", k, "running cumsum=", cumsum_condprob_onehop[state_nr, k])
+                    cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i]                    
 
             t1_conn = time()
             logger.info_refstate.elapsed_connecting_states += (t1_conn - t0_conn)                    
@@ -609,8 +608,8 @@ for jj in range(1):
                 print("ref_conf=", ref_conf)
                 print("1hop sta=", xs[state_nr])
                 print("cond_prob_onehop[state_nr, k, :]=", cond_prob_onehop[state_nr, k, :])
-                print("sum=", np.sum(cond_prob_onehop[state_nr, k, :]))
-                print("cumsum_condprob_onehop[state_nr, k]=", cumsum_condprob_onehop[state_nr, k])
+                print("sum [state_nr=%d, k=%d]= %16.14f" % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :])))
+                print("cumsum_condprob_onehop[state_nr=%d, k=%d]=%16.14f" % (state_nr, k, cumsum_condprob_onehop[state_nr, k]) )
                 assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, atol=ATOL), "np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f ?= %16.10f = cumsum" % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :]), cumsum_condprob_onehop[state_nr, k])               
 
 
