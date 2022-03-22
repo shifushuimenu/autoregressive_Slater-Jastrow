@@ -106,24 +106,24 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 # Calculate the conditional probabilities of the reference state
 Ns = 16; Np = 7    # Ns=12, Np=5: singular matrix
-l1d = Lattice1d(ns=Ns)
-#l2d = Lattice_rectangular(nx=4, ny=4)
+#l1d = Lattice1d(ns=Ns)
+l2d = Lattice_rectangular(nx=4, ny=4)
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
 SDsampler = SlaterDetSampler_ordered(Nsites=Ns, Nparticles=Np, single_particle_eigfunc=U, naive=False)
 
-for jj in range(100):
+for jj in range(1):
     print("jj=", jj)
 
     ref_conf = generate_random_config(Ns, Np)
     ref_I = bin2int(ref_conf) # ATTENTION: Wrong results for too large bitarrays !
     print("ref_I=", ref_I)
 
-    # # #  `states_I` are only the connecting states, the reference state is not included 
-    rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l1d))
-    num_connecting_states = len(states_I)
-    xs = int2bin(states_I, ns=Ns)
+    ## # #  `states_I` are only the connecting states, the reference state is not included 
+    #rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l2d))
+    #num_connecting_states = len(states_I)
+    #xs = int2bin(states_I, ns=Ns)
 
     #ref_conf = np.array([1, 0, 1, 1, 0, 0])
     #xs = list(         [[0, 0, 1, 1, 0, 1]],)
@@ -158,6 +158,9 @@ for jj in range(100):
     #xs = list(          [[0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1]],)
     #rs_pos = ((9, 3),)    
 
+    ref_conf = np.array([1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1])
+    xs = list(         [[0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1]], )
+    rs_pos = ((0, 4),)
 
     num_connecting_states = len(xs)    
 
@@ -203,6 +206,8 @@ for jj in range(100):
 
     # Needed for long-range hopping in 2D. 
     # At position `s` (`r`) sits the `k_s[state_nr]`-th (`k_r[state_nr]`-th) particle. 
+    # Here, k_s and k_r are counted in the the one-hop state. However, the loop index k 
+    # is referring to the particle numbers in the reference state. 
     k_s = [np.searchsorted(xs_pos[state_nr, :], rs_pos[state_nr][1]) for state_nr in range(num_connecting_states)]
     k_r = [np.searchsorted(xs_pos[state_nr, :], rs_pos[state_nr][0]) for state_nr in range(num_connecting_states)]
 
@@ -621,6 +626,7 @@ for jj in range(100):
                 print("k=", k, "state_nr=", state_nr, "cumul=", cumsum_condprob_onehop[state_nr,k])
                 print("ref_conf=", ref_conf)
                 print("1hop sta=", xs[state_nr])
+                print("k_r=", k_r[state_nr], "k_s=", k_s[state_nr])
                 print("cond_prob_onehop[state_nr, k, :]=", cond_prob_onehop[state_nr, k, :])
                 print("sum [state_nr=%d, k=%d]= %16.14f" % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :])))
                 print("cumsum_condprob_onehop[state_nr=%d, k=%d]=%16.14f" % (state_nr, k, cumsum_condprob_onehop[state_nr, k]) )
