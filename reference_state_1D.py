@@ -120,10 +120,10 @@ for jj in range(1):
     ref_I = bin2int(ref_conf) # ATTENTION: Wrong results for too large bitarrays !
     print("ref_I=", ref_I)
 
-    ## # #  `states_I` are only the connecting states, the reference state is not included 
-    #rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l2d))
-    #num_connecting_states = len(states_I)
-    #xs = int2bin(states_I, ns=Ns)
+    # # #  `states_I` are only the connecting states, the reference state is not included 
+    rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l2d))
+    num_connecting_states = len(states_I)
+    xs = int2bin(states_I, ns=Ns)
 
     #ref_conf = np.array([1, 0, 1, 1, 0, 0])
     #xs = list(         [[0, 0, 1, 1, 0, 1]],)
@@ -154,13 +154,21 @@ for jj in range(1):
     # separate file. 
     # ===============================================================
 
-    #ref_conf = np.array( [0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1])
-    #xs = list(          [[0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1]],)
+    #ref_conf = np.array( [0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1])
+    #xs = list(          [[0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1]],)
     #rs_pos = ((9, 3),)    
 
-    ref_conf = np.array([1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1])
-    xs = list(         [[0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1]], )
-    rs_pos = ((0, 4),)
+    #ref_conf= np.array([1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0])
+    #xs = list(        [[0, 1, 1, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0]], )
+    #rs_pos = ((0, 4), )
+
+    #ref_conf= np.array([1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 1])
+    #xs = list(        [[0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 1]], )
+    #rs_pos = ((0, 12),)
+
+    #ref_conf = np.array([1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1])
+    #xs = list(         [[0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1]], )
+    #rs_pos = ((0, 4),)
 
     num_connecting_states = len(xs)    
 
@@ -327,7 +335,7 @@ for jj in range(1):
                                     # cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
                             
                             # Yet another special case 
-                            if k == k_s[state_nr] and i > s:
+                            if k == k_s[state_nr] + 1 and i > s:
                                 # Again, calculate the ratio of determinants from scratch. 
                                 # (same code as above, combine it with the previous case)
                                 base = list(range(0, xs_pos[state_nr, k-1]+1))
