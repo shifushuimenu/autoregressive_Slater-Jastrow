@@ -105,14 +105,15 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 12; Np = 7    # Ns=12, Np=5: singular matrix
+Ns = 16; Np = 7    # Ns=12, Np=5: singular matrix
 l1d = Lattice1d(ns=Ns)
+#l2d = Lattice_rectangular(nx=4, ny=4)
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
 SDsampler = SlaterDetSampler_ordered(Nsites=Ns, Nparticles=Np, single_particle_eigfunc=U, naive=False)
 
-for jj in range(1):
+for jj in range(100):
     print("jj=", jj)
 
     ref_conf = generate_random_config(Ns, Np)
@@ -348,7 +349,7 @@ for jj in range(1):
                                     if i==pos_vec[k-1]+1:
                                     # need to calculate some additional cond. probs. along the way 
                                         for j_add in range(xmin_onehop, pos_vec[k-1]+1):
-                                            print("s=", s, "k=", k, "i=", i, "j_add=", j_add, "xmin_onehop=", xmin_onehop)
+                                            print("s=", s, "k=", k, "i=", i, "j_add=", j_add, "xmin_onehop=", xmin_onehop, "k_copy_=", k_copy_)
                                             # reuse all information from (k-1) cond. probs. of reference state
                                             if k == k_copy_ + 1 and s == 0: # 1D long-range hopping                                             
                                                 Gdenom_inv_, corr = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=xs_pos[state_nr, k-1])
@@ -384,6 +385,7 @@ for jj in range(1):
                                             cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, j_add]
 
                                     if k == k_copy_ + 1 and s==0:       
+                                        print("DOING NOTHING, i=", i)
                                         pass # Gdenom_inv_ and corr_factor_Gdenom has already been computed and is still up to date 
                                         #Gdenom_inv_, corr_factor_Gdenom = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s)
                                     elif k == k_copy_ + 1 and s > 0:
