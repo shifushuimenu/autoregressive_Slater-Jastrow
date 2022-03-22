@@ -19,7 +19,7 @@ from k_copy import *
 
 from monitoring import logger
 
-#np.random.seed(43514)
+np.random.seed(43514)
 
 # absolute tolerance in comparisons (e.g. normalization)
 ATOL = 1e-8
@@ -113,7 +113,7 @@ P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
 SDsampler = SlaterDetSampler_ordered(Nsites=Ns, Nparticles=Np, single_particle_eigfunc=U, naive=False)
 
-for jj in range(1):
+for jj in range(100):
     print("jj=", jj)
 
     ref_conf = generate_random_config(Ns, Np)
@@ -124,6 +124,12 @@ for jj in range(1):
     rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l2d))
     num_connecting_states = len(states_I)
     xs = int2bin(states_I, ns=Ns)
+
+    print("ref")
+    print(ref_conf)
+    print("xs=")
+    print(xs)
+
 
     #ref_conf = np.array([1, 0, 1, 1, 0, 0])
     #xs = list(         [[0, 0, 1, 1, 0, 1]],)
@@ -169,6 +175,20 @@ for jj in range(1):
     #ref_conf = np.array([1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1])
     #xs = list(         [[0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1]], )
     #rs_pos = ((0, 4),)
+
+
+    #ref_conf = np.array([1, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0])
+    #xs = list(         [[1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0]], )
+    #rs_pos = ((6, 2),)
+
+    #ref_conf = np.array([1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1])
+    #xs = list(         [[1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1]], )
+    #rs_pos = ((6, 2), )
+
+    #ref_conf = np.array([0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0])
+    #xs = list(         [[0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0]], )
+    #rs_pos = ((13, 1), )
+
 
     num_connecting_states = len(xs)    
 
@@ -400,8 +420,9 @@ for jj in range(1):
                                     if k == k_copy_ + 1 and s==0:                                                                                       
                                         Gdenom_inv_, corr_factor_Gdenom = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s)
                                     elif k == k_copy_ + 1 and s > 0:
-                                        print("DOING NOTHING, i=", i)
-                                        pass # Gdenom_inv_ and corr_factor_Gdenom has already been computed and is still up to date 
+                                        #print("DOING NOTHING, i=", i)
+                                        Gdenom_inv_, corr_factor_Gdenom = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s)
+                                        #pass # Gdenom_inv_ and corr_factor_Gdenom has already been computed and is still up to date 
                                     else:                 
                                         corr_factor_Gdenom= corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s)
                                     corr_factor_Gnum = corr_factor_removeadd_rs(Gnum_inv, r=pos_vec[k-1], s=s)                                    
@@ -631,6 +652,7 @@ for jj in range(1):
         for k in range(Np):
             if k > k_copy_:
                 # pass
+                print("=============================================")
                 print("k=", k, "state_nr=", state_nr, "cumul=", cumsum_condprob_onehop[state_nr,k])
                 print("ref_conf=", ref_conf)
                 print("1hop sta=", xs[state_nr])
