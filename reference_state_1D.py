@@ -105,15 +105,15 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 16; Np = 7    # Ns=12, Np=5: singular matrix
+Ns = 25; Np = 12    # Ns=12, Np=5: singular matrix
 #l1d = Lattice1d(ns=Ns)
-l2d = Lattice_rectangular(nx=4, ny=4)
+l2d = Lattice_rectangular(nx=5, ny=5)
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
 SDsampler = SlaterDetSampler_ordered(Nsites=Ns, Nparticles=Np, single_particle_eigfunc=U, naive=False)
 
-for jj in range(100):
+for jj in range(1000):
     print("jj=", jj)
 
     ref_conf = generate_random_config(Ns, Np)
@@ -125,10 +125,10 @@ for jj in range(100):
     num_connecting_states = len(states_I)
     xs = int2bin(states_I, ns=Ns)
 
-    print("ref=")
-    print(ref_conf)
-    print("xs=")
-    print(xs)
+    #print("ref=")
+    #print(ref_conf)
+    #print("xs=")
+    #print(xs)
 
     #ref_conf = np.array([1, 0, 1, 1, 0, 0])
     #xs = list(         [[0, 0, 1, 1, 0, 1]],)
@@ -633,7 +633,7 @@ for jj in range(100):
                                     t1 = time()
                                     logger.info_refstate.elapsed_singular += (t1 - t0)
 
-                    assert cond_prob_onehop[state_nr, k, i] >= 0.0, "state_nr=%d, k=%d, i=%d, r=%d, s=%d" %(state_nr, k, i, r, s)
+                    assert cond_prob_onehop[state_nr, k, i] >= -1e-8, "state_nr=%d, k=%d, i=%d, r=%d, s=%d" %(state_nr, k, i, r, s)
                     cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i]                    
 
             t1_conn = time()
