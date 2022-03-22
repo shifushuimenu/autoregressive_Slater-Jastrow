@@ -106,8 +106,8 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 # Calculate the conditional probabilities of the reference state
 Ns = 16; Np = 7    # Ns=12, Np=5: singular matrix
-#l1d = Lattice1d(ns=Ns)
-l2d = Lattice_rectangular(nx=4, ny=4)
+l1d = Lattice1d(ns=Ns)
+#l2d = Lattice_rectangular(nx=4, ny=4)
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
@@ -121,7 +121,7 @@ for jj in range(100):
     print("ref_I=", ref_I)
 
     # # #  `states_I` are only the connecting states, the reference state is not included 
-    rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l2d))
+    rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l1d))
     num_connecting_states = len(states_I)
     xs = int2bin(states_I, ns=Ns)
 
@@ -382,7 +382,7 @@ for jj in range(100):
                                     if i==pos_vec[k-1]+1:
                                     # need to calculate some additional cond. probs. along the way 
                                         for j_add in range(xmin_onehop, pos_vec[k-1]+1):
-                                            print("s=", s, "k=", k, "i=", i, "j_add=", j_add, "xmin_onehop=", xmin_onehop, "k_copy_=", k_copy_)
+                                            print("state_nr=", state_nr, "s=", s, "k=", k, "i=", i, "j_add=", j_add, "xmin_onehop=", xmin_onehop, "k_copy_=", k_copy_)
                                             # reuse all information from (k-1) cond. probs. of reference state
                                             if k == k_copy_ + 1 and s == 0: # 1D long-range hopping                                             
                                                 Gdenom_inv_, corr = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=xs_pos[state_nr, k-1])
@@ -402,7 +402,7 @@ for jj in range(100):
                                                     print("special case 2")
                                                     print("xs_pos[state_nr,:]=", xs_pos[state_nr,:])
                                                     print("pos_vec[:]        =", pos_vec[:])
-                                                    # We are calculation cond. probs. for the k-th particle. For the reference state low-rank updates 
+                                                    # We are calculating cond. probs. for the k-th particle. For the reference state low-rank updates 
                                                     # are based on the sampled position of the (k-1)-th particle. For the onehop state they are based 
                                                     # on the position of the (k-2)-th particle. 
                                                     Gdenom_inv_, corr = adapt_Ainv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s, i_start=pos_vec[k-2]+1, i_end=s)
@@ -421,10 +421,13 @@ for jj in range(100):
                                         Gdenom_inv_, corr_factor_Gdenom = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s)
                                     elif k == k_copy_ + 1 and s > 0:
                                         #print("DOING NOTHING, i=", i)
+                                        # IS THIS CORRECT ? WHAT ABOUT i < r ? 
+                                        print("Is this correct 1 , r=", r, "i=", i)
                                         Gdenom_inv_, corr_factor_Gdenom = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s)
                                         #pass # Gdenom_inv_ and corr_factor_Gdenom has already been computed and is still up to date 
                                     else:                 
                                         corr_factor_Gdenom= corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s)
+                                    print("Is this correct 2 , r=", r, "i=", i, "No, No, No !")  # NO !                             
                                     corr_factor_Gnum = corr_factor_removeadd_rs(Gnum_inv, r=pos_vec[k-1], s=s)                                    
                                     corr_factor = corr_factor_Gnum / corr_factor_Gdenom
                                     cond_prob_onehop[state_nr, k, i] = corr_factor * (det_Gdenom / det_Gdenom_reuse[k-1]) * cond_prob_ref[k, i]
