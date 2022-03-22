@@ -384,11 +384,10 @@ for jj in range(100):
                                             # update cumul. probs. explicitly because this is inside the body of an extra loop
                                             cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, j_add]
 
-                                    if k == k_copy_ + 1 and s==0:       
-                                        print("DOING NOTHING, i=", i)
-                                        pass # Gdenom_inv_ and corr_factor_Gdenom has already been computed and is still up to date 
-                                        #Gdenom_inv_, corr_factor_Gdenom = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s)
+                                    if k == k_copy_ + 1 and s==0:                                                                                       
+                                        Gdenom_inv_, corr_factor_Gdenom = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s)
                                     elif k == k_copy_ + 1 and s > 0:
+                                        print("DOING NOTHING, i=", i)
                                         pass # Gdenom_inv_ and corr_factor_Gdenom has already been computed and is still up to date 
                                     else:                 
                                         corr_factor_Gdenom= corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s)
