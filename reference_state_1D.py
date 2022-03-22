@@ -19,7 +19,7 @@ from k_copy import *
 
 from monitoring import logger
 
-np.random.seed(43514)
+#np.random.seed(43514)
 
 # absolute tolerance in comparisons (e.g. normalization)
 ATOL = 1e-8
@@ -106,8 +106,8 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 # Calculate the conditional probabilities of the reference state
 Ns = 16; Np = 7    # Ns=12, Np=5: singular matrix
-l1d = Lattice1d(ns=Ns)
-#l2d = Lattice_rectangular(nx=4, ny=4)
+#l1d = Lattice1d(ns=Ns)
+l2d = Lattice_rectangular(nx=4, ny=4)
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
@@ -121,15 +121,14 @@ for jj in range(100):
     print("ref_I=", ref_I)
 
     # # #  `states_I` are only the connecting states, the reference state is not included 
-    rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l1d))
+    rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l2d))
     num_connecting_states = len(states_I)
     xs = int2bin(states_I, ns=Ns)
 
-    print("ref")
+    print("ref=")
     print(ref_conf)
     print("xs=")
     print(xs)
-
 
     #ref_conf = np.array([1, 0, 1, 1, 0, 0])
     #xs = list(         [[0, 0, 1, 1, 0, 1]],)
@@ -189,7 +188,10 @@ for jj in range(100):
     #xs = list(         [[0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0]], )
     #rs_pos = ((13, 1), )
 
-
+    #ref_conf = np.array([0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1])
+    #xs = list(         [[1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0]]
+    #            )
+    #rs_pos = ((15, 0),)
     num_connecting_states = len(xs)    
 
     # special case of 1d n.n. hopping matrix
@@ -277,6 +279,8 @@ for jj in range(100):
 
             # Needed for low-rank update for onehop states differing from the reference 
             # state by long-range hopping between positions r and s. 
+            # (It is important the quantities that are to be reused are only taken from the reference 
+            # state since quantities taken from a one-hop state would be overwritten by other one-hop states.)
             Gdenom_inv_reuse[k] = Gdenom_inv # does not depend on i 
             det_Gdenom_reuse[k] = det_Gdenom # does not depend on i
             Gnum_inv_reuse[k][i] = Gnum_inv
@@ -381,8 +385,7 @@ for jj in range(100):
                                 if k <= k_r[state_nr]:
                                     if i==pos_vec[k-1]+1:
                                     # need to calculate some additional cond. probs. along the way 
-                                        for j_add in range(xmin_onehop, pos_vec[k-1]+1):
-                                            print("state_nr=", state_nr, "s=", s, "k=", k, "i=", i, "j_add=", j_add, "xmin_onehop=", xmin_onehop, "k_copy_=", k_copy_)
+                                        for j_add in range(xmin_onehop, pos_vec[k-1]+1):                                            
                                             # reuse all information from (k-1) cond. probs. of reference state
                                             if k == k_copy_ + 1 and s == 0: # 1D long-range hopping                                             
                                                 Gdenom_inv_, corr = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=xs_pos[state_nr, k-1])
@@ -392,6 +395,8 @@ for jj in range(100):
                                                 # state since they differ only in the occupancies of the positions `s` and `r`.)
                                                 if k_s[state_nr] == 0:
                                                     print("special case 1")
+                                                    print("xs_pos[state_nr,:]=", xs_pos[state_nr,:])
+                                                    print("pos_vec[:]        =", pos_vec[:])                                                    
                                                     Gdenom_inv_, corr = adapt_Ainv(np.array([]).reshape(0,0), Gglobal=G, r=r, s=s, i_start=0, i_end=s)
                                                     corr_factor_Gdenom = corr
                                                     #print("exiting...")
@@ -405,7 +410,8 @@ for jj in range(100):
                                                     # We are calculating cond. probs. for the k-th particle. For the reference state low-rank updates 
                                                     # are based on the sampled position of the (k-1)-th particle. For the onehop state they are based 
                                                     # on the position of the (k-2)-th particle. 
-                                                    Gdenom_inv_, corr = adapt_Ainv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s, i_start=pos_vec[k-2]+1, i_end=s)
+                                                    i_start = pos_vec[k-2]+1 if k >= 2 else 0
+                                                    Gdenom_inv_, corr = adapt_Ainv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s, i_start=i_start, i_end=s)
                                                     corr_factor_Gdenom = corr
                                                     #print("exiting ...")
                                                     #exit(1)
@@ -417,20 +423,26 @@ for jj in range(100):
                                             # update cumul. probs. explicitly because this is inside the body of an extra loop
                                             cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, j_add]
 
-                                    if k == k_copy_ + 1 and s==0:                                                                                       
-                                        Gdenom_inv_, corr_factor_Gdenom = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s)
-                                    elif k == k_copy_ + 1 and s > 0:
-                                        #print("DOING NOTHING, i=", i)
-                                        # IS THIS CORRECT ? WHAT ABOUT i < r ? 
-                                        print("Is this correct 1 , r=", r, "i=", i)
-                                        Gdenom_inv_, corr_factor_Gdenom = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s)
-                                        #pass # Gdenom_inv_ and corr_factor_Gdenom has already been computed and is still up to date 
+                                    if k == k_copy_ + 1:
+                                        if s==0:                                                                                       
+                                            # Is this correct ? 
+                                            #Gdenom_inv_, corr = adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=xs_pos[state_nr, k-1])
+                                            Gdenom_inv_, corr = adapt_Ainv(np.array([]).reshape(0,0), Gglobal=G, r=r, s=s, i_start=0, i_end=s)
+                                            corr_factor_Gdenom = corr
+                                            #pass # Gdenom_inv_ and corr_factor_Gdenom has already been computed and is still up to date. 
+                                            # Really ? Not overwritten by another one-hop state ? 
+                                        elif s > 0:
+                                            #print("DOING NOTHING, i=", i)
+                                            i_start = pos_vec[k-2]+1 if k >= 2 else 0                                         
+                                            Gdenom_inv_, corr = adapt_Ainv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s, i_start=i_start, i_end=s)
+                                            corr_factor_Gdenom = corr                                 
+                                            #pass # Gdenom_inv_ and corr_factor_Gdenom has already been computed and is still up to date 
                                     else:                 
-                                        corr_factor_Gdenom= corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s)
-                                    print("Is this correct 2 , r=", r, "i=", i, "No, No, No !")  # NO !                             
+                                        corr_factor_Gdenom= corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s)                       
                                     corr_factor_Gnum = corr_factor_removeadd_rs(Gnum_inv, r=pos_vec[k-1], s=s)                                    
                                     corr_factor = corr_factor_Gnum / corr_factor_Gdenom
                                     cond_prob_onehop[state_nr, k, i] = corr_factor * (det_Gdenom / det_Gdenom_reuse[k-1]) * cond_prob_ref[k, i]
+
 
                                 elif k > k_r[state_nr]:
                                     corr_factor_Gnum = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)
@@ -621,6 +633,7 @@ for jj in range(100):
                                     t1 = time()
                                     logger.info_refstate.elapsed_singular += (t1 - t0)
 
+                    assert cond_prob_onehop[state_nr, k, i] >= 0.0, "state_nr=%d, k=%d, i=%d, r=%d, s=%d" %(state_nr, k, i, r, s)
                     cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i]                    
 
             t1_conn = time()
