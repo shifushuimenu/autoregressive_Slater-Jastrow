@@ -1,3 +1,5 @@
+"""low-rank update of the determinant of numerator and denominator matrices (used 
+in the algorithm for ordered componentwise direct sampling from a Slater determinant"""
 import numpy as np
 
 from block_update_numpy import ( block_update_inverse,
@@ -8,17 +10,17 @@ from block_update_numpy import ( block_update_inverse,
 
 def corr_factor_removeadd_rs(Ainv, r, s):
     """ 
-        Correction factor to 
-             det(G_{K,K} - N_K)
-        with N_K = (n_0, n_1, ..., n_{K-1}) where n_r = 1 and n_s = 0
-        and a particle is moved such that after the update n_r = 0 and n_s = 1.         
+    Correction factor to 
+        det(G_{K,K} - N_K)
+    with N_K = (n_0, n_1, ..., n_{K-1}) where n_r = 1 and n_s = 0
+    and a particle is moved such that after the update n_r = 0 and n_s = 1.         
     """
     return (1 + Ainv[r,r]) * (1 - Ainv[s,s]) + Ainv[r,s] * Ainv[s,r]
     #return 1 + Ainv[r,r] - Ainv[s,s] - Ainv[r,r] * Ainv[s,s] + Ainv[r,s]*Ainv[s,r]
 
 
 def corr_factor_add_s(Ainv, s):
-    """add a particle at position s without removing any particle """
+    """add a particle at position s without removing any particle"""
     return (1 - Ainv[s,s])
 
 

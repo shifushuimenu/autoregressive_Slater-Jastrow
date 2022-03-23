@@ -29,7 +29,8 @@ class _info_refstate(object):
                "  elapsed_adapt=            %d" % (self.elapsed_adapt) + "\n" +              
                "  counter_singular=         %d" % (self.counter_singular) + "\n" +
                "  counter_skip=             %d" % (self.counter_skip) + "\n" +
-               "  counter_nonsingular=      %d" % (self.counter_nonsingular) + "\n"
+               "  counter_nonsingular=      %d" % (self.counter_nonsingular) + "\n" + 
+               "  max. cond. number (Gdenom) = %16.8f" % (self.Gdenom_cond_max) + "\n"
              )
 
 
