@@ -95,7 +95,7 @@ class Lattice_rectangular(object):
         down  = np.roll(rectl, -1, axis=0).flatten()
         left  = np.roll(rectl, 1, axis=1).flatten()        
 
-        self.neigh = np.vstack((up, right, down, left)).transpose() # idxs: sitenr, direction (up=0, right=1, down=2, left=3)
+        self.neigh = np.vstack((up, right, down, left)).transpose().astype('object') # idxs: sitenr, direction (up=0, right=1, down=2, left=3)
         
 ###############################
 

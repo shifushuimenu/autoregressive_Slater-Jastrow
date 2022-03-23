@@ -74,8 +74,6 @@ def adapt_Ainv_sing(Gdenom_inv, Gglobal, r, s, i_start, i_end, pos1, pos2):
     # put particles at positions `pos1` and `pos2`.
     l = i_end+1-i_start 
     DD = np.zeros(l)
-    print("i_start=", i_start)
-    print("pos1-i_start=", pos1-i_start, "pos2-i_start=", pos2-i_start)
     DD[pos1-i_start] = -1; DD[pos2-i_start] = -1
     DD = np.diag(DD)
 

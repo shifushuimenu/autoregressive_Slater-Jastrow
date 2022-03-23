@@ -6,6 +6,7 @@ class _info_refstate(object):
     of conditional probabilities of one-hop states based on a reference state.
     """
     def __init__(self):
+        self.num_onehop_states = 0
         self.elapsed_ref = 0.0
         self.elapsed_connecting_states = 0.0
         self.elapsed_singular = 0.0
@@ -21,10 +22,11 @@ class _info_refstate(object):
 
     def print_summary(self):        
         print( "Low-rank update of cond. probs. for one-hop states based on their reference state:\n"
-               "  elapsed_ref [s] =              %16.8f" % (self.elapsed_ref) + "\n" +
+               "  num. onehop states = %d" % (self.num_onehop_states) + "\n" +
+               "  elapsed_ref [s] =         %16.8f" % (self.elapsed_ref) + "\n" +
                "  elapsed_connecting_states=%16.8f" % (self.elapsed_connecting_states) + "\n" +
                "  elapsed_singular=         %16.8f" % (self.elapsed_singular) + "\n" +
-               "  elapsed_adapt=            %d" % (self.elapsed_adapt) +               
+               "  elapsed_adapt=            %d" % (self.elapsed_adapt) + "\n" +              
                "  counter_singular=         %d" % (self.counter_singular) + "\n" +
                "  counter_skip=             %d" % (self.counter_skip) + "\n" +
                "  counter_nonsingular=      %d" % (self.counter_nonsingular) + "\n"

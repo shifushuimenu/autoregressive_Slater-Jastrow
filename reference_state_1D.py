@@ -105,15 +105,15 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 25; Np = 12    # Ns=12, Np=5: singular matrix
+Ns = 100; Np = 50    # Ns=12, Np=5: singular matrix
 #l1d = Lattice1d(ns=Ns)
-l2d = Lattice_rectangular(nx=5, ny=5)
+l2d = Lattice_rectangular(nx=10, ny=10)
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
 SDsampler = SlaterDetSampler_ordered(Nsites=Ns, Nparticles=Np, single_particle_eigfunc=U, naive=False)
 
-for jj in range(1000):
+for jj in range(10):
     print("jj=", jj)
 
     ref_conf = generate_random_config(Ns, Np)
@@ -193,12 +193,13 @@ for jj in range(1000):
     #            )
     #rs_pos = ((15, 0),)
     num_connecting_states = len(xs)    
+    logger.info_refstate.num_onehop_states = num_connecting_states
 
     # special case of 1d n.n. hopping matrix
     # assert np.all([abs(r-s) == 1 or abs(r-s) == Ns-1 for r,s in rs_pos])
 
     k_copy = calc_k_copy(rs_pos, ref_conf)
-    print("k_copy=", k_copy)
+    #print("k_copy=", k_copy)
     one_hop_info = list(zip(k_copy, rs_pos))
 
 
@@ -342,7 +343,6 @@ for jj in range(1000):
                                     Gnum_special = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
 
                                     cond_prob_onehop[state_nr, k, i] = (-1) * np.linalg.det(Gnum_special) / np.linalg.det(Gdenom_special)
-                                    print("special=", cond_prob_onehop[state_nr, k, i])
 
                                     # !!!!!!!!!!! Problem: np.linalg.inv() sometimes throws error due to singular matrix 
                                     # try:
@@ -394,27 +394,17 @@ for jj in range(1000):
                                                 # 1. No particle to the left of position `s`. (Of course, this is so both in the reference state and in the onhop
                                                 # state since they differ only in the occupancies of the positions `s` and `r`.)
                                                 if k_s[state_nr] == 0:
-                                                    print("special case 1")
-                                                    print("xs_pos[state_nr,:]=", xs_pos[state_nr,:])
-                                                    print("pos_vec[:]        =", pos_vec[:])                                                    
                                                     Gdenom_inv_, corr = adapt_Ainv(np.array([]).reshape(0,0), Gglobal=G, r=r, s=s, i_start=0, i_end=s)
                                                     corr_factor_Gdenom = corr
-                                                    #print("exiting...")
-                                                    #exit(1)
                                                 # 2. There is at least one particle to the left of position `s`. Numerator and denominator 
                                                 # matrices can be extended from that position. 
                                                 elif k_s[state_nr] > 0:
-                                                    print("special case 2")
-                                                    print("xs_pos[state_nr,:]=", xs_pos[state_nr,:])
-                                                    print("pos_vec[:]        =", pos_vec[:])
                                                     # We are calculating cond. probs. for the k-th particle. For the reference state low-rank updates 
                                                     # are based on the sampled position of the (k-1)-th particle. For the onehop state they are based 
                                                     # on the position of the (k-2)-th particle. 
                                                     i_start = pos_vec[k-2]+1 if k >= 2 else 0
                                                     Gdenom_inv_, corr = adapt_Ainv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s, i_start=i_start, i_end=s)
                                                     corr_factor_Gdenom = corr
-                                                    #print("exiting ...")
-                                                    #exit(1)
                                             else:
                                                 corr_factor_Gdenom = corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s)
                                             corr_factor_Gnum = corr_factor_add_s(Gnum_inv_reuse[k-1][j_add], s=s)
@@ -668,22 +658,22 @@ for jj in range(1000):
         for k in range(Np):
             if k > k_copy_:
                 # pass
-                print("=============================================")
-                print("k=", k, "state_nr=", state_nr, "cumul=", cumsum_condprob_onehop[state_nr,k])
-                print("ref_conf=", ref_conf)
-                print("1hop sta=", xs[state_nr])
-                print("k_r=", k_r[state_nr], "k_s=", k_s[state_nr])
-                print("cond_prob_onehop[state_nr, k, :]=", cond_prob_onehop[state_nr, k, :])
-                print("sum [state_nr=%d, k=%d]= %16.14f" % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :])))
-                print("cumsum_condprob_onehop[state_nr=%d, k=%d]=%16.14f" % (state_nr, k, cumsum_condprob_onehop[state_nr, k]) )
+                #print("=============================================")
+                #print("k=", k, "state_nr=", state_nr, "cumul=", cumsum_condprob_onehop[state_nr,k])
+                #print("ref_conf=", ref_conf)
+                #print("1hop sta=", xs[state_nr])
+                #print("k_r=", k_r[state_nr], "k_s=", k_s[state_nr])
+                #print("cond_prob_onehop[state_nr, k, :]=", cond_prob_onehop[state_nr, k, :])
+                #print("sum [state_nr=%d, k=%d]= %16.14f" % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :])))
+                #print("cumsum_condprob_onehop[state_nr=%d, k=%d]=%16.14f" % (state_nr, k, cumsum_condprob_onehop[state_nr, k]) )
                 assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, atol=ATOL), "np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f ?= %16.10f = cumsum" % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :]), cumsum_condprob_onehop[state_nr, k])               
 
 
     for i in range(num_connecting_states):
-        print("state_nr=", i)
-        print("log_prob_ref=", log_prob_ref)
-        print("ref_conf=", ref_conf)
-        print("xs=      ", xs[i])
+        #print("state_nr=", i)
+        #print("log_prob_ref=", log_prob_ref)
+        #print("ref_conf=", ref_conf)
+        #print("xs=      ", xs[i])
         print(log_probs[i], log_probs2[i], SDsampler.log_prob([xs[i]]).item())
         print("ratio=", np.exp(log_prob_ref - log_probs2[i]), xs[i], ref_conf)
         #assert np.isclose( log_probs2[i] - log_prob_ref, SDsampler.log_prob([xs[i]]).item()  - log_prob_ref, atol=1e-1)

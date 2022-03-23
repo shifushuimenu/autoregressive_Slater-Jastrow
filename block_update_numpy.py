@@ -61,7 +61,6 @@ def block_update_inverse2(Ainv, B, C, D):
 
     AinvB = np.matmul(Ainv, B)
     S = D - np.matmul(C, AinvB)
-    print("S=", S)
     Sinv = np.linalg.inv(S)
 
     Ablock = Ainv + np.matmul(np.matmul(AinvB, Sinv), AinvB.transpose())
