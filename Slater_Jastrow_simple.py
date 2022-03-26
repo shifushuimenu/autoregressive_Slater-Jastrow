@@ -52,8 +52,8 @@ def fermion_parity( n, state_idx, i, j ):
         
     """
     state_idx = np.array(state_idx, dtype='object')
-    assert(np.all(state_idx < pow(2,n)))
-    assert(0 <= i < j < n)
+    #assert(np.all(state_idx < pow(2,n)))
+    #assert(0 <= i < j < n)
     # count number of particles between site i and j 
     mask = np.zeros((state_idx.shape + (n,)), dtype='object')
     mask[..., slice(i+1, j)] = 1
@@ -64,6 +64,16 @@ def fermion_parity( n, state_idx, i, j ):
     parity = np.where(num_exchanges%2==0, +1, -1)
     
     return parity         
+
+
+def fermion_parity2(n, state_idx, i, j):
+    """
+    s = '0b11001' -> s[2:] = '11001'  (remove the leading characters 0b)
+    s[2:].rjust(6, '0') = '011001     (add leading zeros by right-justifying)
+    """
+    #assert 0 <= i < j < n
+    num_exchanges = bin(state_idx)[2:].rjust(n, '0').count('1', i+1, j)
+    return - 2 * (num_exchanges%2) + 1
 
 
 ###############################
@@ -147,7 +157,6 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
             count += 1 
             j = neigh[i, d]
             M[...] = pow(2, i) + pow(2, j)
-            aa = pow(2, i) + pow(2, j)
             K = np.bitwise_and(M, I)
             L = np.bitwise_xor(K, M)
             STATE_EXISTS = ((K != 0) & (L != 0) & (L != K))
@@ -155,6 +164,81 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
             ii = min(i,j)
             jj = max(i,j)
             matrix_elem[..., count] = -t_hop * np.where(STATE_EXISTS, fermion_parity(ns, I, ii, jj), 0)
+            # hop_from_to.append((i,j))
+
+            # CAREFUL: hop_from_to is only correct if the input is not batched.
+            if np.bitwise_and(I, 2**i) == 2**i and np.bitwise_xor(I, I+2**j) == 2**j:
+                r = i; s = j
+            elif np.bitwise_and(I, 2**j) == 2**j and np.bitwise_xor(I, I+2**i) == 2**i:
+                r = j; s = i 
+            else:
+                r = -1; s = -1
+            hop_from_to.append((r,s))
+
+    # Set states in `I_prime` which were annihilated by the hopping operator to a valid value (i.e.
+    # in the correct particle number sector) so that downstream subroutines don't crash. 
+    # This does not introduce errors, since the corresponding matrix elements are zero anyways
+    # so that their multiplicative contribution is zero. 
+    config = int2bin(I, ns=ns)
+    num_particles = np.count_nonzero(config[0])    
+    I_prime[I_prime == 0] = 2**num_particles - 1
+
+    return ( hop_from_to, I_prime, matrix_elem )
+
+
+def kinetic_term2( I, lattice, t_hop=1.0 ):
+    """
+        NO BATCH DIMENSION. 
+
+        Parameters:
+        -----------
+            I: Bitcoded integer representing occupation numbers 
+               of spinless fermions.
+            lattice: Lattice object 
+                Provides nearest neighbour matrix which defines the possible 
+                hopping terms. 
+            t_hop: hopping parameter in 
+                 -t_hop \sum_{(i,j) \in bonds} (c_i^{\dagger} c_j + h.c.)
+            
+        Returns:
+        --------
+            hop_from_to: list of pairs [(i1_initial, i1_final), (i2_initial, i2_final), ...]
+                where state I1_prime is obtained from I by a particle hopping from i1_initial to i1_final, 
+                state I2_prime is obtained from I by hopping from i2_initial to i2_final etc. 
+            I_prime: list of ints of length `max_num_connect`
+                List of states connected to I by the application of the kinetic operator K_kin.
+                `max_num_connect` is the number of distinct hopping terms in the kinetic
+                operator. If a given hopping term annihilates state |I>, the "connecting state" is still recorded, 
+                however with matrix element zero. This is to ensure that, given a batch of samples, 
+                            
+            matrix_elem: list of floats             
+                <I| K_kin |I_prime> for all possible I_prime given the lattice structure. 
+
+        Example:
+        --------
+    """
+    neigh = lattice.neigh
+    ns = lattice.ns
+    coord = neigh.shape[-1]
+    max_num_connect = ns*(coord//2)
+    
+    I_prime = np.empty((max_num_connect,), dtype='object')
+    matrix_elem = np.empty_like(I_prime)
+    hop_from_to = []
+    count = -1
+    for d in range((coord//2)): ####### Replace this error-prone hack by a sum over hopping-bonds. 
+        for i in range(ns):     #######
+            M = 0
+            count += 1 
+            j = neigh[i, d]
+            M = pow(2, i) + pow(2, j)
+            K = np.bitwise_and(M, I)
+            L = np.bitwise_xor(K, M)
+            STATE_EXISTS = ((K != 0) & (L != 0) & (L != K))
+            I_prime[count] = np.where(STATE_EXISTS, I - K + L, False)
+            ii = min(i,j)
+            jj = max(i,j)
+            matrix_elem[count] = -t_hop * np.where(STATE_EXISTS, fermion_parity2(ns, I, ii, jj), 0)
             # hop_from_to.append((i,j))
 
             # CAREFUL: hop_from_to is only correct if the input is not batched.
@@ -192,7 +276,7 @@ def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=5.0):
     Returns:
        number: local energy <config|H|psi> / <config|psi>
     '''
-    config = np.array(config)
+    config = np.array(config).astype(int)
     assert len(config.shape) > 1 and config.shape[0] == 1 # just one sample per batch
     nsites = len(config[-1])
     I = bin2int(config)
@@ -220,7 +304,10 @@ def tVmodel_loc(config, psi_func, psi_loc, ansatz, V=5.0):
     for wi, config_i, (r,s) in zip(wl, states, from_to):
         if wi != 0: # there are unphysical connecting states whose matrix elements are set to zero
             if not (r==0 and s==0):
-                abspsi_conf_i = torch.sqrt(ansatz.prob(config_i)).item() # The repeated density estimation of very similar configurations is the bottleneck. 
+                # The repeated density estimation of very similar configurations is the bottleneck. 
+                abspsi_conf_i = torch.sqrt(ansatz.prob(config_i)).item() 
+                # IMPROVE: Calculate sign() of ratio of Slater determinant directly from the number of exchanges 
+                # that brings one state to the other. (Is this really correct ?)
                 ratio = (abspsi_conf_i / abs(psi_loc)) * np.sign(ratio_Slater(OBDM_loc, alpha=config[0], beta=config_i[0], r=r, s=s))
             else:
                 ratio = 1.0 # <alpha/psi> / <alpha/psi> = 1

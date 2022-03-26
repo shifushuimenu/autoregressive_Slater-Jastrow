@@ -16,7 +16,27 @@ def corr_factor_removeadd_rs(Ainv, r, s):
     and a particle is moved such that after the update n_r = 0 and n_s = 1.         
     """
     return (1 + Ainv[r,r]) * (1 - Ainv[s,s]) + Ainv[r,s] * Ainv[s,r]
-    #return 1 + Ainv[r,r] - Ainv[s,s] - Ainv[r,r] * Ainv[s,s] + Ainv[r,s]*Ainv[s,r]
+
+
+def removeadd_rs(Gnum_inv, Gdenom_inv, r, s):
+    """
+    Correction factor to the ratio of numerator and denominator matrices,
+    i.e. the conditional probability, after removing a particle at position `r`
+    and adding a particle at position `s`.
+    """
+    corr_factor_Gnum = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)
+    corr_factor_Gdenom = corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)
+    return corr_factor_Gnum / corr_factor_Gdenom
+
+
+def remove_r(Gnum_inv, Gdenom_inv, r):
+    """
+    Correction factor to the ratio of numerator and denominator matrices,
+    i.e. the conditional probability, after removing a particle at position `r`.    
+    """
+    corr_factor_Gnum = corr_factor_remove_r(Gnum_inv, r=r)
+    corr_factor_Gdenom = corr_factor_remove_r(Gdenom_inv, r=r)
+    return corr_factor_Gnum / corr_factor_Gdenom    
 
 
 def corr_factor_add_s(Ainv, s):
@@ -215,40 +235,40 @@ def det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal, r, s, xmin, i):
     return det_Gdenom_ * det_Schur
 
 
-def lowrank_update_Schur_det_removeadd_rs(D, C, Gdenom_inv, B, r, s):
-    """
-        Low-rank update of the determinant of the Schur complement.
-        Remove a particle at position `r`, add one at position `s`. 
-    """ 
-    CGdenom_inv = np.matmul(C, Gdenom_inv) # should be precomputed
-    Gdenom_invB = CGdenom_inv.transpose()  # should be precomputed
-    CGB = np.matmul(CGdenom_inv, B)        # should be precomputed
+# def lowrank_update_Schur_det_removeadd_rs(D, C, Gdenom_inv, B, r, s):
+#     """
+#         Low-rank update of the determinant of the Schur complement.
+#         Remove a particle at position `r`, add one at position `s`. 
+#     """ 
+#     CGdenom_inv = np.matmul(C, Gdenom_inv) # should be precomputed
+#     Gdenom_invB = CGdenom_inv.transpose()  # should be precomputed
+#     CGB = np.matmul(CGdenom_inv, B)        # should be precomputed
 
-    # capacitance matrix
-    CC = np.array([ [1 + Gdenom_inv[r,r], Gdenom_inv[r,s]], 
-                    [- Gdenom_inv[s,r], 1 - Gdenom_inv[s,s]] ])
-    CC_inv = np.linalg.inv(CC)
+#     # capacitance matrix
+#     CC = np.array([ [1 + Gdenom_inv[r,r], Gdenom_inv[r,s]], 
+#                     [- Gdenom_inv[s,r], 1 - Gdenom_inv[s,s]] ])
+#     CC_inv = np.linalg.inv(CC)
 
-    CGB_updated = CGB - np.matmul( np.matmul(np.hstack((CGdenom_inv[:,r], CGdenom_inv[:,s])), CC_inv),
-                               np.vstack((Gdenom_invB[r,:], - Gdenom_invB[s,:])) )
+#     CGB_updated = CGB - np.matmul( np.matmul(np.hstack((CGdenom_inv[:,r], CGdenom_inv[:,s])), CC_inv),
+#                                np.vstack((Gdenom_invB[r,:], - Gdenom_invB[s,:])) )
 
-    # determinant of the Schur complement after low-rank update
+#     # determinant of the Schur complement after low-rank update
 
-    return np.linalg.det(D - CGB_updated)
+#     return np.linalg.det(D - CGB_updated)
 
 
-def lowrank_update_Schur_det_remove_r(D, C, Gdenom_inv, B, r):
-    """
-        Low-rank update of the determinant of the Schur complement.
-        Remove a particle at position `r`, don't add any particle. 
-    """ 
-    CGdenom_inv = np.matmul(C, Gdenom_inv) # should be precomputed
-    Gdenom_invB = CGdenom_inv.transpose()  # should be precomputed
-    CGB = np.matmul(CGdenom_inv, B)        # should be precomputed
+# def lowrank_update_Schur_det_remove_r(D, C, Gdenom_inv, B, r):
+#     """
+#         Low-rank update of the determinant of the Schur complement.
+#         Remove a particle at position `r`, don't add any particle. 
+#     """ 
+#     CGdenom_inv = np.matmul(C, Gdenom_inv) # should be precomputed
+#     Gdenom_invB = CGdenom_inv.transpose()  # should be precomputed
+#     CGB = np.matmul(CGdenom_inv, B)        # should be precomputed
 
-    cc_inv = 1.0 / (1.0 + Gdenom_inv[r,r])
+#     cc_inv = 1.0 / (1.0 + Gdenom_inv[r,r])
 
-    # IMPROVE: This can be simplified due to symmetry. 
-    CGB_updated = CGB - np.outer(CGdenom_inv[:,r], Gdenom_invB[r,:]) * cc_inv
+#     # IMPROVE: This can be simplified due to symmetry. 
+#     CGB_updated = CGB - np.outer(CGdenom_inv[:,r], Gdenom_invB[r,:]) * cc_inv
 
-    return np.linalg.det(D - CGB_updated)
+#     return np.linalg.det(D - CGB_updated)
