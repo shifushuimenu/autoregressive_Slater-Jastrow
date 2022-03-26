@@ -68,8 +68,40 @@ def fermion_parity( n, state_idx, i, j ):
 
 def fermion_parity2(n, state_idx, i, j):
     """
+    FASTER, NO BATCH INPUT ALLOWED 
+
+    Starting from the occupation number state encoded by the integer 
+    `state_idx`, let a particle hop from position `i` to position `j`
+    (or the backward process, i<j), which may result in a new state. If the new 
+    state does not vanish, fermion_parity() returns its sign. 
+
+    So this functions counts the number of ones in the bit representation of 
+    integer `state_idx` between sites i and j, i.e. in the closed interval [i+1, j-1]. 
+
     s = '0b11001' -> s[2:] = '11001'  (remove the leading characters 0b)
     s[2:].rjust(6, '0') = '011001     (add leading zeros by right-justifying)
+
+    
+    Parameters:
+    -----------
+        n: number of sites   
+        state_idx: int or 1d array_like of ints 
+            bitcoded occupation number state 
+        i, j: ints
+            0 <= i < j < n. The particle is assumed to hop from i to j or from j to i,
+            irrespective of whether such a hopping process is possible for the given 
+            occupation number states. 
+        
+    Returns:
+    --------
+        parity: \in [+1, -1]
+
+    Example:
+    --------
+    >>> fermion_parity2(4, 6, 0, 3)
+    1
+    >>> fermion_parity2(4, 10, 0, 3)
+    -1
     """
     #assert 0 <= i < j < n
     num_exchanges = bin(state_idx)[2:].rjust(n, '0').count('1', i+1, j)
