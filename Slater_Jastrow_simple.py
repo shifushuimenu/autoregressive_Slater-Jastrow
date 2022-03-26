@@ -173,7 +173,7 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
         Example:
         --------
     """
-    I = np.array(I, dtype='object')  # Note: python bigintegers are slower than actual ints.
+    I = np.array(I, dtype='object') 
     neigh = lattice.neigh
     ns = lattice.ns
     coord = neigh.shape[-1]
@@ -229,8 +229,8 @@ def kinetic_term2( I, lattice, t_hop=1.0 ):
             lattice: Lattice object 
                 Provides nearest neighbour matrix which defines the possible 
                 hopping terms. 
-            t_hop: hopping parameter in 
-                 -t_hop \sum_{(i,j) \in bonds} (c_i^{\dagger} c_j + h.c.)
+            t_hop: ( optional )
+                hopping parameter 
             
         Returns:
         --------
@@ -249,6 +249,8 @@ def kinetic_term2( I, lattice, t_hop=1.0 ):
         Example:
         --------
     """
+    #I = np.asarray(I, dtype='object')
+    assert type(I) == int 
     neigh = lattice.neigh
     ns = lattice.ns
     coord = neigh.shape[-1]
@@ -260,12 +262,12 @@ def kinetic_term2( I, lattice, t_hop=1.0 ):
     count = -1
     for d in range((coord//2)): ####### Replace this error-prone hack by a sum over hopping-bonds. 
         for i in range(ns):     #######
-            M = 0
             count += 1 
             j = neigh[i, d]
-            M = pow(2, i) + pow(2, j)
-            K = np.bitwise_and(M, I)
-            L = np.bitwise_xor(K, M)
+            pow2i = 1 << i; pow2j = 1 << j # 2**i and 2**j
+            M = pow2i + pow2j
+            K = M & I # bitwise AND
+            L = K ^ M # bitwise XOR
             STATE_EXISTS = ((K != 0) & (L != 0) & (L != K))
             I_prime[count] = np.where(STATE_EXISTS, I - K + L, False)
             ii = min(i,j)
@@ -273,10 +275,9 @@ def kinetic_term2( I, lattice, t_hop=1.0 ):
             matrix_elem[count] = -t_hop * np.where(STATE_EXISTS, fermion_parity2(ns, I, ii, jj), 0)
             # hop_from_to.append((i,j))
 
-            # CAREFUL: hop_from_to is only correct if the input is not batched.
-            if np.bitwise_and(I, 2**i) == 2**i and np.bitwise_xor(I, I+2**j) == 2**j:
+            if I & pow2i == pow2i and I ^ I+pow2j == pow2j:
                 r = i; s = j
-            elif np.bitwise_and(I, 2**j) == 2**j and np.bitwise_xor(I, I+2**i) == 2**i:
+            elif I & pow2j == pow2j and I ^ I+pow2i == pow2i:
                 r = j; s = i 
             else:
                 r = -1; s = -1

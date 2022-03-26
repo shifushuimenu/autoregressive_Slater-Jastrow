@@ -16,6 +16,7 @@ from one_hot import *
 from Slater_Jastrow_simple import kinetic_term, Lattice1d
 from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 from k_copy import *
+from lowrank_update import *
 
 from monitoring import logger
 
