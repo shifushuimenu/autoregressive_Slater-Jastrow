@@ -12,8 +12,8 @@ from itertools import permutations
 
 from selfMADE import selfMADE
 from slater_sampler import SlaterDetSampler
-#from slater_sampler_ordered import SlaterDetSampler_ordered
-from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
+from slater_sampler_ordered import SlaterDetSampler_ordered
+#from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 
 from one_hot import occ_numbers_unfold, occ_numbers_collapse
 from bitcoding import int2bin, bin2pos

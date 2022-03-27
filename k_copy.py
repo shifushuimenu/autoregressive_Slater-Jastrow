@@ -5,19 +5,22 @@
 
 import numpy as np
 from bitcoding import *
-from Slater_Jastrow_simple import kinetic_term, Lattice1d, Lattice_rectangular
 
-from lowrank_update import * 
+# def exclude_invalid_connecting_states(hop_from_to, states_I, matrix_elem):
+#     STATE_EXISTS = np.where(matrix_elem != 0)
+#     for _ in range(matrix_elem.shape[1] - len(STATE_EXISTS[0])):
+#         hop_from_to.remove((-1,-1))
+#     matrix_elem = matrix_elem[STATE_EXISTS]
+#     states_I = states_I[STATE_EXISTS]
+
+#     return sort_onehop_states(hop_from_to, states_I, matrix_elem)
+
+# alias 
+# valid_states = exclude_invalid_connecting_states 
 
 
-def exclude_invalid_connecting_states(hop_from_to, states_I, matrix_elem):
-    STATE_EXISTS = np.where(matrix_elem != 0)
-    for _ in range(matrix_elem.shape[1] - len(STATE_EXISTS[0])):
-        hop_from_to.remove((-1,-1))
-    matrix_elem = matrix_elem[STATE_EXISTS]
-    states_I = states_I[STATE_EXISTS]
-
-    # Sort connecting states in increasing order of min(r,s)
+def sort_onehop_states(hop_from_to, states_I, matrix_elem):
+    """sorts connecting states in increasing order of min(r,s)"""
     idx_sorted = np.argsort([min(*el) for el in hop_from_to])
     hop_from_to = np.array(hop_from_to)[idx_sorted]
     states_I = states_I[idx_sorted]
@@ -25,8 +28,7 @@ def exclude_invalid_connecting_states(hop_from_to, states_I, matrix_elem):
 
     return (hop_from_to, states_I, matrix_elem)
 
-# alias 
-valid_states = exclude_invalid_connecting_states 
+
 
 
 def calc_k_copy(hop_from_to, ref_state):

@@ -2,7 +2,8 @@
 #          when making a package with an  __init__.py file. 
 
 from Slater_Jastrow_simple import *
-from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
+#from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
+from slater_sampler_ordered import SlaterDetSampler_ordered
 import time
 import matplotlib.pyplot as plt
 from test_suite import prepare_test_system_zeroT
@@ -23,7 +24,7 @@ Nparticles = 10 # 5
 Vint = 5.0
 
 
-def train(model, learning_rate, num_samples=10, use_cuda=False):
+def train(model, learning_rate, num_samples=100, use_cuda=False):
     '''
     train a model using stochastic gradient descent 
 
@@ -93,7 +94,7 @@ def _update_curve(energy, precision):
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
-(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
+(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=False, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
 Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)
 

@@ -7,6 +7,9 @@ dtype='object'  ensures that integers can be as large as memory allows.
 #         everywhere and not just in places where a TypeError shows up.
 #       - Bit are ordered frmo left to right. Oringinally, they were ordered from right to left. 
 #         The change has introduced some hacks, which should be eliminated in favour of a cleaner solution.
+#
+#       - Use a class for basis states where both the numpy binary array and the integer value are stored. 
+#         This avoids repeated conversions.  
 
 import torch 
 import numpy as np
@@ -28,6 +31,26 @@ def bin2int(bin_array):
         int_[...] = ( np.left_shift(int_[...], 1) ) | bin_array[..., i]
     return int_
     #return torch.as_tensor(int_, device=default_torch_device)
+
+
+def bin2int_nobatch(bin_array):
+    """
+    """
+    assert len(bin_array.shape) == 1 # no batch dimension 
+    bin_array = bin_array[::-1]
+    int_ = 0
+    for i in range(bin_array.shape[-1]):
+        int_ = (int_ << 1) | bin_array[i]
+    return int(int_)
+
+
+def bin2int_nobatch_v2(bin_array):
+    """
+    """
+    bin_array_s = list(map(str, bin_array[::-1]))
+    S = "0b" + "".join([b for b in bin_array_s])
+    return int(S, base=0)
+
 
 def int2bin(I, ns):
     """
@@ -53,12 +76,12 @@ def int2bin(I, ns):
                 [1, 1, 0, 0]],
         <BLANKLINE>
                [[1, 1, 0, 0],
-                [0, 1, 0, 1]]], dtype=object)
+                [0, 1, 0, 1]]])
 
     """
     # Hack. Is this fast enough ? 
     I = np.array(I, dtype='object')
-    bin_array = np.zeros(I.shape + (ns,), dtype='object')
+    bin_array = np.zeros(I.shape + (ns,), dtype=int)
     scan = np.ones_like(I)
     for i in range(ns):
         bin_array[..., ns-i-1] = np.bitwise_and(I[...], np.left_shift(scan[...], i)) // np.left_shift(scan[...], i)

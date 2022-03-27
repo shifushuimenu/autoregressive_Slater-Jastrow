@@ -13,7 +13,7 @@ from test_suite import ( prepare_test_system_zeroT,
                          generate_random_config )
 from bitcoding import *
 from one_hot import *
-from Slater_Jastrow_simple import kinetic_term, Lattice1d
+from Slater_Jastrow_simple import kinetic_term, kinetic_term2, Lattice1d, Lattice_rectangular
 from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 from k_copy import *
 from lowrank_update import *
@@ -134,11 +134,13 @@ for jj in range(10):
     print("jj=", jj)
 
     ref_conf = generate_random_config(Ns, Np)
-    ref_I = bin2int(ref_conf)
+    #ref_I = bin2int(ref_conf)
+    ref_I = bin2int_nobatch(ref_conf)
     print("ref_I=", ref_I)
 
     #  `states_I` comprises only the onehop states, the reference state is not included 
-    rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l2d))
+    # rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l2d))
+    rs_pos, states_I, _ = sort_onehop_states(*kinetic_term2(ref_I, l2d))
     num_onehop_states = len(states_I)
     xs = int2bin(states_I, ns=Ns)
     num_onehop_states = len(xs)    
