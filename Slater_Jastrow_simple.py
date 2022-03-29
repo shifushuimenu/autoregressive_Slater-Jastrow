@@ -166,6 +166,8 @@ class PhysicalSystem(object):
 
         acc = 0.0
 
+        E_kin_loc = 0.0
+
         assert len(from_to) == len(states) == len(wl)
         t0_OBDM = time()
         OBDM_loc = local_OBDM(alpha=config[0], sp_states = ansatz.slater_sampler.P_ortho.detach().numpy())
@@ -183,6 +185,8 @@ class PhysicalSystem(object):
                 ratio = (abspsi_conf_i / abs(psi_loc)) * np.sign(ratio_Slater(OBDM_loc, alpha=config[0], beta=config_i[0], r=r, s=s))
                 t1_Slater_ratio = time()
                 t_Slater_ratio += t1_Slater_ratio - t0_Slater_ratio
+
+                E_kin_loc += wi * ratio
             else:
                 ratio = 1.0 # <alpha/psi> / <alpha/psi> = 1
 
@@ -198,6 +202,8 @@ class PhysicalSystem(object):
             acc += eng_i
         t1_onehop = time()
         t_onehop = t1_onehop - t0_onehop
+
+        print("E_kin_loc=", E_kin_loc)
 
         print("t_kin=", t_kin)
         print("t_OBDM=", t_OBDM)

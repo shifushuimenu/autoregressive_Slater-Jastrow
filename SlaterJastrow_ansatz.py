@@ -308,7 +308,7 @@ class SlaterJastrow_ansatz(selfMADE):
         return self.psi_amplitude_unbatch(samples)
 
 
-    def lowrank_kinetic(self, I_ref, psi_loc, OBDM_loc, lattice):        
+    def lowrank_kinetic(self, I_ref, psi_loc, lattice):        
         """Compute local kinetic energy for a basis state. 
 
         Input:
@@ -346,14 +346,14 @@ class SlaterJastrow_ansatz(selfMADE):
             # CAREFUL: this may be wrong if a probability is accidentally zero !
             # introduce a boolean array which indicates the valid support
             # and use log-probabilities throughout.  
-            supp = np.empty((num_states, self.N, self.D), dtype=bool)
+            supp = np.empty((num_states, self.num_components, self.D), dtype=bool)
             supp[...] = False 
             for l in range(num_states):
-                for k in range(self.N):
+                for k in range(self.num_components):
                     xmin = 0 if k==0 else xs_pos[l, k-1] + 1
-                    xmax = self.D - self.N + k + 1
+                    xmax = self.D - self.num_components + k + 1
                     supp[l, k, xmin:xmax] = True
-            supp = supp.reshape(-1, self.N*self.D)
+            supp = supp.reshape(-1, self.num_components*self.D)
             assert mm.shape == supp.shape
             # CAREFUL
             log_probs = _log_cutoff(np.where(mm > 0, mm, 1.0)).sum(axis=-1)
@@ -365,13 +365,14 @@ class SlaterJastrow_ansatz(selfMADE):
         rs_pos, xs_I, matrix_elem = sort_onehop_states(*kinetic_term2(I_ref, lattice))
 
         # conditional probabilities of all onehop states
-        xs_hat_F, cond_prob_ref = self.slater_sampler.lowrank_kinetic(I_ref, xs_I, rs_pos)
-        # IMPROVE: Check that the probability amplitude (!) calculated from the conditional 
-        # probabilities `cond_prob_ref` conincides with `psi_loc`. -> assert 
-        pos_ref = bin2pos([config_ref])
-        config_ref_unfolded = occ_numbers_unfold([config_ref])
-        log_prob_ref = _cond_prob2log_prob(xs_hat=cond_prob_ref, xs_unfolded=config_ref_unfolded, xs_pos=pos_ref)
-        assert np.exp(0.5*log_prob_ref) == abs(psi_loc)
+        xs_hat_F, cond_prob_ref_F = self.slater_sampler.lowrank_kinetic(I_ref, xs_I, rs_pos)
+        ## IMPROVE: Check that the probability amplitude (!) calculated from the conditional 
+        ## probabilities `cond_prob_ref` conincides with `psi_loc`. -> assert 
+        #pos_ref = bin2pos([config_ref])
+        #config_ref_unfolded = occ_numbers_unfold([config_ref])
+        #log_prob_ref = _cond_prob2log_prob(xs_hat=cond_prob_ref[None,:], xs_unfolded=config_ref_unfolded, xs_pos=pos_ref) # requires batch dimension 
+        #print("log_prob_ref=", log_prob_ref, "psi_loc=", psi_loc, "np.exp(0.5*log_prob_ref)=", np.exp(0.5*log_prob_ref))
+        #assert np.exp(0.5*log_prob_ref) == abs(psi_loc)
         
         xs = int2bin(xs_I, ns=self.D)
         xs_unfolded = occ_numbers_unfold(xs, duplicate_entries=False) # output of occ_numbers_unfold() is a torch tensor 
@@ -379,7 +380,7 @@ class SlaterJastrow_ansatz(selfMADE):
 
 #        for i, x_unfolded in enumerate(xs_unfolded):
 #            xs_hat_B[i, :] = self.forward(x_unfolded.unsqueeze(dim=0)).squeeze(dim=0).numpy() # net.forward() requires batch dimension 
-        xs_hat_B[:,:] = self.forward(xs_unfolded).numpy() # process a batch of samples at once
+        xs_hat_B[:,:] = self.forward(xs_unfolded).detach().numpy() # process a batch of samples at once
 
         xs_hat = xs_hat_F[:, :] * xs_hat_B[:, :]
         # normalize: The probabilities x_hat_F and x_hat_B individually are normalized,
@@ -390,15 +391,16 @@ class SlaterJastrow_ansatz(selfMADE):
             xs_hat[:, k*self.D:(k+1)*self.D] /= norm[:, None] # enable broadcast 
 
         # Pick only the probabilities at actually sampled positions
+        # so as to compute the probability of a sample. 
         xs_unfolded = xs_unfolded.numpy()
         xs_pos = bin2pos(xs)
         log_probs = _cond_prob2log_prob(xs_hat, xs_unfolded, xs_pos)
-        b_absamp = np.sqrt(np.exp(log_probs))
+        b_absamp = np.sqrt(0.5*np.exp(log_probs))
 
         # sign( <\beta|\psi> / <\alpha|\psi> )
         b_relsign = np.empty_like(b_absamp)
         # local OBDM is needed for computing ratio of two Slater determinants
-        OBDM_loc = local_OBDM(alpha=config_ref, sp_states=self.slater_sampler.P)
+        OBDM_loc = local_OBDM(alpha=config_ref, sp_states=self.slater_sampler.P_ortho.detach().numpy())
         for i, x in enumerate(xs):            
             (r,s) = rs_pos[i]
             b_relsign[i] = np.sign(ratio_Slater(OBDM_loc, alpha=config_ref, beta=x, r=r, s=s))

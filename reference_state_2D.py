@@ -121,19 +121,20 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 20; Np = 10    # Ns=20, Np=10; Ns=16, Np=8; Ns=12, Np=5: singular matrix
+Ns = 10; Np = 5    # Ns=20, Np=10; Ns=16, Np=8; Ns=12, Np=5: singular matrix
 #l1d = Lattice1d(ns=Ns)
-l2d = Lattice_rectangular(nx=5, ny=4)
+l2d = Lattice_rectangular(nx=5, ny=2)
 assert l2d.ns == Ns
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
 SDsampler = SlaterDetSampler_ordered(Nsites=Ns, Nparticles=Np, single_particle_eigfunc=U, naive=False)
 
-for jj in range(10):
+for jj in range(1):
     print("jj=", jj)
 
     ref_conf = generate_random_config(Ns, Np)
+    #ref_conf = np.array([1,0,1,0,1,0,1,1,0,0])                        
     #ref_I = bin2int(ref_conf)
     ref_I = bin2int_nobatch(ref_conf)
     print("ref_I=", ref_I)

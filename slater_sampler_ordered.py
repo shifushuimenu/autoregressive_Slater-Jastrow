@@ -321,6 +321,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         from monitoring import logger 
         import lowrank_update as LR
 
+        # CAREFUL
+        GG = self.G.detach().numpy()
+
         # normalization needs to be satisfied up to 
         #     \sum_i p(i)  > `eps_norm_probs``
         eps_norm_probs = 1.0 - 1e-10
@@ -397,6 +400,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         k_s = [np.searchsorted(xs_pos[state_nr, :], rs_pos[state_nr][1]) for state_nr in range(num_onehop_states)]
         k_r = [np.searchsorted(xs_pos[state_nr, :], rs_pos[state_nr][0]) for state_nr in range(num_onehop_states)]
 
+        print("ref_conf=", ref_conf, "ref_I=", ref_I)
 
         for k in range(self.N):
             # Calculate the conditional probabilities for the k-th particle (for all onehop states 
@@ -417,8 +421,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 # reference state        
                 Ksites_add += [i]
                 occ_vec_add = occ_vec[0:xmin] + [0]*ii + [1]
-                Gnum = self.G[np.ix_(Ksites_add, Ksites_add)] - np.diag(occ_vec_add)
-                Gdenom = self.G[np.ix_(Ksites, Ksites)] - np.diag(occ_vec[0:len(Ksites)])
+                Gnum = GG[np.ix_(Ksites_add, Ksites_add)] - np.diag(occ_vec_add)
+                Gdenom = GG[np.ix_(Ksites, Ksites)] - np.diag(occ_vec[0:len(Ksites)])
 
                 # In production runs use flag -O to suppress asserts and 
                 # __debug__ sections. 
@@ -463,6 +467,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 # and `Gdenom`.
                 t0_conn = time()
                 for state_nr, (k_copy_, (r,s)) in enumerate(onehop_info):
+                    print("k=", k, "state_nr=", state_nr, "xs[state_nr]=", xs[state_nr])
                     if k_copy_ >= k:
                         # Copy conditional probabilities rather than calculating them.
                         # Exit the loop; it is assumed that onehop states are ordered according to increasing values 
@@ -493,12 +498,12 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                     if i > xs_pos[state_nr, k-1]: # support is smaller than in the reference state                                     
                                         # In this special case, calculate the ratio of determinants from scratch.
                                         # IMPROVE: One could also design a low-rank update here. 
-                                        cond_prob_onehop[state_nr, k, i] = (-1) * _detratio_from_scratch(self.G, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
+                                        cond_prob_onehop[state_nr, k, i] = (-1) * _detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
                                 
                                 # Yet another special case 
                                 if k == k_s[state_nr] + 1 and i > s:
                                     # Again, calculate the ratio of determinants from scratch. 
-                                    cond_prob_onehop[state_nr, k, i] = (-1) * _detratio_from_scratch(self.G, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
+                                    cond_prob_onehop[state_nr, k, i] = (-1) * _detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
 
                                 if k > k_s[state_nr] + 1 and i > s:
                                     corr_factor = LR.removeadd_rs(Gnum_inv, Gdenom_inv, r, s)
@@ -512,12 +517,12 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                             for j_add in range(xmin_onehop, pos_vec[k-1]+1):                                            
                                                 # reuse all information from (k-1) cond. probs. of reference state
                                                 if k == k_copy_ + 1 and s == 0: # 1D long-range hopping                                             
-                                                    Gdenom_inv_, corr_factor_Gdenom = LR.adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=self.G, r=r, s=xs_pos[state_nr, k-1])
+                                                    Gdenom_inv_, corr_factor_Gdenom = LR.adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=GG, r=r, s=xs_pos[state_nr, k-1])
                                                 elif k == k_copy_ + 1 and s > 0: # 2D long-range hopping: There are particles or empty sites to the left of s.                                            
                                                     # 1. No particle to the left of position `s`. (Of course, this is so both in the reference state and in the onhop
                                                     # state since they differ only in the occupancies of the positions `s` and `r`.)
                                                     if k_s[state_nr] == 0:
-                                                        Gdenom_inv_, corr_factor_Gdenom = LR.adapt_Ainv(np.array([]).reshape(0,0), Gglobal=self.G, r=r, s=s, i_start=0, i_end=s)
+                                                        Gdenom_inv_, corr_factor_Gdenom = LR.adapt_Ainv(np.array([]).reshape(0,0), Gglobal=GG, r=r, s=s, i_start=0, i_end=s)
                                                     # 2. There is at least one particle to the left of position `s`. Numerator and denominator 
                                                     # matrices can be extended from that position. 
                                                     elif k_s[state_nr] > 0:
@@ -525,7 +530,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                                         # are based on the sampled position of the (k-1)-th particle. For the onehop state they are based 
                                                         # on the position of the (k-2)-th particle. 
                                                         i_start = pos_vec[k-2]+1 if k >= 2 else 0
-                                                        Gdenom_inv_, corr_factor_Gdenom = LR.adapt_Ainv(Gdenom_inv_reuse[k-1], Gglobal=self.G, r=r, s=s, i_start=i_start, i_end=s)
+                                                        Gdenom_inv_, corr_factor_Gdenom = LR.adapt_Ainv(Gdenom_inv_reuse[k-1], Gglobal=GG, r=r, s=s, i_start=i_start, i_end=s)
                                                 else:
                                                     corr_factor_Gdenom = LR.corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s)
                                                 corr_factor_Gnum = LR.corr_factor_add_s(Gnum_inv_reuse[k-1][j_add], s=s)
@@ -536,10 +541,10 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
                                         if k == k_copy_ + 1:
                                             if s==0:                                                                                       
-                                                Gdenom_inv_, corr_factor_Gdenom = LR.adapt_Ainv(np.array([]).reshape(0,0), Gglobal=self.G, r=r, s=s, i_start=0, i_end=s)
+                                                Gdenom_inv_, corr_factor_Gdenom = LR.adapt_Ainv(np.array([]).reshape(0,0), Gglobal=GG, r=r, s=s, i_start=0, i_end=s)
                                             elif s > 0:
                                                 i_start = pos_vec[k-2]+1 if k >= 2 else 0                                         
-                                                Gdenom_inv_, corr_factor_Gdenom = LR.adapt_Ainv(Gdenom_inv_reuse[k-1], Gglobal=self.G, r=r, s=s, i_start=i_start, i_end=s)                              
+                                                Gdenom_inv_, corr_factor_Gdenom = LR.adapt_Ainv(Gdenom_inv_reuse[k-1], Gglobal=GG, r=r, s=s, i_start=i_start, i_end=s)                              
                                         else:                 
                                             corr_factor_Gdenom= LR.corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s)                       
                                         corr_factor_Gnum = LR.corr_factor_removeadd_rs(Gnum_inv, r=pos_vec[k-1], s=s)                                    
@@ -557,7 +562,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                         logger.info_refstate.counter_nonsingular += 1
 
                                         if k==(k_copy_+1):                                                   
-                                            Gdenom_inv_, corr1 = LR.adapt_Gdenom_inv(Gdenom_inv, Gglobal=self.G, r=r, s=s)
+                                            Gdenom_inv_, corr1 = LR.adapt_Gdenom_inv(Gdenom_inv, Gglobal=GG, r=r, s=s)
                                             corr2 = LR.corr_factor_remove_r(Gdenom_inv_, r=r)
                                             corr_factor_Gdenom = corr1 * corr2
                                             #log_corr_factor = log_cutoff(abs(corr_factor_Gnum)) - log_cutoff(abs(corr1)) - log_cutoff(abs(corr2))                                                                      
@@ -590,7 +595,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                             # Now Gdenom_inv_ still has a particle at position s and (!) r. 
                                             corr2 = LR.corr_factor_remove_r(Gdenom_inv_, r=r)
                                             corr_factor_Gdenom = corr1 * corr2                                
-                                            corr4, corr3 = LR.corr3_Gnum_from_Gdenom(Gdenom_inv_, Gglobal=self.G, r=r, s=s, xmin=xmin, i=i)
+                                            corr4, corr3 = LR.corr3_Gnum_from_Gdenom(Gdenom_inv_, Gglobal=GG, r=r, s=s, xmin=xmin, i=i)
                                             det_Gnum_ = corr4 * corr3 * corr1
                                             cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / (corr_factor_Gdenom) 
                                             #cond_logprob_onehop[state_nr, k, i] = ( log_cutoff(abs(corr4)) + log_cutoff(abs(corr3)) + log_cutoff(abs(corr1)) 
@@ -598,7 +603,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                         else:
                                             # connecting state and reference state have the same support in the denominator 
                                             corr_factor_Gdenom = LR.corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)
-                                            det_Gnum_ = LR.det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal=self.G, r=r, s=s, xmin=xmin, i=i)
+                                            det_Gnum_ = LR.det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal=GG, r=r, s=s, xmin=xmin, i=i)
                                             cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / (det_Gdenom * corr_factor_Gdenom)
                                             #cond_logprob_onehop[state_nr, k, i] = log_cutoff(abs(det_Gnum_)) - log_cutoff(abs(det_Gdenom)) - log_cutoff(abs(corr_factor_Gdenom))
 
@@ -672,12 +677,12 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
                                                 cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i-1]
                                             if i > r:                                     
-                                                det_Gnum_ = LR.det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal=self.G, r=r, s=s, xmin=xmin, i=i)
+                                                det_Gnum_ = LR.det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal=GG, r=r, s=s, xmin=xmin, i=i)
                                                 cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / det_Gdenom_
                                                 #cond_logprob_onehop[state_nr, k, i] = log_cutoff(abs(det_Gnum_)) - log_cutoff(abs(det_Gdenom_))
                                         else:
                                             corr_factor_Gdenom = LR.corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)
-                                            det_Gnum_ = LR.det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal=self.G, r=r, s=s, xmin=xmin, i=i)
+                                            det_Gnum_ = LR.det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal=GG, r=r, s=s, xmin=xmin, i=i)
                                             cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / ( det_Gdenom * corr_factor_Gdenom)      
                                             #cond_logprob_onehop[state_nr, k, i] = log_cutoff(abs(det_Gnum_)) - log_cutoff(abs(det_Gdenom)) - log_cutoff(abs(corr_factor_Gdenom))
                                             
