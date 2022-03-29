@@ -18,22 +18,17 @@ torch.manual_seed(seed)
 if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 
-max_iter = 1000 # 1000 
-Nsites = 20 # 10
-Nparticles = 10 # 5
-Vint = 5.0
 
-
-def train(model, learning_rate, num_samples=100, use_cuda=False):
+def train(VMCmodel, learning_rate, num_samples=100, use_cuda=False):
     '''
     train a model using stochastic gradient descent 
 
     Args:
-        model (obj): a model that meet VMC model definition.
+        model (obj): a model that meets VMC model definition.
         learning_rate (float): the learning rate for SGD.
     '''
     if use_cuda:
-        model.ansatz.cuda()
+        VMCmodel.ansatz.cuda()
 
     while True:
         # get expectation values for energy, gradient and their product,
@@ -42,26 +37,26 @@ def train(model, learning_rate, num_samples=100, use_cuda=False):
         print("before sampling")
         with torch.no_grad():
             for i in range(num_samples):
-                sample_unfolded, sample_prob = SJA.sample_unfolded()
+                sample_unfolded, sample_prob = VMCmodel.ansatz.sample_unfolded()
                 sample_list[i] = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
 
         print("before vmc_measure")
-        energy, grad, energy_grad, precision = vmc_measure(model.local_measure, sample_list, num_bin=50)
+        energy, grad, energy_grad, precision = vmc_measure(VMCmodel.local_measure, sample_list, num_bin=50)
 
         # update variables using stochastic gradient descent
         g_list = [eg - energy * g for eg, g in zip(energy_grad, grad)]
-        for var, g in zip(model.ansatz.parameters(), g_list):
+        for var, g in zip(VMCmodel.ansatz.parameters(), g_list):
             delta = learning_rate * g
             var.data -= delta
 
         # re-orthogonalize the columns of the Slater determinant
         # and update bias of the zero-th component 
-        if isinstance(model.ansatz, SlaterJastrow_ansatz):
-            print("slater_sampler.P.grad=", model.ansatz.slater_sampler.P.grad)
-            print("named parameters", list(model.ansatz.named_parameters()))
-            model.ansatz.slater_sampler.reortho_orbitals()
-            model.ansatz.slater_sampler.reset_sampler()
-            model.ansatz.bias_zeroth_component[:] = model.ansatz.slater_sampler.get_cond_prob(k=0)
+        if isinstance(VMCmodel.ansatz, SlaterJastrow_ansatz):
+            print("slater_sampler.P.grad=", VMCmodel.ansatz.slater_sampler.P.grad)
+            print("named parameters", list(VMCmodel.ansatz.named_parameters()))
+            VMCmodel.ansatz.slater_sampler.reortho_orbitals()
+            VMCmodel.ansatz.slater_sampler.reset_sampler()
+            VMCmodel.ansatz.bias_zeroth_component[:] = VMCmodel.ansatz.slater_sampler.get_cond_prob(k=0)
 
         yield energy, precision
         
@@ -83,13 +78,23 @@ def _update_curve(energy, precision):
     MM = np.hstack((np.array(energy_list)[:,None], np.array(precision_list)[:,None]))
     np.savetxt("energies_Ns{}Np{}V{}.dat".format(Nsites, Nparticles, Vint), MM)
 
-    # save converged ansatz
+
+def _checkpoint(VMCmodel):
+    """Save most recent SJA state to disk."""
     state = {
         "energy": energy,
         "precision": precision, 
-        "net": SJA.state_dict()
+        "net": VMCmodel.ansatz.state_dict()
     }
     torch.save(state, 'state_Ns{}Np{}V{}.pt'.format(Nsites, Nparticles, Vint))
+
+
+
+
+max_iter = 2 # 1000 
+Nsites = 10 # 10
+Nparticles = 5 # 5
+Vint = 5.0
 
 
 # Aggregation of MADE neural network as Jastrow factor 
@@ -98,15 +103,18 @@ def _update_curve(energy, precision):
 Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)
 
-model = VMCKernel(energy_loc=tVmodel_loc, ansatz=SJA)
+phys_system = PhysicalSystem(nx=Nsites, ny=1, ns=Nsites, np=Nparticles, D=1, Vint=Vint)
+VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
+del SJA
 
 E_exact =  -2.9774135797163597 #-3.3478904193465335
 
 t0 = time.time()
-for i, (energy, precision) in enumerate(train(model, learning_rate = 0.1, num_samples=100, use_cuda = use_cuda)):
+for i, (energy, precision) in enumerate(train(VMCmodel_, learning_rate = 0.1, num_samples=100, use_cuda = use_cuda)):
     t1 = time.time()
     print('Step %d, dE/|E| = %.4f, elapsed = %.4f' % (i, -(energy - E_exact)/E_exact, t1-t0))
     _update_curve(energy, precision)
+    _checkpoint(VMCmodel_)
     t0 = time.time()
 
     # stop condition
@@ -119,10 +127,10 @@ corr_ = np.zeros(Nsites)
 
 print("Now sample from the converged ansatz")
 dd = torch.load('state_Ns{}Np{}V{}.pt'.format(Nsites, Nparticles, Vint))
-SJA.load_state_dict(dd['net'])
+VMCmodel_.ansatz.load_state_dict(dd['net'])
 num_samples = 1000
 for _ in range(num_samples):
-    sample_unfolded, sample_prob = SJA.sample_unfolded()
+    sample_unfolded, sample_prob = VMCmodel_.ansatz.sample_unfolded()
     config = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
     print("config=", config)       
     config_sz = 2*config - 1

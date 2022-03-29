@@ -10,8 +10,6 @@ dtype='object'  ensures that integers can be as large as memory allows.
 #
 #       - Use a class for basis states where both the numpy binary array and the integer value are stored. 
 #         This avoids repeated conversions.  
-
-import torch 
 import numpy as np
 from utils import default_torch_device 
 

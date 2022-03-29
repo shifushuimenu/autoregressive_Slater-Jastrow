@@ -1,3 +1,4 @@
+from re import L
 import torch
 import numpy as np
 import torch.nn as nn
@@ -112,6 +113,102 @@ def fermion_parity2(n, state_idx, i, j):
 
 ###############################
 # Just for testing purposes
+
+class PhysicalSystem(object):
+    """holds system parameters such as lattice, interaction strength etc."""
+    def __init__(self, nx, ny, ns, np, D, Vint):
+        self.nx = nx; self.ny = ny
+        assert ns == nx*ny
+        self.ns = nx*ny
+        self.np = np
+        self.Vint = Vint
+        if D == 1:
+            self.lattice = Lattice1d(ns=self.nx)
+        elif D == 2:
+            self.lattice = Lattice_rectangular(nx, ny)    
+
+    def local_energy(self, config, psi_loc, ansatz):
+        '''
+        Local energy of periodic 1D or 2D t-V model
+        
+        Args:
+        config (1D array): occupation numbers as bitstring.
+        psi_func (func): wave function amplitude
+        psi_loc (number): projection of wave function onto config <config|psi>
+        V (float): nearest-neighbout interaction
+
+        Returns:
+        number: local energy <config|H|psi> / <config|psi>
+        '''
+        t0_kin = time()
+        config = np.array(config).astype(int)
+        assert len(config.shape) > 1 and config.shape[0] == 1 # just one sample per batch
+        nsites = len(config[-1])
+        I = bin2int_nobatch(config[0])
+        hop_from_to, connecting_states_I, kin_matrix_elements = sort_onehop_states(*kinetic_term2(I, self.lattice))
+        connecting_states = int2bin(connecting_states_I, ns=nsites)
+    
+        wl, states, from_to = [], [], []
+
+        # diagonal matrix element: nearest neighbour interactions
+        nn_int = self.Vint * (np.roll(config, shift=-1) * config).sum(axis=-1).item()
+        wl.append(nn_int)
+        states.append(config)
+        from_to.append((0, 0)) # diagonal matrix element: no hopping => choose r=s=0 by convention
+
+        for ss, mm, rs_pair in zip(connecting_states, kin_matrix_elements, hop_from_to):
+            wl.append(mm)
+            states.append(ss[None,:]) # Note: ansatz.psi requires batch dim
+            from_to.append(rs_pair)
+
+        t1_kin = time()
+        t_kin = t1_kin - t0_kin
+
+        acc = 0.0
+
+        assert len(from_to) == len(states) == len(wl)
+        t0_OBDM = time()
+        OBDM_loc = local_OBDM(alpha=config[0], sp_states = ansatz.slater_sampler.P_ortho.detach().numpy())
+        t1_OBDM = time()
+        t_OBDM = t1_OBDM - t0_OBDM
+        t0_onehop = time()
+        t_Slater_ratio = 0
+        for wi, config_i, (r,s) in zip(wl, states, from_to):
+            if not (r==0 and s==0):
+                # The repeated density estimation of very similar configurations is the bottleneck. 
+                abspsi_conf_i = torch.sqrt(ansatz.prob(config_i)).item() 
+                # IMPROVE: Calculate sign() of ratio of Slater determinant directly from the number of exchanges 
+                # that brings one state to the other. (Is this really correct ?)
+                t0_Slater_ratio = time()
+                ratio = (abspsi_conf_i / abs(psi_loc)) * np.sign(ratio_Slater(OBDM_loc, alpha=config[0], beta=config_i[0], r=r, s=s))
+                t1_Slater_ratio = time()
+                t_Slater_ratio += t1_Slater_ratio - t0_Slater_ratio
+            else:
+                ratio = 1.0 # <alpha/psi> / <alpha/psi> = 1
+
+            eng_i = wi * ratio
+
+            # ==============================================
+            # assert np.isclose( (psi_func(config_i) / psi_loc), ratio ), "Error: ratio1= %16.8f, ratio2 = %16.8f" % (psi_func(config_i) / psi_loc, ratio)
+            # Alternative approach:
+            # Recalculate wave function aplitude for each connecting state 
+            # without using low-rank update. 
+            # eng_i = wi * (psi_func(config_i) / psi_loc) 
+            # ==============================================
+            acc += eng_i
+        t1_onehop = time()
+        t_onehop = t1_onehop - t0_onehop
+
+        print("t_kin=", t_kin)
+        print("t_OBDM=", t_OBDM)
+        print("t_Slater_ratio=", t_Slater_ratio)
+        print("t_onehop=", t_onehop, "num_connecting_states=", len(connecting_states_I))
+        
+        return acc
+
+
+
+
 class Lattice1d(object):
     """1d lattice with pbc"""
     def __init__(self, ns=4):
@@ -295,85 +392,6 @@ def kinetic_term2( I, lattice, t_hop=1.0 ):
 
 
 #@profile
-def tVmodel_loc(config, psi_loc, ansatz, V=5.0):
-    '''
-    Local energy of periodic 1D t-V model
-    
-    Args:
-       config (1D array): occupation numbers as bitstring.
-       psi_func (func): wave function amplitude
-       psi_loc (number): projection of wave function onto config <config|psi>
-       V (float): nearest-neighbout interaction
-
-    Returns:
-       number: local energy <config|H|psi> / <config|psi>
-    '''
-    t0_kin = time()
-    config = np.array(config).astype(int)
-    assert len(config.shape) > 1 and config.shape[0] == 1 # just one sample per batch
-    nsites = len(config[-1])
-    I = bin2int_nobatch(config[0])
-    lattice = Lattice1d(ns=nsites)
-    hop_from_to, connecting_states_I, kin_matrix_elements = sort_onehop_states(*kinetic_term2(I, lattice))
-    connecting_states = int2bin(connecting_states_I, ns=nsites)
- 
-    wl, states, from_to = [], [], []
-
-    # diagonal matrix element: nearest neighbour interactions
-    nn_int = V * (np.roll(config, shift=-1) * config).sum(axis=-1).item()
-    wl.append(nn_int)
-    states.append(config)
-    from_to.append((0, 0)) # diagonal matrix element: no hopping => choose r=s=0 by convention
-
-    for ss, mm, rs_pair in zip(connecting_states, kin_matrix_elements, hop_from_to):
-        wl.append(mm)
-        states.append(ss[None,:]) # Note: ansatz.psi requires batch dim
-        from_to.append(rs_pair)
-
-    t1_kin = time()
-    t_kin = t1_kin - t0_kin
-
-    acc = 0.0
-
-    assert len(from_to) == len(states) == len(wl)
-    t0_OBDM = time()
-    OBDM_loc = local_OBDM(alpha=config[0], sp_states = ansatz.slater_sampler.P_ortho.detach().numpy())
-    t1_OBDM = time()
-    t_OBDM = t1_OBDM - t0_OBDM
-    t0_onehop = time()
-    t_Slater_ratio = 0
-    for wi, config_i, (r,s) in zip(wl, states, from_to):
-        if not (r==0 and s==0):
-            # The repeated density estimation of very similar configurations is the bottleneck. 
-            abspsi_conf_i = torch.sqrt(ansatz.prob(config_i)).item() 
-            # IMPROVE: Calculate sign() of ratio of Slater determinant directly from the number of exchanges 
-            # that brings one state to the other. (Is this really correct ?)
-            t0_Slater_ratio = time()
-            ratio = (abspsi_conf_i / abs(psi_loc)) * np.sign(ratio_Slater(OBDM_loc, alpha=config[0], beta=config_i[0], r=r, s=s))
-            t1_Slater_ratio = time()
-            t_Slater_ratio += t1_Slater_ratio - t0_Slater_ratio
-        else:
-            ratio = 1.0 # <alpha/psi> / <alpha/psi> = 1
-
-        eng_i = wi * ratio
-
-        # ==============================================
-        # assert np.isclose( (psi_func(config_i) / psi_loc), ratio ), "Error: ratio1= %16.8f, ratio2 = %16.8f" % (psi_func(config_i) / psi_loc, ratio)
-        # Alternative approach:
-        # Recalculate wave function aplitude for each connecting state 
-        # without using low-rank update. 
-        # eng_i = wi * (psi_func(config_i) / psi_loc) 
-        # ==============================================
-        acc += eng_i
-    t1_onehop = time()
-    t_onehop = t1_onehop - t0_onehop
-
-    print("t_kin=", t_kin)
-    print("t_OBDM=", t_OBDM)
-    print("t_Slater_ratio=", t_Slater_ratio)
-    print("t_onehop=", t_onehop, "num_connecting_states=", len(connecting_states_I))
-    
-    return acc
 
 #@profile
 def vmc_measure(local_measure, sample_list, num_bin=50):
@@ -444,6 +462,7 @@ class VMCKernel(object):
     variational Monte Carlo kernel.
 
     Args:
+       phys_system: class containing lattice parameters, interaction strengths etc. 
        energy_loc (func): local energy <x|H|\psi>/<x|\psi>.
        ansatz (Module): torch neural network
     '''
@@ -490,6 +509,7 @@ class VMCKernel(object):
         eloc = self.energy_loc(config, psi_loc.data, ansatz=self.ansatz).item()
         return eloc, grad_loc
 
+
 def _test():
     import doctest 
     doctest.testmod(verbose=True)
@@ -525,7 +545,9 @@ if __name__ == "__main__":
     #for name, p in SJA.named_parameters():
     #    print("name", name, "-> param", p)
 
-    VMC = VMCKernel(energy_loc=tVmodel_loc, ansatz=SJA)
+    phys_system = PhysicalSystem(nx=Nsites, ny=1, ns=Nsites, np=Nparticles, D=1, Vint=5.0)
+
+    VMC = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
     print(VMC.prob([[0,1,0,0,1]]))
     print("VMC.local_measure")
     e_loc, grad_loc = VMC.local_measure([[0,1,0,0,1]])

@@ -8,8 +8,8 @@ from scipy.special import binom
 
 import matplotlib.pyplot as plt 
 
-Ns = 7 # 13
-Np = 3 #5
+Ns = 20 # 13
+Np = 10 #5
 
 
 dimH = int(binom(Ns, Np))

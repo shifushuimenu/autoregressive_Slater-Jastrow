@@ -329,9 +329,12 @@ def ratio_Slater(G, alpha, beta, r, s):
     """
     # IMPROVE: assert that beta is indeed obtained from alpha 
     G = np.asarray(G)
-    alpha = np.asarray(alpha)
+    alpha = np.asarray(alpha) # alpha is not used 
     beta = np.asarray(beta)
     R = (1 - G[r,r] - G[s,s] + G[r,s] + G[s,r])
+    # Furthermore, there is an additional sign factor due to the fact that in the P-matrix
+    # representation of a Fock state as a Slater determinant columns need to be ordered according 
+    # to increasing row index where the 1's are. 
     sign = np.prod([(-1) if beta[i] == 1 else 1 for i in range(min(s,r)+1, max(s,r))])
     return R * sign
 

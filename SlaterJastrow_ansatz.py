@@ -57,7 +57,7 @@ class SlaterJastrow_ansatz(selfMADE):
         >>> SdetSampler = SlaterDetSampler(eigvecs, N_particles);
         >>> SJA = SlaterJastrow_ansatz(SdetSampler, D=N_sites, num_components=N_particles, net_depth=3);
     """
-    def __init__(self, slater_sampler, deactivate_Slater=False, deactivate_Jastrow=False, **kwargs):
+    def __init__(self, slater_sampler, **kwargs):
         self.D = kwargs['D']
         self.num_components = kwargs['num_components']
         self.net_depth = kwargs['net_depth']
@@ -77,8 +77,6 @@ class SlaterJastrow_ansatz(selfMADE):
         super(SlaterJastrow_ansatz, self).__init__(**kwargs)
 
         self.slater_sampler = slater_sampler
-        self.deactivate_Slater = deactivate_Slater
-        self.deactivate_Jastrow = deactivate_Jastrow
         
 
     def sample(self):
@@ -113,11 +111,7 @@ class SlaterJastrow_ansatz(selfMADE):
             # x_hat_bias is not affected by the Pauli blocker in the Softmax layer 
             # and is overwritten in selfMADE.__init__().            
             for i in range(0, self.num_components):
-                if self.deactivate_Jastrow:
-                    x_hat = self.forward(x_out)
-                    x_hat[:, self.D:] = 1.0 # zero-th block is given by cond_prob_fermi(i=0)
-                else:
-                    x_hat = self.forward(x_out)
+                x_hat = self.forward(x_out)
 
                 cond_prob_fermi = self.slater_sampler.get_cond_prob(k=i)
 
@@ -125,10 +119,7 @@ class SlaterJastrow_ansatz(selfMADE):
                 # The position of particle i, k_i, is always to the left of k_{i+1},
                 # i.e. k_i
                 #  < k_{i+1}.
-                if self.deactivate_Slater:
-                    probs = x_hat[:,i*self.D:(i+1)*self.D]
-                else:
-                    probs = x_hat[:,i*self.D:(i+1)*self.D] * cond_prob_fermi
+                probs = x_hat[:,i*self.D:(i+1)*self.D] * cond_prob_fermi
                 # With the factor coming from Slater determinant the probabilities are not normalized.                    
                 # OneHotCategorical() accepts unnormalized probabilities, still it is better to normalize.
                 norm = torch.sum(probs, dim=-1)
@@ -180,11 +171,6 @@ class SlaterJastrow_ansatz(selfMADE):
                 samples: binary array, i.e. 
                     torch.Tensor([[1,0,1,0], [0,0,1,1], [1,1,0,0]])
                     First dimension is batch dimension. 
-            Returns:
-            --------
-
-            Example:
-            --------
         """
         samples = torch.as_tensor(samples)
         assert samples.shape[0] == 1 # just one sample per batch
@@ -207,25 +193,18 @@ class SlaterJastrow_ansatz(selfMADE):
         # for several "connecting states", but forward() accepts only one batch dimension.)
         samples_unfold_flat = samples_unfold.view(-1, samples_unfold.shape[-1])
 
-        if self.deactivate_Jastrow:
-            x_hat_B = self.forward(samples_unfold_flat)
-            x_hat_B[:, self.D:] = 1.0 # zero-th block is given by cond_prob_fermi(i=0), only reset the other blocks
-        else:
-            x_hat_B = self.forward(samples_unfold_flat)
+        x_hat_B = self.forward(samples_unfold_flat)
 
-        if self.deactivate_Slater:
-            x_hat = x_hat_B 
-        else:
-            x_hat_F = torch.zeros_like(x_hat_B, requires_grad=False)
-            self.slater_sampler.reset_sampler()
-            for k in range(0, self.num_components): 
-                x_hat_F[..., k*self.D:(k+1)*self.D] = self.slater_sampler.get_cond_prob(k)
-                self.slater_sampler.update_state(pos[k].item())
-            x_hat = x_hat_B * x_hat_F
-            x_hat[..., 0:self.D] = x_hat_F[..., 0:self.D]  # cond_prob_fermi(i=0) is already contained as 'bias_zeroth_component' in MADE.
-            for k in range(self.num_components):
-                norm = torch.sum(x_hat[..., k*self.D:(k+1)*self.D])
-                x_hat[..., k*self.D:(k+1)*self.D] /= norm
+        x_hat_F = torch.zeros_like(x_hat_B, requires_grad=False)
+        self.slater_sampler.reset_sampler()
+        for k in range(0, self.num_components): 
+            x_hat_F[..., k*self.D:(k+1)*self.D] = self.slater_sampler.get_cond_prob(k)
+            self.slater_sampler.update_state(pos[k].item())
+        x_hat = x_hat_B * x_hat_F
+        x_hat[..., 0:self.D] = x_hat_F[..., 0:self.D]  # cond_prob_fermi(i=0) is already contained as 'bias_zeroth_component' in MADE.
+        for k in range(self.num_components):
+            norm = torch.sum(x_hat[..., k*self.D:(k+1)*self.D])
+            x_hat[..., k*self.D:(k+1)*self.D] /= norm
 
         if self.input_orbitals:
             assert(x_hat.requires_grad and not x_hat_F.requires_grad)
@@ -253,11 +232,6 @@ class SlaterJastrow_ansatz(selfMADE):
                 samples: binary array, i.e. 
                     torch.Tensor([[1,0,1,0], [0,0,1,1], [1,1,0,0]])
                     First dimension is batch dimension. 
-            Returns:
-            --------
-
-            Example:
-            --------
         """
         samples = torch.as_tensor(samples)
         assert len(samples.shape) == 2 and samples.shape[0] == 1 # Convention: just one sample per batch allowed
@@ -265,6 +239,7 @@ class SlaterJastrow_ansatz(selfMADE):
         amp_sign = torch.sign(self.slater_sampler.psi_amplitude(samples))
         #assert amp_sign.requires_grad
         return amp_abs * amp_sign
+
 
     def prob(self, samples):
         """Convenience function"""
@@ -286,6 +261,7 @@ class SlaterJastrow_ansatz(selfMADE):
             return log_prob
         else:
             return self.log_prob(samples)
+
 
     def psi_amplitude_unbatch(self, samples):
         """
@@ -331,6 +307,107 @@ class SlaterJastrow_ansatz(selfMADE):
         samples = int2bin(samples_I, self.D)
         return self.psi_amplitude_unbatch(samples)
 
+
+    def lowrank_kinetic(self, I_ref, psi_loc, OBDM_loc, lattice):        
+        """Compute local kinetic energy for a basis state. 
+
+        Input:
+        ------
+            I_ref : int (no batch dimension)       
+
+
+        Except in the input to net.forward(), where a torch tensor is used, numpy arrays 
+        are used throughout since it is not necessary to backpropagate the kinetic energy.  
+        """
+        # Later move imports to the top of the file 
+        from k_copy import sort_onehop_states 
+        from test_suite import ratio_Slater, local_OBDM
+        from Slater_Jastrow_simple import kinetic_term2
+
+        def _log_cutoff(x):
+            """
+            Replace -inf by a very small, but finite value.
+            """
+            return np.where(x > 0, np.log(x), -1000)
+
+        def _cond_prob2log_prob(xs_hat, xs_unfolded, xs_pos):
+            """
+            First dimension is batch dimension. 
+
+            Pick conditional probabilities at actually sampled positions so as to 
+            get the probability of the microconfiguration.
+
+            Inputs are conditional probabilities.
+            """
+            assert xs_hat.shape == xs_unfolded.shape 
+            assert len(xs_hat.shape) == 2
+            num_states = xs_hat.shape[0]
+            mm = xs_unfolded[:,:] * xs_hat[:,:]
+            # CAREFUL: this may be wrong if a probability is accidentally zero !
+            # introduce a boolean array which indicates the valid support
+            # and use log-probabilities throughout.  
+            supp = np.empty((num_states, self.N, self.D), dtype=bool)
+            supp[...] = False 
+            for l in range(num_states):
+                for k in range(self.N):
+                    xmin = 0 if k==0 else xs_pos[l, k-1] + 1
+                    xmax = self.D - self.N + k + 1
+                    supp[l, k, xmin:xmax] = True
+            supp = supp.reshape(-1, self.N*self.D)
+            assert mm.shape == supp.shape
+            # CAREFUL
+            log_probs = _log_cutoff(np.where(mm > 0, mm, 1.0)).sum(axis=-1)
+
+            return log_probs 
+
+
+        config_ref = int2bin(I_ref, ns=self.D)
+        rs_pos, xs_I, matrix_elem = sort_onehop_states(*kinetic_term2(I_ref, lattice))
+
+        # conditional probabilities of all onehop states
+        xs_hat_F, cond_prob_ref = self.slater_sampler.lowrank_kinetic(I_ref, xs_I, rs_pos)
+        # IMPROVE: Check that the probability amplitude (!) calculated from the conditional 
+        # probabilities `cond_prob_ref` conincides with `psi_loc`. -> assert 
+        pos_ref = bin2pos([config_ref])
+        config_ref_unfolded = occ_numbers_unfold([config_ref])
+        log_prob_ref = _cond_prob2log_prob(xs_hat=cond_prob_ref, xs_unfolded=config_ref_unfolded, xs_pos=pos_ref)
+        assert np.exp(0.5*log_prob_ref) == abs(psi_loc)
+        
+        xs = int2bin(xs_I, ns=self.D)
+        xs_unfolded = occ_numbers_unfold(xs, duplicate_entries=False) # output of occ_numbers_unfold() is a torch tensor 
+        xs_hat_B = np.empty_like(xs_hat_F)
+
+#        for i, x_unfolded in enumerate(xs_unfolded):
+#            xs_hat_B[i, :] = self.forward(x_unfolded.unsqueeze(dim=0)).squeeze(dim=0).numpy() # net.forward() requires batch dimension 
+        xs_hat_B[:,:] = self.forward(xs_unfolded).numpy() # process a batch of samples at once
+
+        xs_hat = xs_hat_F[:, :] * xs_hat_B[:, :]
+        # normalize: The probabilities x_hat_F and x_hat_B individually are normalized,
+        # but their product is not. 
+        assert len(xs_hat.shape) == 2 
+        for k in range(self.num_components):
+            norm = np.sum(xs_hat[:, k*self.D:(k+1)*self.D], axis=1)
+            xs_hat[:, k*self.D:(k+1)*self.D] /= norm[:, None] # enable broadcast 
+
+        # Pick only the probabilities at actually sampled positions
+        xs_unfolded = xs_unfolded.numpy()
+        xs_pos = bin2pos(xs)
+        log_probs = _cond_prob2log_prob(xs_hat, xs_unfolded, xs_pos)
+        b_absamp = np.sqrt(np.exp(log_probs))
+
+        # sign( <\beta|\psi> / <\alpha|\psi> )
+        b_relsign = np.empty_like(b_absamp)
+        # local OBDM is needed for computing ratio of two Slater determinants
+        OBDM_loc = local_OBDM(alpha=config_ref, sp_states=self.slater_sampler.P)
+        for i, x in enumerate(xs):            
+            (r,s) = rs_pos[i]
+            b_relsign[i] = np.sign(ratio_Slater(OBDM_loc, alpha=config_ref, beta=x, r=r, s=s))
+
+        E_kin_loc = np.dot(matrix_elem[:], b_absamp[:] * b_relsign[:]) / abs(psi_loc)
+
+        return E_kin_loc 
+
+        
 
 def init_test(N_particles=3, N_sites=5):
     """Initialize a minimal test system."""
