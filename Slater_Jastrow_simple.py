@@ -140,77 +140,85 @@ class PhysicalSystem(object):
         Returns:
         number: local energy <config|H|psi> / <config|psi>
         '''
-        t0_kin = time()
+        # t0_kin = time()
         config = np.array(config).astype(int)
         assert len(config.shape) > 1 and config.shape[0] == 1 # just one sample per batch
-        nsites = len(config[-1])
         I = bin2int_nobatch(config[0])
-        hop_from_to, connecting_states_I, kin_matrix_elements = sort_onehop_states(*kinetic_term2(I, self.lattice))
-        connecting_states = int2bin(connecting_states_I, ns=nsites)
+        # hop_from_to, connecting_states_I, kin_matrix_elements = sort_onehop_states(*kinetic_term2(I, self.lattice))
+        # connecting_states = int2bin(connecting_states_I, ns=self.ns)
     
-        wl, states, from_to = [], [], []
+        # wl, states, from_to = [], [], []
 
         # diagonal matrix element: nearest neighbour interactions
         nn_int = self.Vint * (np.roll(config, shift=-1) * config).sum(axis=-1).item()
-        wl.append(nn_int)
-        states.append(config)
-        from_to.append((0, 0)) # diagonal matrix element: no hopping => choose r=s=0 by convention
 
-        for ss, mm, rs_pair in zip(connecting_states, kin_matrix_elements, hop_from_to):
-            wl.append(mm)
-            states.append(ss[None,:]) # Note: ansatz.psi requires batch dim
-            from_to.append(rs_pair)
+        # wl.append(nn_int)
+        # states.append(config)
+        # from_to.append((0, 0)) # diagonal matrix element: no hopping => choose r=s=0 by convention
 
-        t1_kin = time()
-        t_kin = t1_kin - t0_kin
+        # for ss, mm, rs_pair in zip(connecting_states, kin_matrix_elements, hop_from_to):
+        #     wl.append(mm)
+        #     states.append(ss[None,:]) # Note: ansatz.psi requires batch dim
+        #     from_to.append(rs_pair)
 
-        acc = 0.0
+        # t1_kin = time()
+        # t_kin = t1_kin - t0_kin
 
-        E_kin_loc = 0.0
+        # acc = 0.0
+        # E_kin_loc = 0.0
 
-        assert len(from_to) == len(states) == len(wl)
-        t0_OBDM = time()
-        OBDM_loc = local_OBDM(alpha=config[0], sp_states = ansatz.slater_sampler.P_ortho.detach().numpy())
-        t1_OBDM = time()
-        t_OBDM = t1_OBDM - t0_OBDM
-        t0_onehop = time()
-        t_Slater_ratio = 0
-        for wi, config_i, (r,s) in zip(wl, states, from_to):
-            if not (r==0 and s==0):
-                # The repeated density estimation of very similar configurations is the bottleneck. 
-                abspsi_conf_i = torch.sqrt(ansatz.prob(config_i)).item() 
-                # IMPROVE: Calculate sign() of ratio of Slater determinant directly from the number of exchanges 
-                # that brings one state to the other. (Is this really correct ?)
-                t0_Slater_ratio = time()
-                ratio = (abspsi_conf_i / abs(psi_loc)) * np.sign(ratio_Slater(OBDM_loc, alpha=config[0], beta=config_i[0], r=r, s=s))
-                t1_Slater_ratio = time()
-                t_Slater_ratio += t1_Slater_ratio - t0_Slater_ratio
+        # assert len(from_to) == len(states) == len(wl)
+        # t0_OBDM = time()
+        # OBDM_loc = local_OBDM(alpha=config[0], sp_states = ansatz.slater_sampler.P_ortho.detach().numpy())
+        # t1_OBDM = time()
+        # t_OBDM = t1_OBDM - t0_OBDM
+        # t0_onehop = time()
+        # t_Slater_ratio = 0
+        # for wi, config_i, (r,s) in zip(wl, states, from_to):
+        #     if not (r==0 and s==0):
+        #         # The repeated density estimation of very similar configurations is the bottleneck. 
+        #         abspsi_conf_i = torch.sqrt(ansatz.prob(config_i)).item() 
+        #         # IMPROVE: Calculate sign() of ratio of Slater determinant directly from the number of exchanges 
+        #         # that brings one state to the other. (Is this really correct ?)
+        #         t0_Slater_ratio = time()
+        #         ratio = (abspsi_conf_i / abs(psi_loc)) * np.sign(ratio_Slater(OBDM_loc, alpha=config[0], beta=config_i[0], r=r, s=s))
+        #         t1_Slater_ratio = time()
+        #         t_Slater_ratio += t1_Slater_ratio - t0_Slater_ratio
 
-                E_kin_loc += wi * ratio
-            else:
-                ratio = 1.0 # <alpha/psi> / <alpha/psi> = 1
+        #         E_kin_loc += wi * ratio
+        #     else:
+        #         ratio = 1.0 # <alpha/psi> / <alpha/psi> = 1
 
-            eng_i = wi * ratio
+        #     eng_i = wi * ratio
 
-            # ==============================================
-            # assert np.isclose( (psi_func(config_i) / psi_loc), ratio ), "Error: ratio1= %16.8f, ratio2 = %16.8f" % (psi_func(config_i) / psi_loc, ratio)
-            # Alternative approach:
-            # Recalculate wave function aplitude for each connecting state 
-            # without using low-rank update. 
-            # eng_i = wi * (psi_func(config_i) / psi_loc) 
-            # ==============================================
-            acc += eng_i
-        t1_onehop = time()
-        t_onehop = t1_onehop - t0_onehop
+        #     # ==============================================
+        #     # assert np.isclose( (psi_func(config_i) / psi_loc), ratio ), "Error: ratio1= %16.8f, ratio2 = %16.8f" % (psi_func(config_i) / psi_loc, ratio)
+        #     # Alternative approach:
+        #     # Recalculate wave function aplitude for each connecting state 
+        #     # without using low-rank update. 
+        #     # eng_i = wi * (psi_func(config_i) / psi_loc) 
+        #     # ==============================================
+        #     acc += eng_i
+        # t1_onehop = time()
+        #t_onehop = t1_onehop - t0_onehop
 
-        print("E_kin_loc=", E_kin_loc)
-
-        print("t_kin=", t_kin)
-        print("t_OBDM=", t_OBDM)
-        print("t_Slater_ratio=", t_Slater_ratio)
-        print("t_onehop=", t_onehop, "num_connecting_states=", len(connecting_states_I))
+        t1_onehop_lowrank = time()
+        E_kin_loc = ansatz.lowrank_kinetic(I_ref=I, psi_loc=psi_loc, lattice=self.lattice)
+        t2_onehop_lowrank = time()
+        t_onehop_lowrank = t2_onehop_lowrank - t1_onehop_lowrank
+        # print("====================")
+        #print("E_kin_loc=", E_kin_loc)
+        #print("E_kin_loc=", E_kin_loc)
+        #print("====================")
+        # print("t_kin=", t_kin)
+        #print("t_OBDM=", t_OBDM)
+        #print("t_Slater_ratio=", t_Slater_ratio)
+        #print("t_onehop=", t_onehop, "num_connecting_states=", len(connecting_states_I))
+        #print("t_onehop_lowrank=", t_onehop_lowrank)
         
-        return acc
+        return E_kin_loc + nn_int
+
+        # return acc
 
 
 
@@ -416,7 +424,6 @@ def vmc_measure(local_measure, sample_list, num_bin=50):
     # measurements
     energy_loc_list, grad_loc_list = [], []
     for i, config in enumerate(sample_list):
-        print("i=", i)
         # back-propagation is used to get gradients.
         energy_loc, grad_loc = local_measure([config]) # ansatz.psi requires batch dim
         energy_loc_list.append(energy_loc)

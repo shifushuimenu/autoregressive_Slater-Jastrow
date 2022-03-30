@@ -91,9 +91,9 @@ def _checkpoint(VMCmodel):
 
 
 
-max_iter = 2 # 1000 
-Nsites = 10 # 10
-Nparticles = 5 # 5
+max_iter = 1000 
+Nsites = 20 # 10
+Nparticles = 10 # 5
 Vint = 5.0
 
 

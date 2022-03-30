@@ -5,6 +5,12 @@ import numpy as np
 from torch.distributions.categorical import Categorical
 from bitcoding import bin2pos, int2bin
 
+#for lowrank_kinetic()
+from time import time 
+from k_copy import calc_k_copy
+from monitoring import logger 
+import lowrank_update as LR
+
 from profilehooks import profile
 
 class SlaterDetSampler_ordered(torch.nn.Module):
@@ -292,7 +298,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         return 2 * torch.log(torch.abs(self.psi_amplitude(samples)))
 
 
-    def lowrank_kinetic(self, ref_I, xs_I, rs_pos):
+    def lowrank_kinetic(self, ref_I, xs_I, rs_pos, print_stats=False):
         """
         Probability density estimation on states connected to I_ref by the kinetic operator `kinetic_operator`,
         given the Slater-Jastrow ansatz. 
@@ -316,12 +322,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         probabilities coming from MADE. -> normalize -> obtain cond. probs. at actually sampled positions
         -> ratios <beta|psi> / <alpha|psi> -> local kinetic energy for state |alpha> (no backpropagation required). )
         """
-        from time import time 
-        from k_copy import calc_k_copy
-        from monitoring import logger 
-        import lowrank_update as LR
 
-        # CAREFUL
+        # The kinetic energy does not need to be backpropagated. 
         GG = self.G.detach().numpy()
 
         # normalization needs to be satisfied up to 
@@ -390,7 +392,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         assert type(occ_vec) == type(list()) # use a list, otherwise `occ_vec[0:xmin] + [1]` will result in `[]`. 
         pos_vec = bin2pos(ref_conf)
 
-        xs = np.array(xs) # convert list of arrays into 2D array 
         xs_pos = bin2pos(xs)
 
         # Needed for long-range hopping in 2D. 
@@ -399,8 +400,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # is referring to the particle numbers in the reference state. 
         k_s = [np.searchsorted(xs_pos[state_nr, :], rs_pos[state_nr][1]) for state_nr in range(num_onehop_states)]
         k_r = [np.searchsorted(xs_pos[state_nr, :], rs_pos[state_nr][0]) for state_nr in range(num_onehop_states)]
-
-        print("ref_conf=", ref_conf, "ref_I=", ref_I)
 
         for k in range(self.N):
             # Calculate the conditional probabilities for the k-th particle (for all onehop states 
@@ -467,7 +466,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 # and `Gdenom`.
                 t0_conn = time()
                 for state_nr, (k_copy_, (r,s)) in enumerate(onehop_info):
-                    print("k=", k, "state_nr=", state_nr, "xs[state_nr]=", xs[state_nr])
                     if k_copy_ >= k:
                         # Copy conditional probabilities rather than calculating them.
                         # Exit the loop; it is assumed that onehop states are ordered according to increasing values 
@@ -695,7 +693,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 t1_conn = time()
                 logger.info_refstate.elapsed_connecting_states += (t1_conn - t0_conn)                    
 
-        logger.info_refstate.print_summary()
+        if print_stats:
+            logger.info_refstate.print_summary()
                 
         _copy_cond_probs(cond_prob_ref, cond_prob_onehop, onehop_info)
 
