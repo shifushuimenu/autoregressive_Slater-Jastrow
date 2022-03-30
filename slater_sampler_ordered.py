@@ -589,7 +589,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                             continue
 
                                         if k==(k_copy_+1):
-                                            Gdenom_inv_, corr1 = LR.adapt_Gdenom_inv(Gdenom_inv, Gglobal=G, r=r, s=s)
+                                            Gdenom_inv_, corr1 = LR.adapt_Gdenom_inv(Gdenom_inv, Gglobal=GG, r=r, s=s)
                                             # Now Gdenom_inv_ still has a particle at position s and (!) r. 
                                             corr2 = LR.corr_factor_remove_r(Gdenom_inv_, r=r)
                                             corr_factor_Gdenom = corr1 * corr2                                

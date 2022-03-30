@@ -127,6 +127,7 @@ class PhysicalSystem(object):
         elif D == 2:
             self.lattice = Lattice_rectangular(nx, ny)    
 
+    @profile
     def local_energy(self, config, psi_loc, ansatz):
         '''
         Local energy of periodic 1D or 2D t-V model
@@ -331,6 +332,7 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
     return ( hop_from_to, I_prime, matrix_elem )
 
 
+@profile
 def kinetic_term2( I, lattice, t_hop=1.0 ):
     """
         NO BATCH DIMENSION. 
@@ -405,9 +407,7 @@ def kinetic_term2( I, lattice, t_hop=1.0 ):
 
 
 
-#@profile
-
-#@profile
+@profile
 def vmc_measure(local_measure, sample_list, num_bin=50):
     '''
     perform measurements on samples
@@ -497,7 +497,7 @@ class VMCKernel(object):
         config = np.array(config)
         return self.ansatz.prob(config)
 
-    #@profile
+    @profile
     def local_measure(self, config):
         '''
         get local quantities energy_loc, grad_loc.
