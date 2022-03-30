@@ -33,7 +33,7 @@ def fermion_parity( n, state_idx, i, j ):
     Parameters:
     -----------
         n: number of sites   
-        state_idx: int or 1d array_like of ints 
+            state_idx: int or 1d array_like of ints 
             bitcoded occupation number state 
         i, j: ints
             0 <= i < j < n. The particle is assumed to hop from i to j or from j to i,
@@ -127,7 +127,7 @@ class PhysicalSystem(object):
         elif D == 2:
             self.lattice = Lattice_rectangular(nx, ny)    
 
-    @profile
+    #@profile
     def local_energy(self, config, psi_loc, ansatz):
         '''
         Local energy of periodic 1D or 2D t-V model
@@ -203,10 +203,10 @@ class PhysicalSystem(object):
         # t1_onehop = time()
         #t_onehop = t1_onehop - t0_onehop
 
-        t1_onehop_lowrank = time()
+        #t1_onehop_lowrank = time()
         E_kin_loc = ansatz.lowrank_kinetic(I_ref=I, psi_loc=psi_loc, lattice=self.lattice)
-        t2_onehop_lowrank = time()
-        t_onehop_lowrank = t2_onehop_lowrank - t1_onehop_lowrank
+        #t2_onehop_lowrank = time()
+        #t_onehop_lowrank = t2_onehop_lowrank - t1_onehop_lowrank
         # print("====================")
         #print("E_kin_loc=", E_kin_loc)
         #print("E_kin_loc=", E_kin_loc)
@@ -332,7 +332,7 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
     return ( hop_from_to, I_prime, matrix_elem )
 
 
-@profile
+#@profile
 def kinetic_term2( I, lattice, t_hop=1.0 ):
     """
         NO BATCH DIMENSION. 
@@ -407,8 +407,8 @@ def kinetic_term2( I, lattice, t_hop=1.0 ):
 
 
 
-@profile
-def vmc_measure(local_measure, sample_list, num_bin=50):
+#@profile
+def vmc_measure(local_measure, sample_list, sample_probs, num_bin=50):
     '''
     perform measurements on samples
 
@@ -424,6 +424,7 @@ def vmc_measure(local_measure, sample_list, num_bin=50):
     # measurements
     energy_loc_list, grad_loc_list = [], []
     for i, config in enumerate(sample_list):
+        print("sample nr=", i)
         # back-propagation is used to get gradients.
         energy_loc, grad_loc = local_measure([config]) # ansatz.psi requires batch dim
         energy_loc_list.append(energy_loc)
@@ -497,7 +498,7 @@ class VMCKernel(object):
         config = np.array(config)
         return self.ansatz.prob(config)
 
-    @profile
+    #@profile
     def local_measure(self, config):
         '''
         get local quantities energy_loc, grad_loc.
@@ -545,9 +546,11 @@ if __name__ == "__main__":
     SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)
 
     sample_list = np.zeros((num_samples, Nsites)) # a numpy array
+    sample_probs = np.zeros((num_samples,))
     for i in range(num_samples):
         sample_unfolded, sample_prob = SJA.sample_unfolded()
         sample_list[i] = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
+        sample_probs[i] = sample_prob
         print("amplitude=", SJA.psi_amplitude([sample_list[i]]))
         exit(1)
     print("SJ.sample()", sample_list)
@@ -566,5 +569,5 @@ if __name__ == "__main__":
     e_loc, grad_loc = VMC.local_measure([[0,1,0,0,1]])
 
     energy, gradient_mean, energy_gradient, energy_precision = vmc_measure(
-        VMC.local_measure, sample_list, num_bin=10)
+        VMC.local_measure, sample_list, sample_probs, num_bin=10)
 

@@ -34,14 +34,16 @@ def train(VMCmodel, learning_rate, num_samples=100, use_cuda=False):
         # get expectation values for energy, gradient and their product,
         # as well as the precision of energy.        
         sample_list = np.zeros((num_samples, Nsites)) 
+        sample_probs = np.zeros((num_samples,))
         print("before sampling")
         with torch.no_grad():
             for i in range(num_samples):
                 sample_unfolded, sample_prob = VMCmodel.ansatz.sample_unfolded()
+                sample_probs[i] = sample_prob
                 sample_list[i] = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
 
         print("before vmc_measure")
-        energy, grad, energy_grad, precision = vmc_measure(VMCmodel.local_measure, sample_list, num_bin=50)
+        energy, grad, energy_grad, precision = vmc_measure(VMCmodel.local_measure, sample_list, sample_probs, num_bin=50)
 
         # update variables using stochastic gradient descent
         g_list = [eg - energy * g for eg, g in zip(energy_grad, grad)]
@@ -92,8 +94,8 @@ def _checkpoint(VMCmodel):
 
 
 max_iter = 1000 
-Nsites = 20 # 10
-Nparticles = 10 # 5
+Nsites = 25 # Nsites = 64 => program killed because it is using too much memory
+Nparticles = 12
 Vint = 5.0
 
 
@@ -103,7 +105,7 @@ Vint = 5.0
 Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)
 
-phys_system = PhysicalSystem(nx=Nsites//4, ny=4, ns=Nsites, np=Nparticles, D=2, Vint=Vint)
+phys_system = PhysicalSystem(nx=5, ny=5, ns=Nsites, np=Nparticles, D=2, Vint=Vint)
 VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
 del SJA
 

@@ -78,7 +78,7 @@ class SlaterJastrow_ansatz(selfMADE):
 
         self.slater_sampler = slater_sampler
         
-    @profile
+    #@profile
     def sample(self):
         sample_unfolded, prob_sample = self.sample_unfolded()
         return occ_numbers_collapse(sample_unfolded, self.D)
@@ -159,7 +159,7 @@ class SlaterJastrow_ansatz(selfMADE):
 
         return x_out, prob_sample
 
-    @profile 
+    #@profile 
     def log_prob(self, samples):
         """
             Logarithm of the amplitude squared of the wave function on an 
