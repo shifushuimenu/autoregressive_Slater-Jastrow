@@ -99,13 +99,14 @@ Nparticles = 12
 Vint = 5.0
 
 
+phys_system = PhysicalSystem(nx=5, ny=5, ns=Nsites, np=Nparticles, D=2, Vint=Vint)
+
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
-(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=False, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
+(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
 Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)
 
-phys_system = PhysicalSystem(nx=5, ny=5, ns=Nsites, np=Nparticles, D=2, Vint=Vint)
 VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
 del SJA
 
