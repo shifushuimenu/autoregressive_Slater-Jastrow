@@ -318,6 +318,11 @@ class SlaterJastrow_ansatz(selfMADE):
 
         Except in the input to net.forward(), where a torch tensor is used, numpy arrays 
         are used throughout since it is not necessary to backpropagate the kinetic energy.  
+
+                          \sum_b < a | H_kin | b > sqrt(| < b | \psi > |^2) * sign(< b | psi > / < a | psi >)
+        E_kin_loc(a)  =  -------------------------------------------------------------------------------------
+                                                sqrt(| < a | \psi > |^2)
+
         """
         # Later move imports to the top of the file 
         from k_copy import sort_onehop_states 

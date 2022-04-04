@@ -142,14 +142,9 @@ class PhysicalSystem(object):
         Returns:
         number: local energy <config|H|psi> / <config|psi>
         '''
-        # t0_kin = time()
         config = np.array(config).astype(int)
         assert len(config.shape) > 1 and config.shape[0] == 1 # just one sample per batch
         I = bin2int_nobatch(config[0])
-        # hop_from_to, connecting_states_I, kin_matrix_elements = sort_onehop_states(*kinetic_term2(I, self.lattice))
-        # connecting_states = int2bin(connecting_states_I, ns=self.ns)
-    
-        # wl, states, from_to = [], [], []
 
         # diagonal matrix element: nearest neighbour interactions
         Enn_int = 0.0
