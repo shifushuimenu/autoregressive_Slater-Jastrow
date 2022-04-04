@@ -115,7 +115,8 @@ def fermion_parity2(n, state_idx, i, j):
 # Just for testing purposes
 
 class PhysicalSystem(object):
-    """holds system parameters such as lattice, interaction strength etc."""
+    """holds system parameters such as lattice, interaction strength etc.
+       for a hypercubic system"""
     def __init__(self, nx, ny, ns, np, D, Vint):
         self.nx = nx; self.ny = ny
         assert ns == nx*ny
@@ -125,7 +126,7 @@ class PhysicalSystem(object):
         if D == 1:
             self.lattice = Lattice1d(ns=self.nx)
         elif D == 2:
-            self.lattice = Lattice_rectangular(nx, ny)    
+            self.lattice = Lattice_rectangular(self.nx, self.ny)    
 
     #@profile
     def local_energy(self, config, psi_loc, ansatz):
@@ -151,7 +152,10 @@ class PhysicalSystem(object):
         # wl, states, from_to = [], [], []
 
         # diagonal matrix element: nearest neighbour interactions
-        nn_int = self.Vint * (np.roll(config, shift=-1) * config).sum(axis=-1).item()
+        Enn_int = 0.0
+        config_2D = config[0].reshape((self.nx, self.ny))
+        for nd in range(self.lattice.coord // 2):
+            Enn_int += ( np.roll(config_2D, shift=-1, axis=nd) * config_2D ).sum() 
 
         # wl.append(nn_int)
         # states.append(config)
@@ -205,19 +209,8 @@ class PhysicalSystem(object):
 
         #t1_onehop_lowrank = time()
         E_kin_loc = ansatz.lowrank_kinetic(I_ref=I, psi_loc=psi_loc, lattice=self.lattice)
-        #t2_onehop_lowrank = time()
-        #t_onehop_lowrank = t2_onehop_lowrank - t1_onehop_lowrank
-        # print("====================")
-        #print("E_kin_loc=", E_kin_loc)
-        #print("E_kin_loc=", E_kin_loc)
-        #print("====================")
-        # print("t_kin=", t_kin)
-        #print("t_OBDM=", t_OBDM)
-        #print("t_Slater_ratio=", t_Slater_ratio)
-        #print("t_onehop=", t_onehop, "num_connecting_states=", len(connecting_states_I))
-        #print("t_onehop_lowrank=", t_onehop_lowrank)
         
-        return E_kin_loc + nn_int
+        return E_kin_loc + self.Vint * Enn_int
 
         # return acc
 
@@ -228,6 +221,8 @@ class Lattice1d(object):
     """1d lattice with pbc"""
     def __init__(self, ns=4):
         self.ns = ns 
+        self.nx = ns
+        self.ny = 1
         self.coord = 2 
         self.neigh = np.zeros((self.ns, self.coord), dtype='object')
         # left neighbours 
@@ -535,14 +530,14 @@ if __name__ == "__main__":
 
     _test()
 
-    Nparticles = 2
-    Nsites = 5
+    Nparticles = 8
+    Nsites = 16
     num_samples = 1000
     (_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none')
 
     # Aggregation of MADE neural network as Jastrow factor 
     # and Slater determinant sampler. 
-    Sdet_sampler = SlaterDetSampler_ordered(eigvecs, Nparticles=Nparticles)
+    Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs)
     SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)
 
     sample_list = np.zeros((num_samples, Nsites)) # a numpy array

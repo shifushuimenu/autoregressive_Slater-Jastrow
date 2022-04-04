@@ -1,5 +1,7 @@
 """low-rank update of the determinant of numerator and denominator matrices (used 
 in the algorithm for ordered componentwise direct sampling from a Slater determinant"""
+#IMPROVE: The functions removeadd_rs(), remove_r(), etc. can have division 
+# by zero. This gives only a runtime warning, but it should be dealt with.
 import numpy as np
 
 from block_update_numpy import ( block_update_inverse,
@@ -56,13 +58,13 @@ def adapt_Gdenom(Gnum, r, s):
     G[s,s] = G[s,s] - 1
     return G
 
-
+# NOT NEEDED ANYMORE 
 def adapt_Ainv(Ainv, Gglobal, r, s, i_start, i_end):
     """
     Extend inverse of numerator or denominator matrix from position `i_start` (inclusive)
     up to position `i_end` (inclusive) and put a particle at position `i_end`.
     """
-    #assert r == 0 # long-range hopping in 1D 
+    #assert r == 0 # r != 0 in case of long-range hopping in 1D 
     assert Ainv.shape == (i_start, i_start), "Ainv.shape=(%d, %d) and i_start = %d" % (*Ainv.shape, i_start)
     assert i_start <= i_end
 
@@ -78,7 +80,30 @@ def adapt_Ainv(Ainv, Gglobal, r, s, i_start, i_end):
         C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD
         )
     return Ainv_extended, corr
+# NOT NEEDED ANYMORE     
     
+
+def corr_factor_Gdenom_from_Ainv(Ainv, Gglobal, r, s, i_start, i_end):
+    """
+    Extend inverse of numerator or denominator matrix from position `i_start` (inclusive)
+    up to position `i_end` (inclusive) and put a particle at position `i_end`.
+    """
+    #assert r == 0 # r != 0 in case of long-range hopping in 1D 
+    assert Ainv.shape == (i_start, i_start), "Ainv.shape=(%d, %d) and i_start = %d" % (*Ainv.shape, i_start)
+    assert i_start <= i_end
+
+    # put a particle at position `i_end`
+    l = i_end+1-i_start
+    DD = np.zeros((l, l))
+    DD[-1, -1] = -1    
+
+    corr_factor = block_update_det_correction2(
+        Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
+        C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD
+        )
+
+    return corr_factor
+
 
 def adapt_Ainv_sing(Gdenom_inv, Gglobal, r, s, i_start, i_end, pos1, pos2):
     """
@@ -195,6 +220,13 @@ def corr3_Gnum_from_Gdenom(Gdenom_inv_, Gglobal, r, s, xmin, i):
     S = Dcopy - np.matmul(np.matmul(C, Ainv), B)
     det_Schur = np.linalg.det(S)
 
+    # How close to zero must det(S) be so that inv(S) throws the error "Singular matrix" ?
+    # This is not clear to me. 
+    try:
+        invS = np.linalg.inv(S)
+    except np.linalg.LinAlgError as e:
+        det_Schur = 0.0
+        return det_Schur, 0.0 
     # Calculate the inverse of the block matrix. The needed correction factor 
     # to the determinant is given just by a single element
     #       corr_factor_remove_r =   (1 + Ainv_new[r,r])).

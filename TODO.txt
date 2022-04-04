@@ -1,9 +1,9 @@
 [ ] symmetry projection 
 
-[ ] in kinetic_term(): 
-    M[...] = 2**i + 2**j => too large ints cannot be represented by C-long 
+[x] in kinetic_term(): 
+[x]    M[...] = 2**i + 2**j => too large ints cannot be represented by C-long 
 
-[ ] direct sampling from a Pfaffian ansatz 
+[x] direct sampling from a Pfaffian ansatz 
 
 [ ] speed up bitcoding using bitarray.py  
 
@@ -11,7 +11,7 @@
 
 [ ] argparse 
 
-[ ] When computing the local energy, the ratio of amplitudes for two very similar states is required,
+[x] When computing the local energy, the ratio of amplitudes for two very similar states is required,
     which differ only by one electron position. Still, both configurations must be passed through 
     the neural network. This is the 4fficiency bottleneck. Is it possible to evaluate only part of the 
     neural network ? Is it possible to take the gradient wth respect to the inputs and then calculate 
@@ -27,7 +27,7 @@
               kinetic operator along the way. These are O(Nsites) states. (Note that the hopping matrix element could 
               be bond-dependent.) Output: (sample, sample_prob, local_kinetic_energy) 
 
-[ ] verify speedup of advanced update of slater sampler  
+[x] verify speedup of advanced update of slater sampler  
 
 [ ] How can a Pfaffian be expanded in terms of Slater determinants ?
 
@@ -41,3 +41,8 @@
 [ ] Exact diagonalization and Slater-Jastrow ansatz give the same result as long as the Hartree-Fock 
     ansatz used as the Slater determinant is for a closed-shell system. How to deal with degeneracies
     in the Hartree-Fock spectrum ?  
+
+[ ] Singular matrices in lowrank_kinetic(). What is the root cause ? Is there a connection with degeneracies in the Hartree-Fock spectrum ? 
+Could the problem be solved by adding invertibility noise ?  
+
+[ ] Check division by zero in slater_sampler_ordered.py:535 (549, 691)

@@ -60,7 +60,7 @@ def block_update_inverse2(Ainv, B, C, D):
     assert np.isclose(C, B.transpose(-1,-2)).all()
 
     AinvB = np.matmul(Ainv, B)
-    S = D - np.matmul(C, AinvB)
+    S = D - np.matmul(C, AinvB)  # Schur complement of A in M
     Sinv = np.linalg.inv(S)
 
     Ablock = Ainv + np.matmul(np.matmul(AinvB, Sinv), AinvB.transpose())
@@ -111,5 +111,5 @@ def block_update_det_correction2(Ainv, B, C, D):
     assert np.isclose(C, B.transpose(-1,-2)).all()
 
     AinvB = np.matmul(Ainv, B)
-    corr = D - np.matmul(C, AinvB)
-    return np.linalg.det(corr)    
+    S = D - np.matmul(C, AinvB)
+    return np.linalg.det(S)  # determinant of the Schur complement

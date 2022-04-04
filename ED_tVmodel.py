@@ -2,19 +2,26 @@
 
 import numpy as np
 from bitcoding import *
-from Slater_Jastrow_simple import ( kinetic_term, 
-    Lattice1d )
+from Slater_Jastrow_simple import ( kinetic_term2, 
+    Lattice1d, Lattice_rectangular )
 from scipy.special import binom 
 
 import matplotlib.pyplot as plt 
 
-Ns = 20 # 13
-Np = 10 #5
+
+t_hop = 1.0 # t_hop > 0, since kinetic_term() provides already a minus sign 
+V_nnint = 5.0
+
+Nx = 3
+Ny = 3
+Ns = Nx*Ny # 13
+Np = 4 #5
 
 
 dimH = int(binom(Ns, Np))
 print("dimH=", dimH)
-lattice = Lattice1d(ns=Ns)
+#lattice = Lattice1d(ns=Ns)
+lattice = Lattice_rectangular(Nx, Ny)
 
 # build the basis 
 basis_dict = {}
@@ -37,30 +44,26 @@ assert(np.all([ invbasis_dict[int(bin2int(basis_dict[ii]))] == ii for ii in rang
 # build the Hamiltonian 
 Hamiltonian_tV = np.zeros((dimH, dimH))
 
-t_par = 1.0 # t_par > 0, since kinetic_term() provides already a minus sign 
-V_par = 5.0
 
 # kinetic term
 H_kin = np.zeros((dimH, dimH))
 for s1 in range(dimH):
     I1 = bin2int(basis_dict[s1])
-    _, I_primes, matrix_elems = kinetic_term([I1], lattice) # kinetic_term() requires batch dim
-    # remove batch dimension
-    I_primes = I_primes[0]; matrix_elems = matrix_elems[0]
-    # filter non-zero matrix elements 
-    idx = matrix_elems.nonzero()[0]
-    matrix_elems = matrix_elems[idx]
-    I_primes = I_primes[idx]
+    _, I_primes, matrix_elems = kinetic_term2(int(I1), lattice) # kinetic_term() requires batch dim
     for (I2, me) in zip(I_primes, matrix_elems):
         s2 = invbasis_dict[I2]
-        H_kin[s1, s2] = t_par * me 
+        H_kin[s1, s2] = t_hop * me 
         
 # interaction term 
 H_int = np.zeros((dimH, dimH))
 for ii in range(dimH):
     config = basis_dict[ii]
-    ww = V_par * (np.roll(config, shift=-1) * config).sum(axis=-1)
-    H_int[ii,ii] = ww
+    config_2D = config.reshape((lattice.nx, lattice.ny))
+    Enn_int = 0.0
+    for nd in range(lattice.coord // 2):
+        Enn_int += ( np.roll(config_2D, shift=-1, axis=nd) * config_2D ).sum() 
+    #ww = V_nnint * (np.roll(config, shift=-1) * config).sum(axis=-1)
+    H_int[ii,ii] = V_nnint * Enn_int
 
 Hamiltonian_tV = H_kin + H_int
 
@@ -90,7 +93,7 @@ for ii in range(dimH):
         corr_[k] = (np.roll(config_sz, shift=-k) * config_sz).sum(axis=-1) / Ns
     szsz_corr[:] += corr_[:] * abs(GS[ii])**2
 
-np.savetxt('ED_szsz_corr_Ns%dNp%dV%4.4f.dat' % (Ns, Np, V_par), szsz_corr[:, None])
+np.savetxt('ED_szsz_corr_Ns%dNp%dV%4.4f.dat' % (Ns, Np, V_nnint), szsz_corr[:, None])
 
 plt.plot(range(Ns), szsz_corr[:], '--r')
 plt.show()

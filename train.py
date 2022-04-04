@@ -6,7 +6,7 @@ from Slater_Jastrow_simple import *
 from slater_sampler_ordered import SlaterDetSampler_ordered
 import time
 import matplotlib.pyplot as plt
-from test_suite import prepare_test_system_zeroT
+from test_suite import prepare_test_system_zeroT, HartreeFock_tVmodel
 
 torch.set_default_dtype(default_dtype_torch)
 torch.autograd.set_detect_anomaly(True)
@@ -94,23 +94,24 @@ def _checkpoint(VMCmodel):
 
 
 max_iter = 1000 
-Nsites = 25 # Nsites = 64 => program killed because it is using too much memory
-Nparticles = 12
-Vint = 5.0
+Nsites = 9 # Nsites = 64 => program killed because it is using too much memory
+Nparticles = 4
+Vint = 2.5
 
 
-phys_system = PhysicalSystem(nx=5, ny=5, ns=Nsites, np=Nparticles, D=2, Vint=Vint)
+phys_system = PhysicalSystem(nx=3, ny=3, ns=Nsites, np=Nparticles, D=2, Vint=Vint)
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
-(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
+(_, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none")
+#(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
 Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)
 
 VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
 del SJA
 
-E_exact =  -2.9774135797163597 #-3.3478904193465335
+E_exact = 0.4365456400025272 #-3.248988339062832 # -2.9774135797163597 #-3.3478904193465335
 
 t0 = time.time()
 for i, (energy, precision) in enumerate(train(VMCmodel_, learning_rate = 0.1, num_samples=100, use_cuda = use_cuda)):

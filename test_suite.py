@@ -95,6 +95,68 @@ def generate_random_config(Ns, Np):
     return config
 
 
+def HartreeFock_tVmodel(phys_system, potential='none'):
+    """
+    Returns single-particle eigenstates of the Hartree-Fock solution of a 
+    t-V model on a cubic lattice specified by `phys_system`. 
+    """
+    ns = phys_system.ns
+    num_particles = phys_system.np
+    nx = phys_system.nx
+    ny = phys_system.ny
+    lattice = phys_system.lattice
+    Vint = phys_system.Vint
+    
+    t_hop = 1.0
+    
+    if potential == 'none':
+        V_pot = np.zeros((ns,))
+    else:
+        raise NotImplementedError
+    
+    H_kin = np.zeros((ns, ns), dtype=np.float64)
+    for i in range(ns):
+        for nd in range(lattice.coord // 2): # only valid for cubic lattice 
+            j = lattice.neigh[i, nd]
+            H_kin[i,j] = -t_hop
+            H_kin[j,i] = -t_hop
+
+    eigvals, U = linalg.eigh(H_kin) 
+    # BEGIN: Hartree-Fock self-consistency loop 
+    converged = False 
+    counter = 0
+    OBDM = np.zeros((ns, ns))
+    while not converged: 
+        counter += 1 
+        H_HF = H_kin.copy()        
+        for i in range(ns):
+            H_HF[i,i] = V_pot[i] 
+            for nd in range(lattice.coord // 2): # only valid for cubic lattice 
+                j = lattice.neigh[i, nd]
+                H_HF[i,i] += Vint*OBDM[j,j]
+                H_HF[i,j] = -t_hop - Vint*OBDM[j,i]
+                H_HF[j,i] = -t_hop - Vint*OBDM[i,j]
+
+        eigvals, U = linalg.eigh(H_HF)
+        print("min(eigvals)=", min(eigvals))
+        print(eigvals[0:num_particles+1])
+        OBDM_new = Slater2spOBDM(U[:, 0:num_particles])
+
+        if np.all(np.isclose(OBDM_new, OBDM, rtol=1e-8)) or counter == 1000: 
+            converged = True
+            print("converged:")
+            print("OBDM_new=", OBDM_new)
+            print("g.s. energy=", np.sum(eigvals[0:num_particles]) / float(num_particles))
+        else:
+            OBDM = OBDM_new
+    # END: Hartree-Fock 
+
+    eigvals, U = linalg.eigh(H_HF)
+
+    return (ns, U)
+    
+    
+
 def prepare_test_system_zeroT(Nsites=21, potential='parabolic', PBC=True, HF=True, Nparticles=0, Vnnint=0.0):
     """
     One-dimensional system of free fermions with Nsites sites
@@ -156,6 +218,7 @@ def prepare_test_system_zeroT(Nsites=21, potential='parabolic', PBC=True, HF=Tru
             if np.all(np.isclose(OBDM_new, OBDM, rtol=1e-4)) or counter == 1000: 
                 converged = True
                 print("converged:")
+                print("g.s. energy=", np.sum(eigvals[0:Nparticles]))
                 #print("OBDM_initial=", np.diag(OBDM_initial))
                 #print("OBDM = ", np.diag(OBDM))
                 #print("OBDM_new = ", np.diag(OBDM_new))
