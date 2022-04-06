@@ -70,7 +70,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
            self.P = nn.Parameter(torch.rand(self.D, self.N, requires_grad=True)) # leaf Variable, updated during SGD; columns are not (!) orthonormal 
            self.reortho_orbitals()  # orthonormalize columns 
 
-
+        self.cond_max = 0.0
         # timing 
         self.t_fetch_memory = 0.0
         self.t_matmul = 0.0
@@ -405,6 +405,12 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 Xinv_new = torch.vstack(( torch.hstack((Ablock, Bblock)), torch.hstack((Cblock, Dblock)) ))  # np.block([[Ablock, Bblock], [Cblock, Dblock]])
                 self.Xinv = Xinv_new
 
+                # REMOVE
+                cond = np.linalg.cond(Xinv_new)
+                if cond > self.cond_max:
+                    self.cond_max = cond
+                    print("cond_max=", self.cond_max)
+
 
         self.state_index += 1 
 
@@ -495,7 +501,7 @@ if __name__ == "__main__":
     for L in (200,): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
         (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=L, potential='none', PBC=True, HF=True)
         Nparticles = 100 #L//2
-        num_samples = 1 # 1000
+        num_samples = 5 # 1000
 
         #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
         #SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)

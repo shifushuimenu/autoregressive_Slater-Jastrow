@@ -38,8 +38,8 @@ def bin2int_nobatch(bin_array):
     bin_array = bin_array[::-1]
     int_ = 0
     for i in range(bin_array.shape[-1]):
-        int_ = (int_ << 1) | bin_array[i]
-    return int(int_)
+        int_ = (int_ << 1) | int(bin_array[i])
+    return int_
 
 
 def bin2int_nobatch_v2(bin_array):

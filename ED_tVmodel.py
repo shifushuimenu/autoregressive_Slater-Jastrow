@@ -10,18 +10,18 @@ import matplotlib.pyplot as plt
 
 
 t_hop = 1.0 # t_hop > 0, since kinetic_term() provides already a minus sign 
-V_nnint = 5.0
+V_nnint = 3.0
 
-Nx = 3
-Ny = 3
+Nx = 8
+Ny = 1
 Ns = Nx*Ny # 13
 Np = 4 #5
 
 
 dimH = int(binom(Ns, Np))
 print("dimH=", dimH)
-#lattice = Lattice1d(ns=Ns)
-lattice = Lattice_rectangular(Nx, Ny)
+lattice = Lattice1d(ns=Ns)
+#lattice = Lattice_rectangular(Nx, Ny)
 
 # build the basis 
 basis_dict = {}

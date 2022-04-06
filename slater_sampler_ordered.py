@@ -421,28 +421,38 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 # don't waste memory
                 Gnum_inv_reuse[k-2].clear()
 
+            Gdenom = GG[np.ix_(Ksites, Ksites)] - np.diag(occ_vec[0:len(Ksites)])
+
+            # In production runs use flag -O to suppress asserts and 
+            # __debug__ sections. 
+            if __debug__:
+                if Gdenom.shape[0] > 0:
+                    cond = np.linalg.cond(Gdenom)
+                    if cond > logger.info_refstate.Gdenom_cond_max:
+                        logger.info_refstate.Gdenom_cond_max = cond 
+                        print("Gdenom_cond_max=", logger.info_refstate.Gdenom_cond_max)            
+            
+            det_Gdenom = np.linalg.det(Gdenom)
+
+            # Internal state used during low-rank update of conditional probabilities 
+            # of the connnecting states. 
+            Gdenom_inv = np.linalg.inv(Gdenom)
+
+            # Needed for low-rank update for onehop states differing from the reference 
+            # state by long-range hopping between positions r and s. 
+            # (It is important the quantities that are to be reused are only taken from the reference 
+            # state since quantities taken from a onehop state would be overwritten by other onehop states.)
+            Gdenom_inv_reuse[k] = Gdenom_inv # does not depend on i 
+            det_Gdenom_reuse[k] = det_Gdenom # does not depend on i
+
             for ii, i in enumerate(range(xmin, xmax)):
                 t0=time()
                 # reference state        
                 Ksites_add += [i]
                 occ_vec_add = occ_vec[0:xmin] + [0]*ii + [1]
                 Gnum = GG[np.ix_(Ksites_add, Ksites_add)] - np.diag(occ_vec_add)
-                Gdenom = GG[np.ix_(Ksites, Ksites)] - np.diag(occ_vec[0:len(Ksites)])
-
-                # In production runs use flag -O to suppress asserts and 
-                # __debug__ sections. 
-                if __debug__:
-                    if Gdenom.shape[0] > 0:
-                        cond = np.linalg.cond(Gdenom)
-                        if cond > logger.info_refstate.Gdenom_cond_max:
-                            logger.info_refstate.Gdenom_cond_max = cond 
-                            print("Gdenom_cond_max=", logger.info_refstate.Gdenom_cond_max)            
 
                 det_Gnum = np.linalg.det(Gnum)
-                det_Gdenom = np.linalg.det(Gdenom)
-
-                # Internal state used during low-rank update of conditional probabilities 
-                # of the connnecting states. 
 
                 # In case a cond. prob. of the reference state is zero:
                 try:    
@@ -450,14 +460,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 except np.linalg.LinAlgError as e:
                     print("ERROR: det_Gnum=%16.12f\n" % (det_Gnum), e)
                     exit(1)
-                Gdenom_inv = np.linalg.inv(Gdenom)
 
-                # Needed for low-rank update for onehop states differing from the reference 
-                # state by long-range hopping between positions r and s. 
-                # (It is important the quantities that are to be reused are only taken from the reference 
-                # state since quantities taken from a onehop state would be overwritten by other onehop states.)
-                Gdenom_inv_reuse[k] = Gdenom_inv # does not depend on i 
-                det_Gdenom_reuse[k] = det_Gdenom # does not depend on i
                 Gnum_inv_reuse[k][i] = Gnum_inv
 
                 cond_prob_ref[k, i] = (-1) * det_Gnum / det_Gdenom

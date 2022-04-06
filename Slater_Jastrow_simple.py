@@ -117,11 +117,14 @@ def fermion_parity2(n, state_idx, i, j):
 class PhysicalSystem(object):
     """holds system parameters such as lattice, interaction strength etc.
        for a hypercubic system"""
-    def __init__(self, nx, ny, ns, np, D, Vint):
+    def __init__(self, nx, ny, ns, num_particles, D, Vint):
         self.nx = nx; self.ny = ny
         assert ns == nx*ny
         self.ns = nx*ny
-        self.np = np
+        assert num_particles <= ns
+        self.np = num_particles
+        if ny == 1: assert D == 1
+        assert not nx == 1
         self.Vint = Vint
         if D == 1:
             self.lattice = Lattice1d(ns=self.nx)
@@ -200,9 +203,10 @@ class PhysicalSystem(object):
         #     # ==============================================
         #     acc += eng_i
         # t1_onehop = time()
-        #t_onehop = t1_onehop - t0_onehop
+        # t_onehop = t1_onehop - t0_onehop
 
-        #t1_onehop_lowrank = time()
+        # t1_onehop_lowrank = time()
+        
         E_kin_loc = ansatz.lowrank_kinetic(I_ref=I, psi_loc=psi_loc, lattice=self.lattice)
         
         return E_kin_loc + self.Vint * Enn_int

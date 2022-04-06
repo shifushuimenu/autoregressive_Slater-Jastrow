@@ -121,10 +121,10 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 10; Np = 5    # Ns=20, Np=10; Ns=16, Np=8; Ns=12, Np=5: singular matrix
-#l1d = Lattice1d(ns=Ns)
-l2d = Lattice_rectangular(nx=5, ny=2)
-assert l2d.ns == Ns
+Ns = 200; Np = 100    # Ns=20, Np=10; Ns=16, Np=8; Ns=12, Np=5: singular matrix
+l1d = Lattice1d(ns=Ns)
+#l2d = Lattice_rectangular(nx=10, ny=10)
+#assert l2d.ns == Ns
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
@@ -141,7 +141,7 @@ for jj in range(1):
 
     #  `states_I` comprises only the onehop states, the reference state is not included 
     # rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l2d))
-    rs_pos, states_I, _ = sort_onehop_states(*kinetic_term2(ref_I, l2d))
+    rs_pos, states_I, _ = sort_onehop_states(*kinetic_term2(ref_I, l1d))
     num_onehop_states = len(states_I)
     xs = int2bin(states_I, ns=Ns)
     num_onehop_states = len(xs)    
@@ -205,25 +205,29 @@ for jj in range(1):
             # don't waste memory
             Gnum_inv_reuse[k-2].clear()
 
+        Gdenom = G[np.ix_(Ksites, Ksites)] - np.diag(occ_vec[0:len(Ksites)])
+        # In production runs use flag -O to suppress asserts and 
+        # __debug__ sections. 
+        if __debug__:
+            if Gdenom.shape[0] > 0:
+                cond = np.linalg.cond(Gdenom)
+                #print("cond=", cond)
+                #fh = open("Gdenom_vals.dat", "a")
+                #fh.write("%16.15f \n" % cond)                    
+                #fh.close()
+                if cond > logger.info_refstate.Gdenom_cond_max:
+                    logger.info_refstate.Gdenom_cond_max = cond 
+                    print("Gdenom_cond_max=", logger.info_refstate.Gdenom_cond_max)            
+        det_Gdenom = np.linalg.det(Gdenom)
+
         for ii, i in enumerate(range(xmin, xmax)):
             t0=time()
             # reference state        
             Ksites_add += [i]
             occ_vec_add = occ_vec[0:xmin] + [0]*ii + [1]
             Gnum = G[np.ix_(Ksites_add, Ksites_add)] - np.diag(occ_vec_add)
-            Gdenom = G[np.ix_(Ksites, Ksites)] - np.diag(occ_vec[0:len(Ksites)])
-
-            # In production runs use flag -O to suppress asserts and 
-            # __debug__ sections. 
-            if __debug__:
-                if Gdenom.shape[0] > 0:
-                    cond = np.linalg.cond(Gdenom)
-                    if cond > logger.info_refstate.Gdenom_cond_max:
-                        logger.info_refstate.Gdenom_cond_max = cond 
-                        print("Gdenom_cond_max=", logger.info_refstate.Gdenom_cond_max)            
 
             det_Gnum = np.linalg.det(Gnum)
-            det_Gdenom = np.linalg.det(Gdenom)
 
             # Internal state used during low-rank update of conditional probabilities 
             # of the connnecting states. 

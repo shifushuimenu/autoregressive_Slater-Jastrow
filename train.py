@@ -91,20 +91,20 @@ def _checkpoint(VMCmodel):
     torch.save(state, 'state_Ns{}Np{}V{}.pt'.format(Nsites, Nparticles, Vint))
 
 
-
-
 max_iter = 1000 
-Nsites = 9 # Nsites = 64 => program killed because it is using too much memory
-Nparticles = 4
-Vint = 2.5
+Nx = 15
+Ny = 1
+Nsites = 15  # Nsites = 64 => program killed because it is using too much memory
+Nparticles = 7
+Vint = 3.0
 
 
-phys_system = PhysicalSystem(nx=3, ny=3, ns=Nsites, np=Nparticles, D=2, Vint=Vint)
+phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, D=1, Vint=Vint)
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
-(_, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none")
-#(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
+#(_, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none")
+(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
 Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)
 
@@ -113,39 +113,54 @@ del SJA
 
 E_exact = 0.4365456400025272 #-3.248988339062832 # -2.9774135797163597 #-3.3478904193465335
 
-t0 = time.time()
-for i, (energy, precision) in enumerate(train(VMCmodel_, learning_rate = 0.1, num_samples=100, use_cuda = use_cuda)):
-    t1 = time.time()
-    print('Step %d, dE/|E| = %.4f, elapsed = %.4f' % (i, -(energy - E_exact)/E_exact, t1-t0))
-    _update_curve(energy, precision)
-    _checkpoint(VMCmodel_)
-    t0 = time.time()
 
-    # stop condition
-    if i >= max_iter:
-        break
+if True: 
+    t0 = time.time()
+    for i, (energy, precision) in enumerate(train(VMCmodel_, learning_rate = 0.1, num_samples=100, use_cuda = use_cuda)):
+        t1 = time.time()
+        print('Step %d, dE/|E| = %.4f, elapsed = %.4f' % (i, -(energy - E_exact)/E_exact, t1-t0))
+        _update_curve(energy, precision)
+        _checkpoint(VMCmodel_)
+        t0 = time.time()
+
+        # stop condition
+        if i >= max_iter:
+            break
 
 szsz_corr = np.zeros(Nsites)
+szsz_corr_2D = np.zeros((phys_system.nx, phys_system.ny))
 corr_ = np.zeros(Nsites)
+corr_2D_ = np.zeros((phys_system.nx, phys_system.ny))
 
 
 print("Now sample from the converged ansatz")
-dd = torch.load('state_Ns{}Np{}V{}.pt'.format(Nsites, Nparticles, Vint))
-VMCmodel_.ansatz.load_state_dict(dd['net'])
+state_checkpointed = torch.load('state_Ns{}Np{}V{}.pt'.format(Nsites, Nparticles, Vint))
+VMCmodel_.ansatz.load_state_dict(state_checkpointed['net'])
 num_samples = 1000
 for _ in range(num_samples):
     sample_unfolded, sample_prob = VMCmodel_.ansatz.sample_unfolded()
     config = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
-    print("config=", config)       
+    print("config=", config) 
     config_sz = 2*config - 1
     corr_[:] = 0.0
     for k in range(0, Nsites):
         corr_[k] = (np.roll(config_sz, shift=-k) * config_sz).sum(axis=-1) / Nsites
     szsz_corr[:] += corr_[:]
 
+    # 2D spin-spin correlations 
+    config_2D = config.reshape((phys_system.nx, phys_system.ny))
+    config_2D_sz = 2*config_2D - 1
+    corr_2D_[:,:] = 0.0
+    for kx in range(0, phys_system.nx):
+        for ky in range(0, phys_system.ny):
+           corr_2D_[kx, ky] = (np.roll(np.roll(config_2D_sz, shift=-kx, axis=0), shift=-ky, axis=1) * config_2D_sz).sum() / phys_system.ns
+    szsz_corr_2D[:,:] += corr_2D_[:, :]
+
 szsz_corr[:] /= num_samples
+szsz_corr_2D[:,:] /= num_samples
 
 np.savetxt("szsz_corr_Ns{}Np{}V{}.dat".format(Nsites, Nparticles, Vint), szsz_corr)
+np.savetxt("szsz_corr_2D.dat", szsz_corr_2D)
 
 plt.plot(range(Nsites), szsz_corr[:], '--b')
 plt.show()
