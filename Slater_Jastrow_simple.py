@@ -128,8 +128,62 @@ class PhysicalSystem(object):
         self.Vint = Vint
         if D == 1:
             self.lattice = Lattice1d(ns=self.nx)
-        elif D == 2:
+        elif D == 2:  
             self.lattice = Lattice_rectangular(self.nx, self.ny)    
+
+
+    def local_energy_slow(self, config, psi_loc, ansatz):
+        """Recalculate |<psi|beta>|^2 for each beta."""
+        config = np.array(config).astype(int)
+        assert len(config.shape) > 1 and config.shape[0] == 1 # just one sample per batch
+        nsites = len(config[0])
+        I = bin2int_nobatch(config[0])
+
+        hop_from_to, onehop_states_I, kin_matrix_elements = kinetic_term2(I, self.lattice)
+        onehop_states = int2bin(onehop_states_I, ns=nsites)
+
+        wl, states, from_to = [], [], []
+
+        # diagonal matrix element: nearest neighbour interactions
+        Enn_int = 0.0
+        config_2D = config[0].reshape((self.nx, self.ny))
+        for nd in range(self.lattice.coord // 2):
+            Enn_int += ( np.roll(config_2D, shift=-1, axis=nd) * config_2D ).sum()      
+        wl.append(Enn_int)
+        states.append(config)
+        from_to.append((0, 0)) # diagonal matrix element: no hopping => choose r=s=0 by convention
+
+        for ss, mm, rs_pair in zip(onehop_states, kin_matrix_elements, hop_from_to):
+            wl.append(mm)
+            states.append([ss]) # Note: ansatz.psi requires batch dim
+            from_to.append(rs_pair)
+
+        assert len(from_to) == len(states) == len(wl)
+        OBDM_loc = local_OBDM(alpha=config[0], sp_states = ansatz.slater_sampler.P_ortho.detach().numpy())
+        acc = 0.0
+        for wi, config_i, (r,s) in zip(wl, states, from_to):
+            if not (r==0 and s==0):                
+                # The repeated density estimation of very similar configurations is the bottleneck. 
+                abspsi_conf_i = torch.sqrt(ansatz.prob(config_i)).item() 
+                # IMPROVE: Calculate sign() of ratio of Slater determinant directly from the number of exchanges 
+                # that brings one state to the other. (Is this really correct ?)
+                ratio = (abspsi_conf_i / abs(psi_loc)) * np.sign(ratio_Slater(OBDM_loc, alpha=config[0], beta=config_i[0], r=r, s=s))
+            else:
+                ratio = 1.0 # <alpha/psi> / <alpha/psi> = 1
+
+            eng_i = wi * ratio
+
+            # ==============================================
+            # assert np.isclose( (psi_func(config_i) / psi_loc), ratio ), "Error: ratio1= %16.8f, ratio2 = %16.8f" % (psi_func(config_i) / psi_loc, ratio)
+            # Alternative approach:
+            # Recalculate wave function aplitude for each connecting state 
+            # without using low-rank update. 
+            # eng_i = wi * (psi_func(config_i) / psi_loc) 
+            # ==============================================
+            acc += eng_i
+
+        return acc
+
 
     #@profile
     def local_energy(self, config, psi_loc, ansatz):
@@ -155,65 +209,12 @@ class PhysicalSystem(object):
         for nd in range(self.lattice.coord // 2):
             Enn_int += ( np.roll(config_2D, shift=-1, axis=nd) * config_2D ).sum() 
 
-        # wl.append(nn_int)
-        # states.append(config)
-        # from_to.append((0, 0)) # diagonal matrix element: no hopping => choose r=s=0 by convention
-
-        # for ss, mm, rs_pair in zip(connecting_states, kin_matrix_elements, hop_from_to):
-        #     wl.append(mm)
-        #     states.append(ss[None,:]) # Note: ansatz.psi requires batch dim
-        #     from_to.append(rs_pair)
-
-        # t1_kin = time()
-        # t_kin = t1_kin - t0_kin
-
-        # acc = 0.0
-        # E_kin_loc = 0.0
-
-        # assert len(from_to) == len(states) == len(wl)
-        # t0_OBDM = time()
-        # OBDM_loc = local_OBDM(alpha=config[0], sp_states = ansatz.slater_sampler.P_ortho.detach().numpy())
-        # t1_OBDM = time()
-        # t_OBDM = t1_OBDM - t0_OBDM
-        # t0_onehop = time()
-        # t_Slater_ratio = 0
-        # for wi, config_i, (r,s) in zip(wl, states, from_to):
-        #     if not (r==0 and s==0):
-        #         # The repeated density estimation of very similar configurations is the bottleneck. 
-        #         abspsi_conf_i = torch.sqrt(ansatz.prob(config_i)).item() 
-        #         # IMPROVE: Calculate sign() of ratio of Slater determinant directly from the number of exchanges 
-        #         # that brings one state to the other. (Is this really correct ?)
-        #         t0_Slater_ratio = time()
-        #         ratio = (abspsi_conf_i / abs(psi_loc)) * np.sign(ratio_Slater(OBDM_loc, alpha=config[0], beta=config_i[0], r=r, s=s))
-        #         t1_Slater_ratio = time()
-        #         t_Slater_ratio += t1_Slater_ratio - t0_Slater_ratio
-
-        #         E_kin_loc += wi * ratio
-        #     else:
-        #         ratio = 1.0 # <alpha/psi> / <alpha/psi> = 1
-
-        #     eng_i = wi * ratio
-
-        #     # ==============================================
-        #     # assert np.isclose( (psi_func(config_i) / psi_loc), ratio ), "Error: ratio1= %16.8f, ratio2 = %16.8f" % (psi_func(config_i) / psi_loc, ratio)
-        #     # Alternative approach:
-        #     # Recalculate wave function aplitude for each connecting state 
-        #     # without using low-rank update. 
-        #     # eng_i = wi * (psi_func(config_i) / psi_loc) 
-        #     # ==============================================
-        #     acc += eng_i
-        # t1_onehop = time()
-        # t_onehop = t1_onehop - t0_onehop
-
-        # t1_onehop_lowrank = time()
         
         E_kin_loc = ansatz.lowrank_kinetic(I_ref=I, psi_loc=psi_loc, lattice=self.lattice)
+        print("E_tot_lowrank=", E_kin_loc + self.Vint * Enn_int, psi_loc)
+        print("E_tot_slow=", self.local_energy_slow(config, psi_loc, ansatz))
         
         return E_kin_loc + self.Vint * Enn_int
-
-        # return acc
-
-
 
 
 class Lattice1d(object):
@@ -420,7 +421,7 @@ def vmc_measure(local_measure, sample_list, sample_probs, num_bin=50):
     for i, config in enumerate(sample_list):
         print("sample nr=", i)
         # back-propagation is used to get gradients.
-        energy_loc, grad_loc = local_measure([config]) # ansatz.psi requires batch dim
+        energy_loc, grad_loc = local_measure([config]) # ansatz.psi requires batch dim)
         energy_loc_list.append(energy_loc)
         grad_loc_list.append(grad_loc)
 

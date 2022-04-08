@@ -121,9 +121,9 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 200; Np = 100    # Ns=20, Np=10; Ns=16, Np=8; Ns=12, Np=5: singular matrix
-l1d = Lattice1d(ns=Ns)
-#l2d = Lattice_rectangular(nx=10, ny=10)
+Ns = 16; Np = 8    # Ns=20, Np=10; Ns=16, Np=8; Ns=12, Np=5: singular matrix
+#l1d = Lattice1d(ns=Ns)
+l2d = Lattice_rectangular(nx=4, ny=4)
 #assert l2d.ns == Ns
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
@@ -141,7 +141,7 @@ for jj in range(1):
 
     #  `states_I` comprises only the onehop states, the reference state is not included 
     # rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l2d))
-    rs_pos, states_I, _ = sort_onehop_states(*kinetic_term2(ref_I, l1d))
+    rs_pos, states_I, _ = sort_onehop_states(*kinetic_term2(ref_I, l2d))
     num_onehop_states = len(states_I)
     xs = int2bin(states_I, ns=Ns)
     num_onehop_states = len(xs)    

@@ -92,10 +92,10 @@ def _checkpoint(VMCmodel):
 
 
 max_iter = 1000 
-Nx = 15
+Nx = 7 #15
 Ny = 1
-Nsites = 15  # Nsites = 64 => program killed because it is using too much memory
-Nparticles = 7
+Nsites = 7 # 15  # Nsites = 64 => program killed because it is using too much memory
+Nparticles = 3
 Vint = 3.0
 
 
@@ -103,8 +103,8 @@ phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, 
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
-#(_, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none")
-(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
+(_, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none")
+#(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
 Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)
 
