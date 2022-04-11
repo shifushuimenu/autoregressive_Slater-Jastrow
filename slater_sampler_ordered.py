@@ -655,7 +655,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                                 cond_prob_onehop[state_nr, k, i-1] = (-1) * det_Gnum_ / det_Gdenom_
                                                 #cond_logprob_onehop[state_nr, k, i-1] = log_cutoff(abs(det_Gnum_)) - log_cutoff(abs(det_Gdenom_))
                                                 cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i-1]
-                                            if i > r:  
+                                            if i > r:   
                                                 corr_factor1 = LR.corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)
                                                 corr_factor  = corr_factor1 * (det_Gdenom / det_Gdenom_)
                                                 cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
