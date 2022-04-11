@@ -95,7 +95,7 @@ max_iter = 1000
 Nx = 15 #15
 Ny = 1
 Nsites = 15 # 15  # Nsites = 64 => program killed because it is using too much memory
-Nparticles = 7
+Nparticles = 5
 Vint = 3.0
 
 

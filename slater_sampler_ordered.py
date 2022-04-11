@@ -525,7 +525,10 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                                 # reuse all information from (k-1) cond. probs. of reference state
                                                 if k == k_copy_ + 1 and s == 0: # 1D long-range hopping      
                                                     # IMPROVE: Gdenom_inv_ is not needed subsequently.                                        
-                                                    Gdenom_inv_, corr_factor_Gdenom = LR.adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=GG, r=r, s=xs_pos[state_nr, k-1])
+                                                    # Gdenom_inv_, corr_factor_Gdenom2 = LR.adapt_Gdenom_inv(Gdenom_inv_reuse[k-1], Gglobal=GG, r=r, s=xs_pos[state_nr, k-1])
+                                                    corr_factor_Gdenom = LR.corr_factor_Gdenom_from_Ainv(Gdenom_inv_reuse[k-1], Gglobal=GG, r=r, s=s, i_start=0, i_end=xs_pos[state_nr, k-1])
+                                                    #print("corr_factor_Gdenom=", corr_factor_Gdenom)
+                                                    #print("corr_factor_Gdenom2=", corr_factor_Gdenom2)
                                                 elif k == k_copy_ + 1 and s > 0: # 2D long-range hopping: There are particles or empty sites to the left of s.                                            
                                                     # 1. No particle to the left of position `s`. (Of course, this is so both in the reference state and in the onhop
                                                     # state since they differ only in the occupancies of the positions `s` and `r`.)
@@ -562,8 +565,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                                 corr_factor_Gdenom = LR.corr_factor_Gdenom_from_Ainv(Gdenom_inv_reuse[k-1], Gglobal=GG, r=r, s=s, i_start=i_start, i_end=s)
                                         else:                 
                                             corr_factor_Gdenom= LR.corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s)                       
-                                        corr_factor_Gnum = LR.corr_factor_removeadd_rs(Gnum_inv, r=pos_vec[k-1], s=s)    
-                                        if (corr_factor_Gnum < 1e-15 and corr_factor_Gdenom < 1e-15) or cond_prob_ref[k,i] < 1e-15:
+                                        corr_factor_Gnum = LR.corr_factor_removeadd_rs(Gnum_inv, r=pos_vec[k-1], s=s)   
+                                        if (abs(corr_factor_Gnum) < 1e-15 and abs(corr_factor_Gdenom) < 1e-15) or abs(cond_prob_ref[k,i]) < 1e-15:
                                             corr_factor = 0.0
                                         else:                                            
                                             corr_factor = corr_factor_Gnum / corr_factor_Gdenom
