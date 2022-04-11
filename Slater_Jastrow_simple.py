@@ -212,13 +212,13 @@ class PhysicalSystem(object):
             Enn_int += ( np.roll(config_2D, shift=-1, axis=nd) * config_2D ).sum() 
         
         E_kin_loc, b_absamp = ansatz.lowrank_kinetic(I_ref=I, psi_loc=psi_loc, lattice=self.lattice)
-        print("E_tot_lowrank=", E_kin_loc + self.Vint * Enn_int)
-        E_tot_slow, abspsi = self.local_energy_slow(config, psi_loc, ansatz)
-        print("E_tot_slow=", E_tot_slow)
-        print("b_absamp=", b_absamp)
-        print("abspsi=", abspsi)
+        #print("E_tot_lowrank=", E_kin_loc + self.Vint * Enn_int)
+        # E_tot_slow, abspsi = self.local_energy_slow(config, psi_loc, ansatz)
+        #print("E_tot_slow=", E_tot_slow)
+        #print("b_absamp=", b_absamp)
+        #print("abspsi=", abspsi)
         
-        return E_tot_slow # E_kin_loc + self.Vint * Enn_int
+        return E_kin_loc + self.Vint * Enn_int # E_tot_slow
 
 
 class Lattice1d(object):
