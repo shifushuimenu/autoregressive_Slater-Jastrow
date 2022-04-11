@@ -381,6 +381,10 @@ class SlaterJastrow_ansatz(selfMADE):
         #assert np.exp(0.5*log_prob_ref) == abs(psi_loc)
         
         xs = int2bin(xs_I, ns=self.D)
+        print("ref=")
+        print(int2bin(I_ref, ns=self.D))
+        print("xs=")
+        print(xs)
         xs_unfolded = occ_numbers_unfold(xs, duplicate_entries=False) # output of occ_numbers_unfold() is a torch tensor 
         xs_hat_B = np.empty_like(xs_hat_F)
 
@@ -413,7 +417,12 @@ class SlaterJastrow_ansatz(selfMADE):
 
         E_kin_loc = np.dot(matrix_elem[:], b_absamp[:] * b_relsign[:]) / abs(psi_loc)
 
-        return E_kin_loc 
+        print("I_ref=", I_ref)
+        print("xs_I=", xs_I)
+        print("psi_loc=", psi_loc)
+        print("b_absamp[0]=", b_absamp[0])
+
+        return E_kin_loc, b_absamp
 
         
 

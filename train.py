@@ -92,10 +92,10 @@ def _checkpoint(VMCmodel):
 
 
 max_iter = 1000 
-Nx = 7 #15
+Nx = 15 #15
 Ny = 1
-Nsites = 7 # 15  # Nsites = 64 => program killed because it is using too much memory
-Nparticles = 3
+Nsites = 15 # 15  # Nsites = 64 => program killed because it is using too much memory
+Nparticles = 7
 Vint = 3.0
 
 

@@ -139,7 +139,7 @@ class PhysicalSystem(object):
         nsites = len(config[0])
         I = bin2int_nobatch(config[0])
 
-        hop_from_to, onehop_states_I, kin_matrix_elements = kinetic_term2(I, self.lattice)
+        hop_from_to, onehop_states_I, kin_matrix_elements = sort_onehop_states(*kinetic_term2(I, self.lattice))
         onehop_states = int2bin(onehop_states_I, ns=nsites)
 
         wl, states, from_to = [], [], []
@@ -148,7 +148,7 @@ class PhysicalSystem(object):
         Enn_int = 0.0
         config_2D = config[0].reshape((self.nx, self.ny))
         for nd in range(self.lattice.coord // 2):
-            Enn_int += ( np.roll(config_2D, shift=-1, axis=nd) * config_2D ).sum()      
+            Enn_int += self.Vint * ( np.roll(config_2D, shift=-1, axis=nd) * config_2D ).sum()      
         wl.append(Enn_int)
         states.append(config)
         from_to.append((0, 0)) # diagonal matrix element: no hopping => choose r=s=0 by convention
@@ -161,10 +161,12 @@ class PhysicalSystem(object):
         assert len(from_to) == len(states) == len(wl)
         OBDM_loc = local_OBDM(alpha=config[0], sp_states = ansatz.slater_sampler.P_ortho.detach().numpy())
         acc = 0.0
+        abspsi = [] # amplitudes of all connecting states 
         for wi, config_i, (r,s) in zip(wl, states, from_to):
             if not (r==0 and s==0):                
                 # The repeated density estimation of very similar configurations is the bottleneck. 
                 abspsi_conf_i = torch.sqrt(ansatz.prob(config_i)).item() 
+                abspsi.append(abspsi_conf_i)
                 # IMPROVE: Calculate sign() of ratio of Slater determinant directly from the number of exchanges 
                 # that brings one state to the other. (Is this really correct ?)
                 ratio = (abspsi_conf_i / abs(psi_loc)) * np.sign(ratio_Slater(OBDM_loc, alpha=config[0], beta=config_i[0], r=r, s=s))
@@ -182,7 +184,7 @@ class PhysicalSystem(object):
             # ==============================================
             acc += eng_i
 
-        return acc
+        return acc, abspsi
 
 
     #@profile
@@ -208,13 +210,15 @@ class PhysicalSystem(object):
         config_2D = config[0].reshape((self.nx, self.ny))
         for nd in range(self.lattice.coord // 2):
             Enn_int += ( np.roll(config_2D, shift=-1, axis=nd) * config_2D ).sum() 
-
         
-        E_kin_loc = ansatz.lowrank_kinetic(I_ref=I, psi_loc=psi_loc, lattice=self.lattice)
-        print("E_tot_lowrank=", E_kin_loc + self.Vint * Enn_int, psi_loc)
-        print("E_tot_slow=", self.local_energy_slow(config, psi_loc, ansatz))
+        E_kin_loc, b_absamp = ansatz.lowrank_kinetic(I_ref=I, psi_loc=psi_loc, lattice=self.lattice)
+        print("E_tot_lowrank=", E_kin_loc + self.Vint * Enn_int)
+        E_tot_slow, abspsi = self.local_energy_slow(config, psi_loc, ansatz)
+        print("E_tot_slow=", E_tot_slow)
+        print("b_absamp=", b_absamp)
+        print("abspsi=", abspsi)
         
-        return E_kin_loc + self.Vint * Enn_int
+        return E_tot_slow # E_kin_loc + self.Vint * Enn_int
 
 
 class Lattice1d(object):

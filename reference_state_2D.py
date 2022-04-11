@@ -121,9 +121,9 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 16; Np = 8    # Ns=20, Np=10; Ns=16, Np=8; Ns=12, Np=5: singular matrix
+Ns = 10; Np = 5    # Ns=20, Np=10; Ns=16, Np=8; Ns=12, Np=5: singular matrix
 #l1d = Lattice1d(ns=Ns)
-l2d = Lattice_rectangular(nx=4, ny=4)
+l2d = Lattice_rectangular(nx=5, ny=2)
 #assert l2d.ns == Ns
 _, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
 P = U[:, 0:Np]
@@ -134,7 +134,7 @@ for jj in range(1):
     print("jj=", jj)
 
     ref_conf = generate_random_config(Ns, Np)
-    #ref_conf = np.array([1,0,1,0,1,0,1,1,0,0])                        
+    ref_conf = np.array([0,0,1,0,1,1,0,0,1,1])                        # np.array([1,0,1,0,1,1,0,0,1,0])                        
     #ref_I = bin2int(ref_conf)
     ref_I = bin2int_nobatch(ref_conf)
     print("ref_I=", ref_I)
@@ -326,7 +326,7 @@ for jj in range(1):
                                                     Gdenom_inv_, corr_factor_Gdenom = adapt_Ainv(Gdenom_inv_reuse[k-1], Gglobal=G, r=r, s=s, i_start=i_start, i_end=s)
                                             else:
                                                 corr_factor_Gdenom = corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s)
-                                            corr_factor_Gnum = corr_factor_add_s(Gnum_inv_reuse[k-1][j_add], s=s)
+                                            corr_factor_Gnum = corr_factor_add_s(Gnum_inv_reuse[k-1][j_add], s=s) # CAREFUL: This is not a marginal probability of an actually sampled state.
                                             corr_factor = corr_factor_Gnum / corr_factor_Gdenom
                                             cond_prob_onehop[state_nr, k, j_add] = corr_factor * cond_prob_ref[k-1, j_add]
                                             # update cumul. probs. explicitly because this is inside the body of an extra loop

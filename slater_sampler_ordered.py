@@ -543,8 +543,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                                         corr_factor_Gdenom = LR.corr_factor_Gdenom_from_Ainv(Gdenom_inv_reuse[k-1], Gglobal=GG, r=r, s=s, i_start=i_start, i_end=s)
                                                 else:
                                                     corr_factor_Gdenom = LR.corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s)
-                                                corr_factor_Gnum = LR.corr_factor_add_s(Gnum_inv_reuse[k-1][j_add], s=s)                                                
-                                                if corr_factor_Gnum < 1e-15 and corr_factor_Gdenom < 1e-15:
+                                                corr_factor_Gnum = LR.corr_factor_add_s(Gnum_inv_reuse[k-1][j_add], s=s)  # CAREFUL: This is not a marginal probability of an actually sampled state.                                             
+                                                if abs(corr_factor_Gnum) < 1e-15 and abs(corr_factor_Gdenom) < 1e-15:
                                                     corr_factor = 0.0
                                                 else:
                                                     corr_factor = corr_factor_Gnum / corr_factor_Gdenom
@@ -727,7 +727,16 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 
         _copy_cond_probs(cond_prob_ref, cond_prob_onehop, onehop_info)
 
+        # Check that all conditional probabilities are normalized. 
         # IMPROVE: Return also information about violation of probability normalization. 
+        if __debug__:
+                for state_nr, (k_copy_, (r,s)) in enumerate(onehop_info):
+                    for k in range(self.N):
+                        if k > k_copy_:
+                            assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, atol=1e-8), \
+                                 "np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f =? 1.0" \
+                                 % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :]))
+
         return cond_prob_onehop.reshape(-1, self.N*self.D), cond_prob_ref.reshape((self.N*self.D,))
 
 
