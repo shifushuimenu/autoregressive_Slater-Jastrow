@@ -371,7 +371,7 @@ class SlaterJastrow_ansatz(selfMADE):
         rs_pos, xs_I, matrix_elem = sort_onehop_states(*kinetic_term2(I_ref, lattice))
 
         # conditional probabilities of all onehop states
-        xs_hat_F, cond_prob_ref_F = self.slater_sampler.lowrank_kinetic(I_ref, xs_I, rs_pos, print_stats=False)        
+        xs_hat_F, cond_prob_ref_F = self.slater_sampler.lowrank_kinetic(I_ref, xs_I, rs_pos, print_stats=True)        
         ## IMPROVE: Check that the probability amplitude (!) calculated from the conditional 
         ## probabilities `cond_prob_ref` conincides with `psi_loc`. -> assert 
         #pos_ref = bin2pos([config_ref])

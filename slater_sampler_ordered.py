@@ -564,8 +564,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                                 #Gdenom_inv_, corr_factor_Gdenom = LR.adapt_Ainv(Gdenom_inv_reuse[k-1], Gglobal=GG, r=r, s=s, i_start=i_start, i_end=s)
                                                 corr_factor_Gdenom = LR.corr_factor_Gdenom_from_Ainv(Gdenom_inv_reuse[k-1], Gglobal=GG, r=r, s=s, i_start=i_start, i_end=s)
                                         else:                 
-                                            corr_factor_Gdenom= LR.corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s)                       
+                                            corr_factor_Gdenom= LR.corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s) 
                                         corr_factor_Gnum = LR.corr_factor_removeadd_rs(Gnum_inv, r=pos_vec[k-1], s=s)   
+                                        print("corr_factor_Gnum=", corr_factor_Gnum)
                                         if (abs(corr_factor_Gnum) < 1e-15 and abs(corr_factor_Gdenom) < 1e-15) or abs(cond_prob_ref[k,i]) < 1e-15:
                                             corr_factor = 0.0
                                         else:                                            
@@ -724,11 +725,20 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
                 t1_conn = time()
                 logger.info_refstate.elapsed_connecting_states += (t1_conn - t0_conn)                    
+                        
+        _copy_cond_probs(cond_prob_ref, cond_prob_onehop, onehop_info)
 
         if print_stats:
             logger.info_refstate.print_summary()
-                
-        _copy_cond_probs(cond_prob_ref, cond_prob_onehop, onehop_info)
+
+            for state_nr in range(cond_prob_onehop.shape[0]):
+                fh = open("cond_prob_onehop%d.dat" % (state_nr), "w")
+                fh.write("# ref_state ["+" ".join(str(item) for item in ref_conf)+"]\n")
+                fh.write("# 1hop      ["+" ".join(str(item) for item in xs[state_nr])+"]\n")
+                for k in range(cond_prob_onehop.shape[1]):
+                    for i in range(cond_prob_onehop.shape[2]):
+                        fh.write("%d %d %20.19f\n" % (k, i, cond_prob_onehop[state_nr, k, i]))
+                fh.close()   
 
         # Check that all conditional probabilities are normalized. 
         # IMPROVE: Return also information about violation of probability normalization. 

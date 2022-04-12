@@ -92,14 +92,14 @@ def _checkpoint(VMCmodel):
 
 
 max_iter = 1000 
-Nx = 15 #15
-Ny = 1
-Nsites = 15 # 15  # Nsites = 64 => program killed because it is using too much memory
-Nparticles = 5
+Nx = 3 #15
+Ny = 3
+Nsites = 9 # 15  # Nsites = 64 => program killed because it is using too much memory
+Nparticles = 4
 Vint = 3.0
 
 
-phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, D=1, Vint=Vint)
+phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, D=2, Vint=Vint)
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
