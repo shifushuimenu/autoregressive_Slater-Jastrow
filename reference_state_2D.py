@@ -5,25 +5,25 @@
 #       - Add meaningful tests (in a different file).
 #
 #       - Correct cumsum. Problem occurs when probs at k are used to calculate probs at k-1.
-
 import numpy as np
 from time import time 
 
 from test_suite import ( prepare_test_system_zeroT,
-                         generate_random_config )
+                         generate_random_config,
+                         HartreeFock_tVmodel )
 from bitcoding import *
 from one_hot import *
-from Slater_Jastrow_simple import kinetic_term, kinetic_term2, Lattice1d, Lattice_rectangular
+from Slater_Jastrow_simple import kinetic_term, kinetic_term2, Lattice1d, Lattice_rectangular, PhysicalSystem
 from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 from k_copy import *
 from lowrank_update import *
 
 from monitoring import logger
 
-np.random.seed(43574)
+#np.random.seed(43574)
 
 # absolute tolerance in comparisons (e.g. normalization)
-ATOL = 1e-8
+ATOL = 1e-4
 
 # normalization needs to be satisfied up to 
 #     \sum_i p(i)  > `eps_norm_probs``
@@ -35,7 +35,34 @@ def log_cutoff(x):
     Replace -inf by a very small, but finite value.
     """
     return np.where(x > 0, np.log(x), -1000)
- 
+
+# Just for testing purposes
+def Gnum_from_scratch(G, occ_vec, base_pos, i):
+    occ_vec_base = list(occ_vec[0:base_pos + 1])
+    extend = list(range(0, i+1))
+    occ_vec_add = [1] if (i - base_pos == 1) else [0] * (i - base_pos - 1) + [1]
+    occ_vec_extend = occ_vec_base + occ_vec_add
+    Gnum = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
+    return Gnum
+
+def Gdenom_from_scratch(G, occ_vec, base_pos):
+    base = list(range(0, base_pos+1))
+    occ_vec_base = list(occ_vec[0:base_pos + 1])
+    Gdenom = G[np.ix_(base, base)] - np.diag(occ_vec_base)    
+    return Gdenom
+
+
+def detGnum_from_scratch(G, occ_vec, base_pos, i):
+    """Calculate numerator determinant from scratch."""
+    return np.linalg.det(Gnum_from_scratch(G, occ_vec, base_pos, i))
+
+def detGdenom_from_scratch(G, occ_vec, base_pos): 
+    """Calculate denominator determinant from scratch."""
+    return np.linalg.det(Gdenom_from_scratch(G, occ_vec, base_pos))
+
+
+# END: Just for testing purposes
+
 
 def detratio_from_scratch(G, occ_vec, base_pos, i):
     """
@@ -43,13 +70,13 @@ def detratio_from_scratch(G, occ_vec, base_pos, i):
     """
     base = list(range(0, base_pos+1))
     occ_vec_base = list(occ_vec[0:base_pos + 1])
-    Gdenom_special = G[np.ix_(base, base)] - np.diag(occ_vec_base)
+    Gdenom = G[np.ix_(base, base)] - np.diag(occ_vec_base)
     extend = list(range(0, i+1))
     occ_vec_add = [1] if (i - base_pos == 1) else [0] * (i - base_pos - 1) + [1]
     occ_vec_extend = occ_vec_base + occ_vec_add
-    Gnum_special = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
+    Gnum = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
 
-    return np.linalg.det(Gnum_special) / np.linalg.det(Gdenom_special)
+    return np.linalg.det(Gnum) / np.linalg.det(Gdenom)
 
 
 def copy_cond_probs(cond_prob_ref, cond_prob_onehop, one_hop_info):
@@ -121,11 +148,20 @@ def cond_logprob2log_prob(xs, cond_logprobs_allk):
 
 
 # Calculate the conditional probabilities of the reference state
-Ns = 10; Np = 5    # Ns=20, Np=10; Ns=16, Np=8; Ns=12, Np=5: singular matrix
-#l1d = Lattice1d(ns=Ns)
-l2d = Lattice_rectangular(nx=5, ny=2)
+Nx = 96; Ny = 1
+Ns = 96; Np = 48    # Ns=20, Np=10; Ns=16, Np=8; Ns=12, Np=5: singular matrix
+l1d = Lattice1d(ns=Ns)
+#l2d = Lattice_rectangular(nx=Nx, ny=Ny)
 #assert l2d.ns == Ns
-_, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
+
+#_, U = prepare_test_system_zeroT(Nsites=Ns, potential='none', Nparticles=Np)
+phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Ns, num_particles=Np, D=1, Vint=3.0)
+(_, U) = HartreeFock_tVmodel(phys_system, potential="none")
+
+# REMOVE
+#U = np.loadtxt("eigvecs.dat")
+# REMOVE
+
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
 SDsampler = SlaterDetSampler_ordered(Nsites=Ns, Nparticles=Np, single_particle_eigfunc=U, naive=False)
@@ -134,14 +170,15 @@ for jj in range(1):
     print("jj=", jj)
 
     ref_conf = generate_random_config(Ns, Np)
-    ref_conf = np.array([0,0,1,0,1,1,0,0,1,1])                        # np.array([1,0,1,0,1,1,0,0,1,0])                        
+    #ref_conf = np.array([1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0])   # np.array([1,0,1,0,1,1,0,0,1,0])    
+    #ref_conf = np.array([0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0])
     #ref_I = bin2int(ref_conf)
     ref_I = bin2int_nobatch(ref_conf)
     print("ref_I=", ref_I)
 
     #  `states_I` comprises only the onehop states, the reference state is not included 
     # rs_pos, states_I, _ = valid_states(*kinetic_term([ref_I], l2d))
-    rs_pos, states_I, _ = sort_onehop_states(*kinetic_term2(ref_I, l2d))
+    rs_pos, states_I, _ = sort_onehop_states(*kinetic_term2(ref_I, l1d))
     num_onehop_states = len(states_I)
     xs = int2bin(states_I, ns=Ns)
     num_onehop_states = len(xs)    
@@ -276,13 +313,20 @@ for jj in range(1):
                         cumsum_condprob_onehop[state_nr, k] = 1.0
                         continue
 
-                    if abs(r-s) > 1: # long-range hopping in 1d
+                    if abs(r-s) > 1: # long-range hopping in 1d (This does not include special cases for long-range hopping due to 2D geometry.)
                         if r < s:
                             if k > 1 and k <= k_s[state_nr]: # k=0 can always be copied from the reference state 
                                 corr_factor = remove_r(Gnum_inv_reuse[k][i], Gdenom_inv_reuse[k], r=r)
                                 # NOTE: The cond. probs. for (k-1)-th particle are computed retroactively while the 
                                 # cond. probs. for k-th particle of the reference state are being computed. 
                                 cond_prob_onehop[state_nr, k-1, i] = corr_factor * cond_prob_ref[k, i]
+                                #if state_nr==23: 
+                                #    print("state_nr=23")
+                                #    print("i=", i, "k=", k, "k_s[state_nr]=", k_s[state_nr])
+                                #    test = (-1) * detratio_from_scratch(G, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-2], i=i)
+                                #    print("test=", test)
+                                #    print("cond_prob_onehop[state_nr, k-1, i]=", cond_prob_onehop[state_nr, k-1, i])
+
 
                             # additionally ...
                             if k == Np-1 or k == k_s[state_nr]: 
@@ -298,9 +342,21 @@ for jj in range(1):
                                 # Again, calculate the ratio of determinants from scratch. 
                                 cond_prob_onehop[state_nr, k, i] = (-1) * detratio_from_scratch(G, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
 
-                            if k > k_s[state_nr] + 1 and i > s:
-                                corr_factor = removeadd_rs(Gnum_inv, Gdenom_inv, r, s)
-                                cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
+                            if k > k_s[state_nr] + 1 and i > s: # i > s might be redundant 
+                                # print("======================")
+                                try:
+                                    corr_factor = removeadd_rs(Gnum_inv, Gdenom_inv, r, s)
+                                    cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
+                                except ErrorFinitePrecision as e:
+                                    cond_prob_onehop[state_nr, k, i] = (-1) * detratio_from_scratch(G, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
+                                
+                                #if state_nr==6 and k==7:
+                                #print("Aha !  state_nr=", state_nr, "i=", i, "r=", r, "s=", s, "cond prob=", cond_prob_onehop[state_nr, k, i])
+                                #test = (-1) * detratio_from_scratch(G, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
+                                #print("from scratch=", test)    
+                                #print("cond_prob_ref[k,i]=", cond_prob_ref[k,i], "corr_factor=", corr_factor)
+                                #print(ref_conf)                            
+                                #print(xs[state_nr])
 
                         elif r > s:
                             if i > s:
@@ -379,7 +435,7 @@ for jj in range(1):
                                     # NOTE: The cond. prob. at the actually sampled positions needs to be computed before 
                                     #       saturation of the normalization can be exploited. 
                                     if cumsum_condprob_onehop[state_nr, k] > eps_norm_probs and i > xs_pos[state_nr, k]:  
-                                        cond_prob_onehop[state_nr, k, i-1:] = 0.0
+                                        cond_prob_onehop[state_nr, k, i:] = 0.0
                                         logger.info_refstate.counter_skip += (xmax - i) 
                                         continue
 
@@ -389,8 +445,13 @@ for jj in range(1):
                                         corr2 = corr_factor_remove_r(Gdenom_inv_, r=r)
                                         corr_factor_Gdenom = corr1 * corr2                                
                                         corr4, corr3 = corr3_Gnum_from_Gdenom(Gdenom_inv_, Gglobal=G, r=r, s=s, xmin=xmin, i=i)
-                                        det_Gnum_ = corr4 * corr3 * corr1
-                                        cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / (corr_factor_Gdenom) 
+                                        # Hack: use if inv(S) throws LinAlgError
+                                        if np.isclose(corr4, 0.0, atol=1e-16):
+                                            cond_prob_onehop[state_nr, k, i] = (-1) * detratio_from_scratch(G, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
+                                        else:
+                                            det_Gnum_ = corr4 * corr3 * corr1                                            
+                                            cond_prob_onehop[state_nr, k, i] = (-1) * det_Gnum_ / (corr_factor_Gdenom) 
+
                                         #cond_logprob_onehop[state_nr, k, i] = ( log_cutoff(abs(corr4)) + log_cutoff(abs(corr3)) + log_cutoff(abs(corr1)) 
                                         #                                        - log_cutoff(abs(corr_factor_Gdenom)) )
                                     else:
@@ -451,7 +512,7 @@ for jj in range(1):
                                     # NOTE: The cond. prob. at the actually sampled positions needs to be computed before 
                                     #       saturation of the normalization can be exploited.                                 
                                     if cumsum_condprob_onehop[state_nr, k] > eps_norm_probs and i > xs_pos[state_nr, k]:
-                                        cond_prob_onehop[state_nr, k, i-1:] = 0.0
+                                        cond_prob_onehop[state_nr, k, i:] = 0.0
                                         logger.info_refstate.counter_skip += (xmax - i)
                                         continue                                    
                                     logger.info_refstate.counter_singular += 1
@@ -493,7 +554,7 @@ for jj in range(1):
     fh.write("# ref_state ["+" ".join(str(item) for item in ref_conf)+"]\n\n")
     for k in range(cond_prob_ref.shape[0]):
         for i in range(cond_prob_ref.shape[1]):
-            fh.write("%d %d %e\n" % (k, i, cond_prob_ref[k, i]))
+            fh.write("%d %d %20.19f\n" % (k, i, cond_prob_ref[k, i]))
     fh.close()
 
     copy_cond_probs(cond_prob_ref, cond_prob_onehop, onehop_info)
@@ -517,12 +578,12 @@ for jj in range(1):
         for k in range(Np):
             if k > k_copy_:
                 # pass
-                #print("=============================================")
-                #print("k=", k, "state_nr=", state_nr, "cumul=", cumsum_condprob_onehop[state_nr,k])
-                #print("ref_conf=", ref_conf)
-                #print("1hop sta=", xs[state_nr])
-                #print("k_r=", k_r[state_nr], "k_s=", k_s[state_nr])
-                #print("cond_prob_onehop[state_nr, k, :]=", cond_prob_onehop[state_nr, k, :])
+                print("=============================================")
+                print("k=", k, "state_nr=", state_nr, "cumul=", cumsum_condprob_onehop[state_nr,k])
+                print("ref_conf=", ref_conf)
+                print("1hop sta=", xs[state_nr])
+                print("k_r=", k_r[state_nr], "k_s=", k_s[state_nr])
+                print("cond_prob_onehop[state_nr, k, :]=", cond_prob_onehop[state_nr, k, :])
                 #print("sum [state_nr=%d, k=%d]= %16.14f" % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :])))
                 #print("cumsum_condprob_onehop[state_nr=%d, k=%d]=%16.14f" % (state_nr, k, cumsum_condprob_onehop[state_nr, k]) )
                 assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, atol=ATOL), "np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f ?= %16.10f = cumsum" % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :]), cumsum_condprob_onehop[state_nr, k])               

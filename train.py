@@ -13,7 +13,7 @@ torch.autograd.set_detect_anomaly(True)
 
 # set random number seed
 use_cuda = False
-seed = 42
+seed = 43
 torch.manual_seed(seed)
 if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
@@ -42,7 +42,6 @@ def train(VMCmodel, learning_rate, num_samples=100, use_cuda=False):
                 sample_probs[i] = sample_prob
                 sample_list[i] = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
 
-        print("before vmc_measure")
         energy, grad, energy_grad, precision = vmc_measure(VMCmodel.local_measure, sample_list, sample_probs, num_bin=50)
 
         # update variables using stochastic gradient descent
@@ -91,19 +90,20 @@ def _checkpoint(VMCmodel):
     torch.save(state, 'state_Ns{}Np{}V{}.pt'.format(Nsites, Nparticles, Vint))
 
 
-max_iter = 1000 
-Nx = 3 #15
-Ny = 3
-Nsites = 9 # 15  # Nsites = 64 => program killed because it is using too much memory
-Nparticles = 4
+max_iter = 1 #1000 
+Nx = 20  # 15
+Ny = 1
+Nsites = 20  # 15  # Nsites = 64 => program killed because it is using too much memory
+Nparticles = 10
 Vint = 3.0
 
 
-phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, D=2, Vint=Vint)
+phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, D=1, Vint=Vint)
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
 (_, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none")
+np.savetxt("eigvecs.dat", eigvecs)
 #(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
 Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)

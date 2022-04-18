@@ -2,12 +2,19 @@
 in the algorithm for ordered componentwise direct sampling from a Slater determinant"""
 #IMPROVE: The functions removeadd_rs(), remove_r(), etc. can have division 
 # by zero. This gives only a runtime warning, but it should be dealt with.
+from termios import CFLUSH
 import numpy as np
 
 from block_update_numpy import ( block_update_inverse,
                            block_update_det_correction,
                            block_update_inverse2,
                            block_update_det_correction2 )
+
+eps = np.finfo(float).eps
+thresh = 1.5*eps
+
+class ErrorFinitePrecision(Exception):
+    pass 
 
 
 def corr_factor_removeadd_rs(Ainv, r, s):
@@ -17,7 +24,21 @@ def corr_factor_removeadd_rs(Ainv, r, s):
     with N_K = (n_0, n_1, ..., n_{K-1}) where n_r = 1 and n_s = 0
     and a particle is moved such that after the update n_r = 0 and n_s = 1.         
     """
-    return (1 + Ainv[r,r]) * (1 - Ainv[s,s]) + Ainv[r,s] * Ainv[s,r]
+    #print("removeadd_rs=", Ainv[r,r], Ainv[s,s], Ainv[r,s], Ainv[s,r])
+    cf = (1 + Ainv[r,r]) * (1 - Ainv[s,s]) + Ainv[r,s] * Ainv[s,r]
+    return cf
+
+
+def corr_factor_add_s(Ainv, s):
+    """add a particle at position s without removing any particle"""
+    cf = (1 - Ainv[s,s])
+    return cf 
+
+
+def corr_factor_remove_r(Ainv, r):
+    """remove a particle at position r without adding any particle"""
+    cf = (1 + Ainv[r,r])
+    return cf  
 
 
 def removeadd_rs(Gnum_inv, Gdenom_inv, r, s):
@@ -27,8 +48,12 @@ def removeadd_rs(Gnum_inv, Gdenom_inv, r, s):
     and adding a particle at position `s`.
     """
     corr_factor_Gnum = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)
-    corr_factor_Gdenom = corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)
-    return corr_factor_Gnum / corr_factor_Gdenom
+    corr_factor_Gdenom = corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)   
+    #return corr_factor_Gnum / corr_factor_Gdenom
+    if abs(corr_factor_Gdenom) < thresh:
+        raise ErrorFinitePrecision
+    else: 
+        return corr_factor_Gnum / corr_factor_Gdenom
 
 
 def remove_r(Gnum_inv, Gdenom_inv, r):
@@ -38,17 +63,10 @@ def remove_r(Gnum_inv, Gdenom_inv, r):
     """
     corr_factor_Gnum = corr_factor_remove_r(Gnum_inv, r=r)
     corr_factor_Gdenom = corr_factor_remove_r(Gdenom_inv, r=r)
-    return corr_factor_Gnum / corr_factor_Gdenom    
-
-
-def corr_factor_add_s(Ainv, s):
-    """add a particle at position s without removing any particle"""
-    return (1 - Ainv[s,s])
-
-
-def corr_factor_remove_r(Ainv, r):
-    """remove a particle at position r without adding any particle"""
-    return (1 + Ainv[r,r])
+    if abs(corr_factor_Gdenom) < thresh:
+        raise ErrorFinitePrecision
+    else: 
+        return corr_factor_Gnum / corr_factor_Gdenom    
 
 
 def adapt_Gdenom(Gnum, r, s):
@@ -225,6 +243,7 @@ def corr3_Gnum_from_Gdenom(Gdenom_inv_, Gglobal, r, s, xmin, i):
     try:
         invS = np.linalg.inv(S)
     except np.linalg.LinAlgError as e:
+        print("inv(S) throws LinAlgError")
         det_Schur = 0.0
         return det_Schur, 0.0 
     # Calculate the inverse of the block matrix. The needed correction factor 
