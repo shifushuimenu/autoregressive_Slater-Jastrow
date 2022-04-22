@@ -11,7 +11,7 @@ from block_update_numpy import ( block_update_inverse,
                            block_update_det_correction2 )
 
 eps = np.finfo(float).eps
-thresh = 1.5*eps
+thresh = 1.5 * eps
 
 class ErrorFinitePrecision(Exception):
     pass 

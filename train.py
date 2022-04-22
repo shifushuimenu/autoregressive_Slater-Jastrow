@@ -19,7 +19,7 @@ if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 
 
-def train(VMCmodel, learning_rate, num_samples=100, use_cuda=False):
+def train(VMCmodel, learning_rate, num_samples=100, num_bin=50, use_cuda=False):
     '''
     train a model using stochastic gradient descent 
 
@@ -42,7 +42,7 @@ def train(VMCmodel, learning_rate, num_samples=100, use_cuda=False):
                 sample_probs[i] = sample_prob
                 sample_list[i] = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
 
-        energy, grad, energy_grad, precision = vmc_measure(VMCmodel.local_measure, sample_list, sample_probs, num_bin=50)
+        energy, grad, energy_grad, precision = vmc_measure(VMCmodel.local_measure, sample_list, sample_probs, num_bin=num_bin)
 
         # update variables using stochastic gradient descent
         g_list = [eg - energy * g for eg, g in zip(energy_grad, grad)]
@@ -90,15 +90,17 @@ def _checkpoint(VMCmodel):
     torch.save(state, 'state_Ns{}Np{}V{}.pt'.format(Nsites, Nparticles, Vint))
 
 
-max_iter = 1 #1000 
-Nx = 20  # 15
-Ny = 1
-Nsites = 20  # 15  # Nsites = 64 => program killed because it is using too much memory
-Nparticles = 10
+max_iter = 1000 #1000 
+num_samples = 100  # samples per batch
+num_bin = 50
+Nx = 5  # 15
+Ny = 5
+Nsites = 25  # 15  # Nsites = 64 => program killed because it is using too much memory
+Nparticles = 12
 Vint = 3.0
 
 
-phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, D=1, Vint=Vint)
+phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, D=2, Vint=Vint)
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
@@ -111,12 +113,12 @@ SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticle
 VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
 del SJA
 
-E_exact = 0.4365456400025272 #-3.248988339062832 # -2.9774135797163597 #-3.3478904193465335
+E_exact = -3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832 # -2.9774135797163597 #-3.3478904193465335
 
 
 if True: 
     t0 = time.time()
-    for i, (energy, precision) in enumerate(train(VMCmodel_, learning_rate = 0.1, num_samples=100, use_cuda = use_cuda)):
+    for i, (energy, precision) in enumerate(train(VMCmodel_, learning_rate = 0.1, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda)):
         t1 = time.time()
         print('Step %d, dE/|E| = %.4f, elapsed = %.4f' % (i, -(energy - E_exact)/E_exact, t1-t0))
         _update_curve(energy, precision)
