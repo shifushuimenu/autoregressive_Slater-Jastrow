@@ -51,6 +51,8 @@ def removeadd_rs(Gnum_inv, Gdenom_inv, r, s):
     corr_factor_Gdenom = corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)   
     #return corr_factor_Gnum / corr_factor_Gdenom
     if abs(corr_factor_Gdenom) < thresh:
+        np.savetxt("FinitePrec_Gnum_inv.dat", Gnum_inv)
+        np.savetxt("FinitePrec_Gdenom_inv.dat", Gdenom_inv)
         raise ErrorFinitePrecision
     else: 
         return corr_factor_Gnum / corr_factor_Gdenom
@@ -91,12 +93,12 @@ def adapt_Ainv(Ainv, Gglobal, r, s, i_start, i_end):
     DD = np.zeros((l, l))
     DD[-1, -1] = -1
 
-    Ainv_extended = block_update_inverse2(Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
-        C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD)
     corr = block_update_det_correction2(
         Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
         C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD
         )
+    Ainv_extended = block_update_inverse2(Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
+        C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD)
     return Ainv_extended, corr
 # NOT NEEDED ANYMORE     
     

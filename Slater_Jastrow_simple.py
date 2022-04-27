@@ -188,7 +188,7 @@ class PhysicalSystem(object):
 
 
     #@profile
-    def local_energy(self, config, psi_loc, ansatz):
+    def local_energy(self, config, psi_loc, ansatz, lowrank_flag=True):
         '''
         Local energy of periodic 1D or 2D t-V model
         
@@ -205,20 +205,27 @@ class PhysicalSystem(object):
         assert len(config.shape) > 1 and config.shape[0] == 1 # just one sample per batch
         I = bin2int_nobatch(config[0])
 
-        # diagonal matrix element: nearest neighbour interactions
-        Enn_int = 0.0
-        config_2D = config[0].reshape((self.nx, self.ny))
-        for nd in range(self.lattice.coord // 2):
-            Enn_int += ( np.roll(config_2D, shift=-1, axis=nd) * config_2D ).sum() 
+        if lowrank_flag:
+            # diagonal matrix element: nearest neighbour interactions
+            Enn_int = 0.0
+            config_2D = config[0].reshape((self.nx, self.ny))
+
+            for nd in range(self.lattice.coord // 2):
+                Enn_int += ( np.roll(config_2D, shift=-1, axis=nd) * config_2D ).sum() 
+                    
+            E_kin_loc, b_absamp = ansatz.lowrank_kinetic(I_ref=I, psi_loc=psi_loc, lattice=self.lattice)
+            return E_kin_loc + self.Vint * Enn_int 
+        else:
+            E_tot_slow, abspsi = self.local_energy_slow(config, psi_loc, ansatz)
+            return E_tot_slow
+            # E_tot_slow
+            #print("E_tot_lowrank=", E_kin_loc + self.Vint * Enn_int)
+            # E_tot_slow, abspsi = self.local_energy_slow(config, psi_loc, ansatz)
+            #print("E_tot_slow=", E_tot_slow)
+            #print("b_absamp=", b_absamp)
+            #print("abspsi=", abspsi)
         
-        E_kin_loc, b_absamp = ansatz.lowrank_kinetic(I_ref=I, psi_loc=psi_loc, lattice=self.lattice)
-        #print("E_tot_lowrank=", E_kin_loc + self.Vint * Enn_int)
-        # E_tot_slow, abspsi = self.local_energy_slow(config, psi_loc, ansatz)
-        #print("E_tot_slow=", E_tot_slow)
-        #print("b_absamp=", b_absamp)
-        #print("abspsi=", abspsi)
         
-        return E_kin_loc + self.Vint * Enn_int # E_tot_slow
 
 
 class Lattice1d(object):

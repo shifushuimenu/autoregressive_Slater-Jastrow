@@ -10,19 +10,19 @@ import matplotlib.pyplot as plt
 
 
 t_hop = 1.0 # t_hop > 0, since kinetic_term() provides already a minus sign 
-V_nnint = 3.0
+V_nnint = 0.0
 
-for V_nnint in np.linspace(3.0, 3.0, 1):
-    Nx = 3
-    Ny = 3
+for V_nnint in np.linspace(0.0, 0.0, 1):
+    Nx = 2
+    Ny = 2
     Ns = Nx*Ny # 13
-    Np = 4 #5
+    Np = 2 #5
 
 
     dimH = int(binom(Ns, Np))
     ###print("dimH=", dimH)
-    lattice = Lattice1d(ns=Ns)
-    #lattice = Lattice_rectangular(Nx, Ny)
+    #lattice = Lattice1d(ns=Ns)
+    lattice = Lattice_rectangular(Nx, Ny)
 
     # build the basis 
     basis_dict = {}
@@ -77,9 +77,9 @@ for V_nnint in np.linspace(3.0, 3.0, 1):
     idx = np.argsort(vals)
     vals = vals[idx]
     vecs = vecs[:, idx]
-    ###print("energies=", vals[0:10])
+    print("energies=", vals[0:10])
     E_gs = np.min(vals)
-    ###print("ground state energy =", E_gs)
+    print("ground state energy =", E_gs)
     print(V_nnint, E_gs)
     #print("ground state = ", vecs[:, 0])
 
@@ -96,7 +96,7 @@ for V_nnint in np.linspace(3.0, 3.0, 1):
             corr_[k] = (np.roll(config_sz, shift=-k) * config_sz).sum(axis=-1) / Ns
         szsz_corr[:] += corr_[:] * abs(GS[ii])**2
 
-    np.savetxt('ED_szsz_corr_Ns%dNp%dV%4.4f.dat' % (Ns, Np, V_nnint), szsz_corr[:, None])
+    np.savetxt('ED_szsz_corr_Nx%dNy%dNp%dV%4.4f.dat' % (Nx, Ny, Np, V_nnint), szsz_corr[:, None])
 
     #plt.plot(range(Ns), szsz_corr[:], '--r')
     #plt.show()
