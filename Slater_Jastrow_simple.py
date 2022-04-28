@@ -203,7 +203,6 @@ class PhysicalSystem(object):
         '''
         config = np.array(config).astype(int)
         assert len(config.shape) > 1 and config.shape[0] == 1 # just one sample per batch
-        I = bin2int_nobatch(config[0])
 
         if lowrank_flag:
             # diagonal matrix element: nearest neighbour interactions
@@ -212,8 +211,18 @@ class PhysicalSystem(object):
 
             for nd in range(self.lattice.coord // 2):
                 Enn_int += ( np.roll(config_2D, shift=-1, axis=nd) * config_2D ).sum() 
-                    
+
+            I = bin2int_nobatch(config[0])
             E_kin_loc, b_absamp = ansatz.lowrank_kinetic(I_ref=I, psi_loc=psi_loc, lattice=self.lattice)
+            # REMOVE
+            E_tot_slow, abspsi = self.local_energy_slow(config, psi_loc, ansatz)
+            print("=========================")
+            print("E_tot_slow=", E_tot_slow)
+            print("E_tot_fast=", E_kin_loc + self.Vint * Enn_int )
+            print("E_kin_loc=", E_kin_loc)
+            exit(1)
+            print("=========================")
+            # REMOVE
             return E_kin_loc + self.Vint * Enn_int 
         else:
             E_tot_slow, abspsi = self.local_energy_slow(config, psi_loc, ansatz)
@@ -257,8 +266,7 @@ class Lattice_rectangular(object):
         down  = np.roll(rectl, -1, axis=0).flatten()
         left  = np.roll(rectl, 1, axis=1).flatten()        
 
-        self.neigh = np.vstack((up, right, down, left)).transpose().astype('object') # idxs: sitenr, direction (up=0, right=1, down=2, left=3)
-        
+        self.neigh = np.vstack((up, right, down, left)).transpose().astype('object') # idxs: sitenr, direction (up=0, right=1, down=2, left=3)        
 ###############################
 
 #@profile        
@@ -296,7 +304,7 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
     I = np.array(I, dtype='object') 
     neigh = lattice.neigh
     ns = lattice.ns
-    coord = neigh.shape[-1]
+    coord = lattice.coord 
     max_num_connect = ns*(coord//2)
     
     I_prime = np.empty(I.shape + (max_num_connect,), dtype='object')
@@ -374,13 +382,13 @@ def kinetic_term2( I, lattice, t_hop=1.0 ):
     assert type(I) == int 
     neigh = lattice.neigh
     ns = lattice.ns
-    coord = neigh.shape[-1]
+    coord = lattice.coord
 
     # preallocate
     max_num_connect = ns*(coord//2)  # for cubic lattice   
     I_prime = np.empty((max_num_connect,), dtype='object')
     matrix_elem = np.empty_like(I_prime)
-    hop_from_to = []
+    rs_pos = [] # particle hopping from position r to position s
 
     count = 0
     for d in range((coord//2)): ####### Replace this error-prone hack by a sum over hopping-bonds. 
@@ -403,13 +411,24 @@ def kinetic_term2( I, lattice, t_hop=1.0 ):
                     r = j; s = i 
                 else:
                     r = -1; s = -1
-                hop_from_to.append((r,s))
+                rs_pos.append((r,s))
                 count += 1
 
     I_prime = I_prime[0:count]
     matrix_elem = matrix_elem[0:count]
 
-    return ( hop_from_to, I_prime, matrix_elem )
+    # make sure there are no duplicates in the hopping bonds (this happens for 2x2 lattice )
+    rs_pos_unique = []
+    idx_unique = []
+    for ii, item in enumerate(rs_pos):
+        if item not in rs_pos_unique:
+            rs_pos_unique.append(item)
+            idx_unique.append(ii)
+    rs_pos = rs_pos_unique 
+    I_prime = I_prime[idx_unique]
+    matrix_elem = matrix_elem[idx_unique]
+
+    return ( rs_pos, I_prime, matrix_elem )
 
 
 
