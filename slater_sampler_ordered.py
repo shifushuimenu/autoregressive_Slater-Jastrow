@@ -433,8 +433,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         num_onehop_states = len(xs_I)
         xs = int2bin(xs_I, ns=self.D)
-        ref_conf = int2bin(ref_I, ns=self.D)
-        num_onehop_states = len(xs)    
+        ref_conf = int2bin(ref_I, ns=self.D)    
         logger.info_refstate.num_onehop_states = num_onehop_states
 
         # special case of 1d n.n. hopping matrix

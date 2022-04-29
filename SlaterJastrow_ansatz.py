@@ -61,6 +61,7 @@ class SlaterJastrow_ansatz(selfMADE):
         self.D = kwargs['D']
         self.num_components = kwargs['num_components']
         self.net_depth = kwargs['net_depth']
+        self.deactivate_Jastrow = kwargs.get('deactivate_Jastrow', False)
         print("isinstance(Sdet_Sampler, SlaterDetSampler_ordered)=", isinstance(slater_sampler, SlaterDetSampler_ordered))
         assert isinstance(slater_sampler, SlaterDetSampler_ordered) or slater_sampler is None 
         self.input_orbitals = (slater_sampler is not None) 
@@ -193,7 +194,11 @@ class SlaterJastrow_ansatz(selfMADE):
         # for several "connecting states", but forward() accepts only one batch dimension.)
         samples_unfold_flat = samples_unfold.view(-1, samples_unfold.shape[-1])
 
-        x_hat_B = self.forward(samples_unfold_flat)
+        if self.deactivate_Jastrow:
+            # for debugging 
+            x_hat_B = torch.ones_like(samples_unfold_flat, requires_grad=False)
+        else:
+            x_hat_B = self.forward(samples_unfold_flat)
 
         x_hat_F = torch.zeros_like(x_hat_B, requires_grad=False)
         self.slater_sampler.reset_sampler()
@@ -206,10 +211,10 @@ class SlaterJastrow_ansatz(selfMADE):
             norm = torch.sum(x_hat[..., k*self.D:(k+1)*self.D])
             x_hat[..., k*self.D:(k+1)*self.D] /= norm
 
-        if self.input_orbitals:
-            assert(x_hat.requires_grad and not x_hat_F.requires_grad)
-        else: # optimize orbitals in Slater determinant, too 
-            assert(x_hat.requires_grad and x_hat_F.requires_grad)
+        if not self.deactivate_Jastrow:
+            assert(x_hat_B.requires_grad)
+        if not self.input_orbitals:
+            assert(x_hat_F.requires_grad)
 
         mm = x_hat * samples_unfold_flat # Pick only the probabilities at actually sampled positions !
         ones = torch.ones(*mm.shape)

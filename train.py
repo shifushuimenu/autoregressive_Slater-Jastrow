@@ -23,9 +23,12 @@ num_samples = 20 # 100  # samples per batch
 num_bin = 10 #50
 Nx = 2  # 15
 Ny = 2
+space_dim = 2
 Nsites = 4  # 15  # Nsites = 64 => program killed because it is using too much memory
-Nparticles = 2
+Nparticles = 3
 Vint = 0.0
+# for debugging 
+deactivate_Jastrow = False
 
 def train(VMCmodel, learning_rate, num_samples=100, num_bin=50, use_cuda=False):
     '''
@@ -88,6 +91,7 @@ def _update_curve(energy, precision):
     np.savetxt("energies_Nx{}Ny{}Np{}V{}.dat".format(Nx, Ny, Nparticles, Vint), MM)
 
 
+ckpt_outfile = 'state_Nx{}Ny{}Np{}V{}.pt'.format(Nx, Ny, Nparticles, Vint)
 def _checkpoint(VMCmodel):
     """Save most recent SJA state to disk."""
     state = {
@@ -95,10 +99,10 @@ def _checkpoint(VMCmodel):
         "precision": precision, 
         "net": VMCmodel.ansatz.state_dict()
     }
-    torch.save(state, 'state_Ns{}Np{}V{}.pt'.format(Nsites, Nparticles, Vint))
+    torch.save(state, ckpt_outfile)
 
 
-phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, D=2, Vint=Vint)
+phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, D=space_dim, Vint=Vint)
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
@@ -106,12 +110,12 @@ phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, 
 np.savetxt("eigvecs.dat", eigvecs)
 #(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
 Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
-SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)
+SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2, deactivate_Jastrow=deactivate_Jastrow)
 
 VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
 del SJA
 
-E_exact = 0.0 #-3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832 # -2.9774135797163597 #-3.3478904193465335
+E_exact = -3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832 # -2.9774135797163597 #-3.3478904193465335
 
 
 if True: 
@@ -134,7 +138,7 @@ corr_2D_ = np.zeros((phys_system.nx, phys_system.ny))
 
 
 print("Now sample from the converged ansatz")
-state_checkpointed = torch.load('state_Ns{}Np{}V{}.pt'.format(Nsites, Nparticles, Vint))
+state_checkpointed = torch.load(ckpt_outfile)
 VMCmodel_.ansatz.load_state_dict(state_checkpointed['net'])
 num_samples = 1000
 for _ in range(num_samples):

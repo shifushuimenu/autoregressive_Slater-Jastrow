@@ -95,7 +95,7 @@ def generate_random_config(Ns, Np):
     return config
 
 
-def HartreeFock_tVmodel(phys_system, potential='none', verbose=False):
+def HartreeFock_tVmodel(phys_system, potential='none', verbose=True):
     """
     Returns single-particle eigenstates of the Hartree-Fock solution of a 
     t-V model on a cubic lattice specified by `phys_system`. 
@@ -148,7 +148,7 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=False):
             if verbose:
                 print("converged:")
                 print("OBDM_new=", OBDM_new)
-                print("g.s. energy=", np.sum(eigvals[0:num_particles]) / float(num_particles))
+                print("g.s. energy=", np.sum(eigvals[0:num_particles]))
         else:
             OBDM = OBDM_new
     # END: Hartree-Fock 

@@ -16,7 +16,7 @@ for V_nnint in np.linspace(0.0, 0.0, 1):
     Nx = 2
     Ny = 2
     Ns = Nx*Ny # 13
-    Np = 2 #5
+    Np = 3 #5
 
 
     dimH = int(binom(Ns, Np))
@@ -50,11 +50,18 @@ for V_nnint in np.linspace(0.0, 0.0, 1):
     H_kin = np.zeros((dimH, dimH))
     for s1 in range(dimH):
         I1 = bin2int(basis_dict[s1])
-        _, I_primes, matrix_elems = kinetic_term2(int(I1), lattice) # kinetic_term() requires batch dim
+        hop_from_to, I_primes, matrix_elems = kinetic_term2(int(I1), lattice) # kinetic_term() requires batch dim
+        print("s1=", s1, "basis state=", basis_dict[s1])
+        print("I_s1=", bin2int(basis_dict[s1]))
         for (I2, me) in zip(I_primes, matrix_elems):
             s2 = invbasis_dict[I2]
+            print("s2=", s2, int2bin(I2, Ns))
+            print("me=", me)
             H_kin[s1, s2] = t_hop * me 
-            
+           
+    print("H_kin:")
+    print(H_kin)
+
     # interaction term 
     H_int = np.zeros((dimH, dimH))
     for ii in range(dimH):

@@ -20,7 +20,7 @@ from bitcoding import *
 
 
 def sort_onehop_states(hop_from_to, states_I, matrix_elem):
-    """sorts connecting states in increasing order of min(r,s)"""
+    """sorts connecting states in increasing order of min(r,s) and eliminates duplicate hopping bonds"""
     idx_sorted = np.argsort([min(*el) for el in hop_from_to])
     hop_from_to = np.array(hop_from_to)[idx_sorted]
     states_I = states_I[idx_sorted]

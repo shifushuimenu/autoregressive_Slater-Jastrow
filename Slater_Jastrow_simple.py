@@ -1,4 +1,3 @@
-from re import L
 import torch
 import numpy as np
 import torch.nn as nn
@@ -18,97 +17,6 @@ from k_copy import sort_onehop_states
 
 from profilehooks import profile
 from time import time 
-
-#@profile
-def fermion_parity( n, state_idx, i, j ):
-    """
-    Starting from the occupation number state encoded by the integer 
-    `state_idx`, let a particle hop from position `i` to position `j`
-    (or the backward process, i<j), which may result in a new state. If the new 
-    state does not vanish, fermion_parity() returns its sign. 
-
-    So this functions counts the number of ones in the bit representation of 
-    integer `state_idx` between sites i and j, i.e. in the closed interval [i+1, j-1]. 
-    
-    Parameters:
-    -----------
-        n: number of sites   
-            state_idx: int or 1d array_like of ints 
-            bitcoded occupation number state 
-        i, j: ints
-            0 <= i < j < n. The particle is assumed to hop from i to j or from j to i,
-            irrespective of whether such a hopping process is possible for the given 
-            occupation number states. 
-        
-    Returns:
-    --------
-        parity: \in [+1, -1]
-        
-    Example:
-    --------
-    >>> l = [7, 10, 0] # accepts list 
-    >>> fermion_parity( 4, l, 0, 3 )
-    array([ 1, -1,  1])
-    >>> a = np.array([6, 10, 0]) # accepts numpy array 
-    >>> fermion_parity( 4, a, 0, 3 )
-    array([ 1, -1,  1])
-        
-    """
-    state_idx = np.array(state_idx, dtype='object')
-    #assert(np.all(state_idx < pow(2,n)))
-    #assert(0 <= i < j < n)
-    # count number of particles between site i and j 
-    mask = np.zeros((state_idx.shape + (n,)), dtype='object')
-    mask[..., slice(i+1, j)] = 1
-    mask = bin2int(mask)
-    num_exchanges = np.array(
-        [bin(np.bitwise_and(mask[batch_idx], state_idx[batch_idx])).count('1') for batch_idx in range(mask.shape[0])]
-        )      
-    parity = np.where(num_exchanges%2==0, +1, -1)
-    
-    return parity         
-
-
-def fermion_parity2(n, state_idx, i, j):
-    """
-    FASTER, NO BATCH INPUT ALLOWED 
-
-    Starting from the occupation number state encoded by the integer 
-    `state_idx`, let a particle hop from position `i` to position `j`
-    (or the backward process, i<j), which may result in a new state. If the new 
-    state does not vanish, fermion_parity() returns its sign. 
-
-    So this functions counts the number of ones in the bit representation of 
-    integer `state_idx` between sites i and j, i.e. in the closed interval [i+1, j-1]. 
-
-    s = '0b11001' -> s[2:] = '11001'  (remove the leading characters 0b)
-    s[2:].rjust(6, '0') = '011001     (add leading zeros by right-justifying)
-
-    
-    Parameters:
-    -----------
-        n: number of sites   
-        state_idx: int or 1d array_like of ints 
-            bitcoded occupation number state 
-        i, j: ints
-            0 <= i < j < n. The particle is assumed to hop from i to j or from j to i,
-            irrespective of whether such a hopping process is possible for the given 
-            occupation number states. 
-        
-    Returns:
-    --------
-        parity: \in [+1, -1]
-
-    Example:
-    --------
-    >>> fermion_parity2(4, 6, 0, 3)
-    1
-    >>> fermion_parity2(4, 10, 0, 3)
-    -1
-    """
-    #assert 0 <= i < j < n
-    num_exchanges = bin(state_idx)[2:].rjust(n, '0').count('1', i+1, j)
-    return - 2 * (num_exchanges%2) + 1
 
 
 ###############################
@@ -180,7 +88,7 @@ class PhysicalSystem(object):
             # Alternative approach:
             # Recalculate wave function aplitude for each connecting state 
             # without using low-rank update. 
-            # eng_i = wi * (psi_func(config_i) / psi_loc) 
+            # eng_i = wi * (psi_func(config_    i) / psi_loc) 
             # ==============================================
             acc += eng_i
 
@@ -220,7 +128,6 @@ class PhysicalSystem(object):
             print("E_tot_slow=", E_tot_slow)
             print("E_tot_fast=", E_kin_loc + self.Vint * Enn_int )
             print("E_kin_loc=", E_kin_loc)
-            exit(1)
             print("=========================")
             # REMOVE
             return E_kin_loc + self.Vint * Enn_int 
@@ -537,12 +444,16 @@ class VMCKernel(object):
         config = np.array(config)
         assert len(config.shape) == 2 and config.shape[0] == 1 # Convention: batch dimension required, but only one sample per batch allowed
         psi_loc = self.ansatz.psi_amplitude(torch.from_numpy(config))
-        assert(psi_loc.requires_grad)
-        with torch.autograd.set_detect_anomaly(True):
-            # get gradient {d/dW}_{loc}
-            self.ansatz.zero_grad()
-            psi_loc.backward(retain_graph=True) # `retain_graph=True` appears to be necessary (?) because saved tensors are accessed after calling backward()
-        grad_loc = [p.grad.data/psi_loc.item() for p in self.ansatz.parameters()]
+        if not self.ansatz.deactivate_Jastrow or not self.ansatz.input_orbitals:
+            assert(psi_loc.requires_grad)
+            with torch.autograd.set_detect_anomaly(True):
+                # get gradient {d/dW}_{loc}
+                self.ansatz.zero_grad()
+                psi_loc.backward(retain_graph=True) # `retain_graph=True` appears to be necessary (?) because saved tensors are accessed after calling backward()
+            grad_loc = [p.grad.data/psi_loc.item() for p in self.ansatz.parameters()]
+        else:
+            # for debugging 
+            grad_loc = [torch.zeros_like(p) for p in self.ansatz.parameters()]
 
         # E_{loc}
         eloc = self.energy_loc(config, psi_loc.data, ansatz=self.ansatz).item()
