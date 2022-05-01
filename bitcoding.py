@@ -76,7 +76,8 @@ def fermion_parity2(n, state_idx, i, j):
     integer `state_idx` between sites i and j, i.e. in the closed interval [i+1, j-1]. 
 
     s = '0b11001' -> s[2:] = '11001'  (remove the leading characters 0b)
-    s[2:].rjust(6, '0') = '011001     (add leading zeros by right-justifying)
+    s[2:].rjust(6, '0') = '011001'    (add leading zeros by right-justifying)
+    s[2:].rjust(6, '0')[::-1] = '100110'  (invert order because in our convention we count sites from the right)
 
     
     Parameters:
@@ -101,7 +102,7 @@ def fermion_parity2(n, state_idx, i, j):
     -1
     """
     #assert 0 <= i < j < n
-    num_exchanges = bin(state_idx)[2:].rjust(n, '0').count('1', i+1, j)
+    num_exchanges = bin(state_idx)[2:].rjust(n, '0')[::-1].count('1', i+1, j)
     return - 2 * (num_exchanges%2) + 1
 
 

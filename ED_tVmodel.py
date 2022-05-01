@@ -57,7 +57,7 @@ for V_nnint in np.linspace(0.0, 0.0, 1):
             s2 = invbasis_dict[I2]
             print("s2=", s2, int2bin(I2, Ns))
             print("me=", me)
-            H_kin[s1, s2] = t_hop * me 
+            H_kin[s1, s2] = - t_hop * me  # minus sign here is consistent with VMC code
            
     print("H_kin:")
     print(H_kin)
