@@ -13,7 +13,7 @@ torch.autograd.set_detect_anomaly(True)
 
 # set random number seed
 use_cuda = False
-seed = 43
+seed = 33
 torch.manual_seed(seed)
 if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
@@ -21,11 +21,12 @@ np.random.seed(seed)
 max_iter = 3000 #1000 
 num_samples = 20 # 100  # samples per batch
 num_bin = 10 #50
-Nx = 4  # 15
+Nx = 3  # 15
 Ny = 3
 Nsites = Nx*Ny  # 15  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
-Nparticles = 5
+Nparticles = 4
+
 Vint = 3.0
 # for debugging 
 deactivate_Jastrow = False

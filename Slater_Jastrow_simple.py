@@ -96,7 +96,7 @@ class PhysicalSystem(object):
 
 
     #@profile
-    def local_energy(self, config, psi_loc, ansatz, lowrank_flag=True):
+    def local_energy(self, config, psi_loc, ansatz, lowrank_flag=False):
         '''
         Local energy of periodic 1D or 2D t-V model
         
@@ -356,7 +356,7 @@ def vmc_measure(local_measure, sample_list, sample_probs, num_bin=50):
     # measurements
     energy_loc_list, grad_loc_list = [], []
     for i, config in enumerate(sample_list):
-        print("sample nr=", i)
+        print("local energy: sample nr=", i)
         # back-propagation is used to get gradients.
         energy_loc, grad_loc = local_measure([config]) # ansatz.psi requires batch dim)
         energy_loc_list.append(energy_loc)
