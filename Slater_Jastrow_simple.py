@@ -122,14 +122,14 @@ class PhysicalSystem(object):
 
             I = bin2int_nobatch(config[0])
             E_kin_loc, b_absamp = ansatz.lowrank_kinetic(I_ref=I, psi_loc=psi_loc, lattice=self.lattice)
-            # REMOVE
-            E_tot_slow, abspsi = self.local_energy_slow(config, psi_loc, ansatz)
-            print("=========================")
-            print("E_tot_slow=", E_tot_slow)
-            print("E_tot_fast=", E_kin_loc + self.Vint * Enn_int )
-            print("E_kin_loc=", E_kin_loc)
-            print("=========================")
-            # REMOVE
+            # # REMOVE
+            # E_tot_slow, abspsi = self.local_energy_slow(config, psi_loc, ansatz)
+            # print("=========================")
+            # print("E_tot_slow=", E_tot_slow)
+            # print("E_tot_fast=", E_kin_loc + self.Vint * Enn_int )
+            # print("E_kin_loc=", E_kin_loc)
+            # print("=========================")
+            # # REMOVE
             return E_kin_loc + self.Vint * Enn_int 
         else:
             E_tot_slow, abspsi = self.local_energy_slow(config, psi_loc, ansatz)

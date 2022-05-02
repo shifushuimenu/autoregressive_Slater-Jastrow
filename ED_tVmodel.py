@@ -12,11 +12,11 @@ import matplotlib.pyplot as plt
 t_hop = 1.0 # t_hop > 0, since kinetic_term() provides already a minus sign 
 V_nnint = 0.0
 
-for V_nnint in np.linspace(0.0, 0.0, 1):
+for V_nnint in np.linspace(3.0, 3.0, 1):
     Nx = 3
     Ny = 3
     Ns = Nx*Ny # 13
-    Np = 2 #5
+    Np = 4 #5
 
 
     dimH = int(binom(Ns, Np))

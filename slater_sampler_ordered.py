@@ -401,23 +401,23 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 print("test1=", test1, "ratio=", ratio)
 
                 ratio = sign_num * sign_denom * np.exp(logdet_num - logdet_denom)
-                if ratio > 0:
+                if ratio > 0:                    
                     print("Error: ratio > 0 ! logdet_num=", logdet_num, "logdet_denom=", logdet_denom)
                     print("exp(logdet_num)=", np.exp(logdet_num), "exp(logdet_denom)=", np.exp(logdet_denom), "sign_num=", sign_num, "sign_denom=", sign_denom, \
                             "cond_num=", np.linalg.cond(Gnum), "cond_denom=", np.linalg.cond(Gdenom))
                     print("np.linalg.cond(Gdenom)=", np.linalg.cond(Gdenom))
-                    np.savetxt("Gdenom.dat", Gdenom)
-                    fig, axs = plt.subplots(nrows=2,ncols=1)
-                    axs[0].set_title("blablabla")
-                    axs[0].imshow(Gnum)
-                    axs[1].imshow(Gdenom)
-                    #axs[0].colorbar()
-                    #axs[1].colorbar()
-                    plt.show()
-                    print("singular values=", ss)
-                    test1 = np.linalg.det( D - C @ np.linalg.inv(X) @ B )
-                    print("test1=", test1, "ratio=", ratio)
-                    exit(1)
+                    # np.savetxt("Gdenom.dat", Gdenom)
+                    # fig, axs = plt.subplots(nrows=2,ncols=1)
+                    # axs[0].set_title("blablabla")
+                    # axs[0].imshow(Gnum)
+                    # axs[1].imshow(Gdenom)
+                    # #axs[0].colorbar()
+                    # #axs[1].colorbar()
+                    # plt.show()
+                    # print("singular values=", ss)
+                    # test1 = np.linalg.det( D - C @ np.linalg.inv(X) @ B )
+                    # print("test1=", test1, "ratio=", ratio)
+                    #exit(1)
 
             return ratio 
 
