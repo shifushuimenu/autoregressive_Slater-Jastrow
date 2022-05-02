@@ -23,8 +23,8 @@ num_samples = 20 # 100  # samples per batch
 num_bin = 10 #50
 Nx = 3  # 15
 Ny = 3
-space_dim = 2
 Nsites = Nx*Ny  # 15  # Nsites = 64 => program killed because it is using too much memory
+space_dim = 2
 Nparticles = 2
 Vint = 0.0
 # for debugging 
@@ -76,18 +76,27 @@ def train(VMCmodel, learning_rate, num_samples=100, num_bin=50, use_cuda=False):
 
 # visualize the loss history
 energy_list, precision_list = [], []
+av_list, sigma_list = [], []
 def _update_curve(energy, precision):
     energy_list.append(energy)
     precision_list.append(precision)
+    Nb = len(energy_list)
+    av = np.sum(energy_list) / Nb
+    sigma = np.sqrt((np.sum([s**2 for s in precision_list]) / Nb) / Nb)
+    av_list.append(av)
+    sigma_list.append(sigma)
     if len(energy_list)%(max_iter-1) == 0:
-        plt.errorbar(np.arange(1, len(energy_list) + 1), energy_list, yerr=precision_list, capsize=3, label="Slater-Jastrow")
+        xvals = np.arange(1, len(energy_list) + 1)
+        plt.errorbar(xvals, energy_list, yerr=precision_list, capsize=3, label="Slater-Jastrow")
+        plt.errorbar(xvals, av_list, yerr=sigma_list, capsize=3)
         # dashed line for exact energy
         plt.axhline(E_exact, ls='--', label="exact")
         plt.title("$L$=%d, $N$=%d, $V/t$ = %4.4f" % (Nsites, Nparticles, Vint))
         plt.legend(loc="upper right")
         plt.show()
 
-    MM = np.hstack((np.array(energy_list)[:,None], np.array(precision_list)[:,None]))
+    MM = np.hstack((np.array(energy_list)[:,None], np.array(precision_list)[:,None],
+                    np.array(av_list)[:,None], np.array(sigma_list)[:,None]))
     np.savetxt("energies_Nx{}Ny{}Np{}V{}.dat".format(Nx, Ny, Nparticles, Vint), MM)
 
 

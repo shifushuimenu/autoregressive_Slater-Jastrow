@@ -13,10 +13,10 @@ t_hop = 1.0 # t_hop > 0, since kinetic_term() provides already a minus sign
 V_nnint = 0.0
 
 for V_nnint in np.linspace(0.0, 0.0, 1):
-    Nx = 2
-    Ny = 2
+    Nx = 3
+    Ny = 3
     Ns = Nx*Ny # 13
-    Np = 3 #5
+    Np = 2 #5
 
 
     dimH = int(binom(Ns, Np))
@@ -57,7 +57,7 @@ for V_nnint in np.linspace(0.0, 0.0, 1):
             s2 = invbasis_dict[I2]
             print("s2=", s2, int2bin(I2, Ns))
             print("me=", me)
-            H_kin[s1, s2] = - t_hop * me  # minus sign here is consistent with VMC code
+            H_kin[s1, s2] =  t_hop * me 
            
     print("H_kin:")
     print(H_kin)
