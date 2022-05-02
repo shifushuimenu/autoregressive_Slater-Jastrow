@@ -21,11 +21,11 @@ np.random.seed(seed)
 max_iter = 3000 #1000 
 num_samples = 20 # 100  # samples per batch
 num_bin = 10 #50
-Nx = 3  # 15
-Ny = 3
+Nx = 8  # 15
+Ny = 8
 Nsites = Nx*Ny  # 15  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
-Nparticles = 4
+Nparticles = 32
 
 Vint = 3.0
 # for debugging 

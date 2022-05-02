@@ -96,7 +96,7 @@ class PhysicalSystem(object):
 
 
     #@profile
-    def local_energy(self, config, psi_loc, ansatz, lowrank_flag=False):
+    def local_energy(self, config, psi_loc, ansatz, lowrank_flag=True):
         '''
         Local energy of periodic 1D or 2D t-V model
         

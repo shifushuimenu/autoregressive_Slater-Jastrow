@@ -137,45 +137,46 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         C = B.transpose()
         D = G[np.ix_(K2, K2)] - np.diag(occ_vec_add)
 
-        # use singular value decomposition to separate scales             
+        # use singular value decomposition to separate scales     
+        # cancel the denominator matrix        
         uu, ss, vv = np.linalg.svd(X)
         ratio = np.linalg.det( D - ( (C @  vv.T) @ np.diag(1.0/ss) @ (uu.T @ B) ) )
 
-        if __debug__:
-            occ_vec_extend = occ_vec_base + occ_vec_add
-            extend = list(range(0, i+1))
-            Gnum = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
-            Gdenom = X
+        # if __debug__:
+        #     occ_vec_extend = occ_vec_base + occ_vec_add
+        #     extend = list(range(0, i+1))
+        #     Gnum = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
+        #     Gdenom = X
 
 
-            sign_num, logdet_num = np.linalg.slogdet(Gnum)
-            sign_denom, logdet_denom = np.linalg.slogdet(Gdenom)
+        #     sign_num, logdet_num = np.linalg.slogdet(Gnum)
+        #     sign_denom, logdet_denom = np.linalg.slogdet(Gdenom)
 
-            np.savetxt("Pmat.dat", self.P)
-            np.savetxt("Gnum.dat", Gnum)
-            np.savetxt("Gdenom.dat", Gdenom)
-            print("exp(logdet_num)=", np.exp(logdet_num), "exp(logdet_denom)=", np.exp(logdet_denom))
-            test1 = np.linalg.det( D - C @ np.linalg.inv(X) @ B )
-            print("test1=", test1, "ratio=", ratio)
+        #     #np.savetxt("Pmat.dat", self.P)
+        #     #np.savetxt("Gnum.dat", Gnum)
+        #     #np.savetxt("Gdenom.dat", Gdenom)
+        #     #print("exp(logdet_num)=", np.exp(logdet_num), "exp(logdet_denom)=", np.exp(logdet_denom))
+        #     #test1 = np.linalg.det( D - C @ np.linalg.inv(X) @ B )
+        #     #print("test1=", test1, "ratio=", ratio)
 
-            ratio = sign_num * sign_denom * np.exp(logdet_num - logdet_denom)
-            if ratio > 0:                    
-                print("Error: ratio > 0 ! logdet_num=", logdet_num, "logdet_denom=", logdet_denom)
-                print("exp(logdet_num)=", np.exp(logdet_num), "exp(logdet_denom)=", np.exp(logdet_denom), "sign_num=", sign_num, "sign_denom=", sign_denom, \
-                        "cond_num=", np.linalg.cond(Gnum), "cond_denom=", np.linalg.cond(Gdenom))
-                print("np.linalg.cond(Gdenom)=", np.linalg.cond(Gdenom))
-                # np.savetxt("Gdenom.dat", Gdenom)
-                # fig, axs = plt.subplots(nrows=2,ncols=1)
-                # axs[0].set_title("blablabla")
-                # axs[0].imshow(Gnum)
-                # axs[1].imshow(Gdenom)
-                # #axs[0].colorbar()
-                # #axs[1].colorbar()
-                # plt.show()
-                # print("singular values=", ss)
-                # test1 = np.linalg.det( D - C @ np.linalg.inv(X) @ B )
-                # print("test1=", test1, "ratio=", ratio)
-                #exit(1)
+        #     ratio = sign_num * sign_denom * np.exp(logdet_num - logdet_denom)
+        #     if ratio > 0:                    
+        #         print("Error: ratio > 0 ! logdet_num=", logdet_num, "logdet_denom=", logdet_denom)
+        #         print("exp(logdet_num)=", np.exp(logdet_num), "exp(logdet_denom)=", np.exp(logdet_denom), "sign_num=", sign_num, "sign_denom=", sign_denom, \
+        #                 "cond_num=", np.linalg.cond(Gnum), "cond_denom=", np.linalg.cond(Gdenom))
+        #         print("np.linalg.cond(Gdenom)=", np.linalg.cond(Gdenom))
+        #         # np.savetxt("Gdenom.dat", Gdenom)
+        #         # fig, axs = plt.subplots(nrows=2,ncols=1)
+        #         # axs[0].set_title("blablabla")
+        #         # axs[0].imshow(Gnum)
+        #         # axs[1].imshow(Gdenom)
+        #         # #axs[0].colorbar()
+        #         # #axs[1].colorbar()
+        #         # plt.show()
+        #         # print("singular values=", ss)
+        #         # test1 = np.linalg.det( D - C @ np.linalg.inv(X) @ B )
+        #         # print("test1=", test1, "ratio=", ratio)
+        #         #exit(1)
 
         return ratio 
 
@@ -250,7 +251,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # IMPROVE: For large matrices the ratio of determinants leads to numerical
         # instabilities which results in not normalized probability distributions   
         # => use LOW-RANK UPDATE     
-        print("k=", k, "xmin=", self.xmin, "xmax=", self.xmax, "i_k=", i_k, "probs[:]=", probs, "  np.sum(probs[:])=", probs.sum())         
+        #print("k=", k, "xmin=", self.xmin, "xmax=", self.xmax, "i_k=", i_k, "probs[:]=", probs, "  np.sum(probs[:])=", probs.sum())         
         #np.savetxt("Schur_complement.dat", self.Schur_complement)
         assert torch.isclose(probs.sum(), torch.tensor([1.0])), "norm=%20.16f" % (probs.sum()) # assert normalization 
         # clamp negative values which are in absolute magnitude below machine precision
@@ -580,6 +581,16 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                             continue
 
                         if abs(r-s) >= 1: # long-range hopping in 1d (This does not include special cases for long-range hopping due to 2D geometry.)
+
+                            # # First check whether the conditional probabilities are already saturated.
+                            # NOTE: The cond. prob. at the actually sampled positions needs to be computed before 
+                            #       saturation of the normalization can be exploited.
+                            # IMPROVE: make sure that all subsequent `i` (for given state_nr and k) are automatically skipped without 
+                            # testing this conditions again `
+                            if cumsum_condprob_onehop[state_nr, k] > eps_norm_probs and i > xs_pos[state_nr, k]:  
+                                cond_prob_onehop[state_nr, k, i:] = 0.0
+                                logger.info_refstate.counter_skip += (xmax - i) 
+                                continue
 
                             if r < s:
                                 if k > 1 and k <= k_s[state_nr]: # k=0 can always be copied from the reference state 
