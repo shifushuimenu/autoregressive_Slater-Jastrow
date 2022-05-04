@@ -13,10 +13,10 @@ t_hop = 1.0 # t_hop > 0, since kinetic_term() provides already a minus sign
 V_nnint = 0.0
 
 for V_nnint in np.linspace(3.0, 3.0, 1):
-    Nx = 4
+    Nx = 3
     Ny = 3
     Ns = Nx*Ny # 13
-    Np = 6 #5
+    Np = 4 #5
 
 
     dimH = int(binom(Ns, Np))
@@ -101,7 +101,7 @@ for V_nnint in np.linspace(3.0, 3.0, 1):
         corr_[:] = 0.0
         for k in range(0, Ns):
             corr_[k] = (np.roll(config_sz, shift=-k) * config_sz).sum(axis=-1) / Ns
-        szsz_corr[:] += corr_[:] * abs(GS[ii])**2
+        szsz_corr[:] += corr_[:] * abs(GS[ii])**2 # CAREFUL if ground state is degenerate ! Sum over degenerate states. 
 
     np.savetxt('ED_szsz_corr_Nx%dNy%dNp%dV%4.4f.dat' % (Nx, Ny, Np, V_nnint), szsz_corr[:, None])
 

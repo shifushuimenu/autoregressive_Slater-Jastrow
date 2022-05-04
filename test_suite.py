@@ -155,7 +155,7 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=True):
 
     eigvals, U = linalg.eigh(H_HF)
 
-    return (ns, U)
+    return (eigvals, U)
     
     
 

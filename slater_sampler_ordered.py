@@ -46,7 +46,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         as columns, the first `Nparticles` columns are chosen to form the 
         Slater determinant.
     """
-    def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, naive=True):
+    def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, eigvals=None, naive=True):
         super(SlaterDetSampler_ordered, self).__init__()
         self.epsilon = 1e-5
         self.D = Nsites 
@@ -66,6 +66,15 @@ class SlaterDetSampler_ordered(torch.nn.Module):
            # Green's function 
            self.G = torch.eye(self.D) - self.U    
        
+        #    # TEST
+        #    # Green's function at finite temperature 
+        #    beta = 1.0
+        #    V = self.eigfunc[:,:]
+        #    self.Gtherm = torch.eye(self.D) - V @ np.diag( 1.0/(1.0 + np.exp(+beta*eigvals[:])) ) @ V.transpose() / np.prod(1.0 + np.exp(-beta*eigvals[:]))
+        #    print("diag=", np.diag(self.Gtherm))
+        #    print("total particle number = ", np.sum(np.diag(self.Gtherm)))
+        #    # TEST
+
         else: # optimize also the columns of the Slater determinant 
            self.optimize_orbitals = True 
            self.P = nn.Parameter(torch.rand(self.D, self.N, requires_grad=True)) # leaf Variable, updated during SGD; columns are not (!) orthonormal 
@@ -140,43 +149,50 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # use singular value decomposition to separate scales     
         # cancel the denominator matrix        
         uu, ss, vv = np.linalg.svd(X)
+        # THIS DOES NOT REALLY WORK because large scales in 1/ss still swamp the smaller scales. 
         ratio = np.linalg.det( D - ( (C @  vv.T) @ np.diag(1.0/ss) @ (uu.T @ B) ) )
 
-        # if __debug__:
-        #     occ_vec_extend = occ_vec_base + occ_vec_add
-        #     extend = list(range(0, i+1))
-        #     Gnum = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
-        #     Gdenom = X
+        if __debug__:
+            occ_vec_extend = occ_vec_base + occ_vec_add
+            extend = list(range(0, i+1))
+            Gnum = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
+            Gdenom = X
 
 
-        #     sign_num, logdet_num = np.linalg.slogdet(Gnum)
-        #     sign_denom, logdet_denom = np.linalg.slogdet(Gdenom)
+            sign_num, logdet_num = np.linalg.slogdet(Gnum)
+            sign_denom, logdet_denom = np.linalg.slogdet(Gdenom)
 
-        #     #np.savetxt("Pmat.dat", self.P)
-        #     #np.savetxt("Gnum.dat", Gnum)
-        #     #np.savetxt("Gdenom.dat", Gdenom)
-        #     #print("exp(logdet_num)=", np.exp(logdet_num), "exp(logdet_denom)=", np.exp(logdet_denom))
-        #     #test1 = np.linalg.det( D - C @ np.linalg.inv(X) @ B )
-        #     #print("test1=", test1, "ratio=", ratio)
+            #np.savetxt("Pmat.dat", self.P)
+            #np.savetxt("Gnum.dat", Gnum)
+            #np.savetxt("Gdenom.dat", Gdenom)
+            #print("exp(logdet_num)=", np.exp(logdet_num), "exp(logdet_denom)=", np.exp(logdet_denom))
+            #test1 = np.linalg.det( D - C @ np.linalg.inv(X) @ B )
+            #print("test1=", test1, "ratio=", ratio)
 
-        #     ratio = sign_num * sign_denom * np.exp(logdet_num - logdet_denom)
-        #     if ratio > 0:                    
-        #         print("Error: ratio > 0 ! logdet_num=", logdet_num, "logdet_denom=", logdet_denom)
-        #         print("exp(logdet_num)=", np.exp(logdet_num), "exp(logdet_denom)=", np.exp(logdet_denom), "sign_num=", sign_num, "sign_denom=", sign_denom, \
-        #                 "cond_num=", np.linalg.cond(Gnum), "cond_denom=", np.linalg.cond(Gdenom))
-        #         print("np.linalg.cond(Gdenom)=", np.linalg.cond(Gdenom))
-        #         # np.savetxt("Gdenom.dat", Gdenom)
-        #         # fig, axs = plt.subplots(nrows=2,ncols=1)
-        #         # axs[0].set_title("blablabla")
-        #         # axs[0].imshow(Gnum)
-        #         # axs[1].imshow(Gdenom)
-        #         # #axs[0].colorbar()
-        #         # #axs[1].colorbar()
-        #         # plt.show()
-        #         # print("singular values=", ss)
-        #         # test1 = np.linalg.det( D - C @ np.linalg.inv(X) @ B )
-        #         # print("test1=", test1, "ratio=", ratio)
-        #         #exit(1)
+            ratio2 = sign_num * sign_denom * np.exp(logdet_num - logdet_denom)
+            print("ratio2=", ratio2, "ratio=", ratio)
+            # if ratio2 > 0:                    
+                #print("Error: ratio > 0 ! logdet_num=", logdet_num, "logdet_denom=", logdet_denom)
+                #print("exp(logdet_num)=", np.exp(logdet_num), "exp(logdet_denom)=", np.exp(logdet_denom), "sign_num=", sign_num, "sign_denom=", sign_denom, \
+                #        "cond_num=", np.linalg.cond(Gnum), "cond_denom=", np.linalg.cond(Gdenom))
+                #print("np.linalg.cond(Gdenom)=", np.linalg.cond(Gdenom))
+                #np.savetxt("Gdenom.dat", Gdenom)
+                #fig, axs = plt.subplots(nrows=2,ncols=1)
+                #axs[0].set_title("blablabla")
+                #axs[0].imshow(Gnum)
+                #axs[1].imshow(Gdenom)
+                #axs[0].colorbar()
+                #axs[1].colorbar()
+                #plt.show()
+                # print("ratio=", ratio)
+                # print((C @  vv.T))
+                # print(np.diag(1.0/ss))
+                # print(np.diag(1.0/ss) @ (uu.T @ B))
+                # print(( (C @  vv.T) @ np.diag(1.0/ss) @ (uu.T @ B) ))
+                # print("singular values=", ss)
+                # test1 = np.linalg.det( D - C @ np.linalg.inv(X) @ B )
+                #print("test1=", test1, "ratio=", ratio)
+                #exit(1)
 
         return ratio 
 
@@ -195,6 +211,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         if self.naive_update:
             Ksites_tmp = self.Ksites[:]
             occ_vec_tmp = self.occ_vec[:]
+            ### Not needed anymore when cancelling the denominator 
             GG_denom = self.G[np.ix_(self.Ksites, self.Ksites)] - torch.diag(torch.tensor(self.occ_vec[0:len(self.Ksites)]))
         else:
             self.BB_reuse = []   # list of matrices to be reused later 
@@ -206,9 +223,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
             if self.naive_update:
                 Ksites_tmp.append(i_k)
                 occ_vec_tmp[i_k] = 1           
-                
-                #GG_num = self.G[np.ix_(Ksites_tmp, Ksites_tmp)] - torch.diag(torch.tensor(occ_vec_tmp[0:i_k+1]))                
-                #probs[i_k] = (-1) * torch.det(GG_num) / torch.det(GG_denom)
+            
+                GG_num = self.G[np.ix_(Ksites_tmp, Ksites_tmp)] - torch.diag(torch.tensor(occ_vec_tmp[0:i_k+1]))                
+                probs[i_k] = (-1) * torch.det(GG_num) / torch.det(GG_denom)
                                 
                 # Cancel numerator determinant rather than calculating it. 
                 if k > 0:
@@ -251,9 +268,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # IMPROVE: For large matrices the ratio of determinants leads to numerical
         # instabilities which results in not normalized probability distributions   
         # => use LOW-RANK UPDATE     
-        #print("k=", k, "xmin=", self.xmin, "xmax=", self.xmax, "i_k=", i_k, "probs[:]=", probs, "  np.sum(probs[:])=", probs.sum())         
+        print("k=", k, "xmin=", self.xmin, "xmax=", self.xmax, "i_k=", i_k, "probs[:]=", probs, "  np.sum(probs[:])=", probs.sum())         
         #np.savetxt("Schur_complement.dat", self.Schur_complement)
-        assert torch.isclose(probs.sum(), torch.tensor([1.0])), "norm=%20.16f" % (probs.sum()) # assert normalization 
+        assert torch.isclose(probs.sum(), torch.tensor([1.0])), "k=%d, norm=%20.16f" % (k, probs.sum()) # assert normalization 
         # clamp negative values which are in absolute magnitude below machine precision
         probs = torch.where(abs(probs) > 1e-15, probs, torch.tensor([0.0]))
 
@@ -540,13 +557,11 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
                 # In case a cond. prob. of the reference state is zero:
                 try:    
-                    Gnum_inv = np.linalg.inv(Gnum) 
+                    Gnum_inv = np.linalg.inv(Gnum)
+                    Gnum_inv_reuse[k][i] = Gnum_inv
                 except np.linalg.LinAlgError as e:
-                    print("ERROR: det_Gnum=%16.12f\n" % (det_Gnum), e)
-                    exit(1)
-
-                Gnum_inv_reuse[k][i] = Gnum_inv
-
+                    print("Cond. prob. of reference state is zero: det_Gnum=%16.12f\n" % (det_Gnum), e)
+                
                 cond_prob_ref[k, i] = (-1) * det_Gnum / det_Gdenom
                 t1 = time() 
                 logger.info_refstate.elapsed_ref += (t1 - t0)
@@ -599,9 +614,11 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                         # NOTE: The cond. probs. for (k-1)-th particle are computed retroactively while the 
                                         # cond. probs. for k-th particle of the reference state are being computed. 
                                         cond_prob_onehop[state_nr, k-1, i] = corr_factor * cond_prob_ref[k, i] # update: (k-1) -> k
+                                        assert -1e-10 <= cond_prob_onehop[state_nr, k-1, i] <= 1.0 + 1e-10, "cond prob = %16.10f" %(cond_prob_onehop[state_nr, k-1, i])
                                     except ErrorFinitePrecision:
                                         print("Excepting finite precision error, state_nr=", state_nr, "k=", k, "i=", i)
                                         cond_prob_onehop[state_nr, k-1, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-2], i=i)
+                                        assert -1e-10 <= cond_prob_onehop[state_nr, k-1, i] <= 1.0 + 1e-10, "cond prob = %16.10f" %(cond_prob_onehop[state_nr, k-1, i])
 
                                 # additionally ...
                                 ###if k == self.N-1 or k == k_s[state_nr]: 
@@ -617,9 +634,11 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                             corr_factor_Gdenom = LR.corr_factor_remove_r(Gdenom_inv_, r=r) * ( det_Gnum / det_Gdenom )
                                             corr_factor = corr_factor_Gnum / corr_factor_Gdenom 
                                             cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
+                                            assert -1e-10 <= cond_prob_onehop[state_nr, k, i] <= 1.0, "cond_prob=%16.10f" % (cond_prob_onehop[state_nr, k, i])
                                         except np.linalg.LinAlgError as e: # from inverting singular matrix in LR.adapt_Ainv()
                                             print("Excepting LinAlgError 1, state_nr=", state_nr, "k=", k, "i=", i)
                                             cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
+                                            assert -1e-10 <= cond_prob_onehop[state_nr, k, i] <= 1.0
 
                                 # Yet another special case (only relevant in 2D since there i > s is possible)
                                 # k is the component in the reference state 
@@ -637,15 +656,18 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                         corr_factor_Gdenom = corr1 * corr2 
                                         corr_factor = corr_factor_Gnum / corr_factor_Gdenom
                                         cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k,i]
+                                        assert 0 <= cond_prob_onehop[state_nr, k, i] <= 1.0
                                     except np.linalg.LinAlgError as e: # from inverting singular matrix in LR.adapt_Ainv() 
                                         print("Excepting LinAlgError 2, state_nr=", state_nr, "k=", k, "i=", i)
                                         cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
+                                        assert -1e-10 <= cond_prob_onehop[state_nr, k, i] <= 1.0
 
                                 # Yet another special case (only relevant in 2D)
                                 elif k > k_s[state_nr] + 1 and i > s:
                                     try:
                                         corr_factor = LR.removeadd_rs(Gnum_inv, Gdenom_inv, r, s)
                                         cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
+                                        assert -1e-10 <= cond_prob_onehop[state_nr, k, i] <= 1.0
                                         #if state_nr==6 and k==7:
                                         #print("Aha !  state_nr=", state_nr, "i=", i, "r=", r, "s=", s, "cond prob=", cond_prob_onehop[state_nr, k, i])
                                         #test = (-1) * _detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
@@ -653,6 +675,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                     except ErrorFinitePrecision as e: 
                                         print("Excepting finite precision error, state_nr=", state_nr, "k=", k, "i=", i)
                                         cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
+                                        assert -1e-10 <= cond_prob_onehop[state_nr, k, i] <= 1.0 + 1e-10, "cond. prob = %16.10f" % (cond_prob_onehop[state_nr, k, i])
                             
                             elif r > s:
                                 if i > s:
@@ -692,6 +715,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                                 else:
                                                     cond_prob_onehop[state_nr, k, j_add] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=j_add)
                                                 # update cumul. probs. explicitly because this is inside the body of an extra loop
+                                                assert -1e-10 <= cond_prob_onehop[state_nr, k, j_add] <= 1.0 + 1e-10
                                                 cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, j_add]
 
                                         if k == k_copy_ + 1:
@@ -706,26 +730,32 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                                 #print("state_nr=", state_nr, "k=", k, "i=", i, "corr_Gnum=", corr_factor_Gnum, "corr_Gdenom=", corr_factor_Gdenom)        
                                         else:                 
                                             corr_factor_Gdenom= LR.corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s) 
-                                        if not np.isclose(corr_factor_Gdenom, 0.0, atol=1e-14): # do not divide by zero
+                                        if not np.isclose(corr_factor_Gdenom, 0.0, atol=1e-15): # do not divide by zero
                                             corr_factor_Gnum = LR.corr_factor_removeadd_rs(Gnum_inv, r=pos_vec[k-1], s=s)
                                             corr_factor = corr_factor_Gnum / corr_factor_Gdenom
-                                            cond_prob_onehop[state_nr, k, i] = corr_factor * (det_Gdenom / det_Gdenom_reuse[k-1]) * cond_prob_ref[k, i]                                            
+                                            cond_prob_onehop[state_nr, k, i] = corr_factor * (det_Gdenom / det_Gdenom_reuse[k-1]) * cond_prob_ref[k, i]    
+                                            assert -1e-10 <= cond_prob_onehop[state_nr, k, i] <= 1.0                                       
                                         else:
-                                            print("Do not divide by zero, corr_factor_Gdenom=", corr_factor_Gdenom)
-                                            print("Strange !!! This should not happen ever !")
-                                            print("ref_conf=    ", ref_conf)
-                                            print("xs[state_nr]=", xs[state_nr])
-                                            print("k=", k, "i=", i)
-                                            print("det_Gdenom_reuse[k-1]=", det_Gdenom_reuse[k-1], "det_Gdenom=", det_Gdenom, "corr_factor_Gdenom=", corr_factor_Gdenom, "corr_factor_Gnum=", corr_factor_Gnum)
+                                            # print("Do not divide by zero, corr_factor_Gdenom=", corr_factor_Gdenom)
+                                            # print("Strange !!! This should not happen ever !")
+                                            # print("ref_conf=    ", ref_conf)
+                                            # print("xs[state_nr]=", xs[state_nr])
+                                            # print("k=", k, "i=", i)
+                                            # print("det_Gdenom_reuse[k-1]=", det_Gdenom_reuse[k-1], "det_Gdenom=", det_Gdenom, "corr_factor_Gdenom=", corr_factor_Gdenom, "corr_factor_Gnum=", corr_factor_Gnum)
                                             cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
+                                            assert -1e-10 <= cond_prob_onehop[state_nr, k, i] <= 1.0
 
                                     elif k > k_r[state_nr]: # conditional probs. of reference state and onehop state have the same support 
-                                        try:
+                                        try:                                           
                                             corr_factor = LR.removeadd_rs(Gnum_inv, Gdenom_inv, r, s)
                                             cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
+
                                         except ErrorFinitePrecision as e:
                                             print("k>k_r: Excepting finite precision error, state_nr=", state_nr, "k=", k, "i=", i)
+                                            print("ref_conf    =", ref_conf)
+                                            print("xs[state_nr]=", xs[state_nr])                                            
                                             cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
+                                            assert -1e-10 <= cond_prob_onehop[state_nr, k, i] <= 1.0, "cond_prob=%16.10f" % (cond_prob_onehop[state_nr, k, i])
 
                                     
                         # elif abs(r-s) == 1: # 1d nearest neighbour hopping 
@@ -887,7 +917,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                         #                 t1 = time()
                         #                 logger.info_refstate.elapsed_singular += (t1 - t0)                                
 
-                        assert cond_prob_onehop[state_nr, k, i] >= -1e-8, "state_nr=%d, k=%d, i=%d, r=%d, s=%d" %(state_nr, k, i, r, s)
+                        # assert cond_prob_onehop[state_nr, k, i] >= -1e-8, "state_nr=%d, k=%d, i=%d, r=%d, s=%d" %(state_nr, k, i, r, s)
+                        assert -1e-10 <= cond_prob_onehop[state_nr, k, i] <= 1.0 + 1e-10, "cond_prob=%16.10f" % (cond_prob_onehop[state_nr, k, i])
                         cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i]                    
 
                 t1_conn = time()
@@ -917,7 +948,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         # Check that all conditional probabilities are normalized. 
         # IMPROVE: Return also information about violation of probability normalization. 
-        if __debug__:
+        if True: #__debug__:
                 for state_nr, (k_copy_, (r,s)) in enumerate(onehop_info):
                     for k in range(self.N):
                         assert np.isclose(np.sum(cond_prob_ref[k,:]), 1.0, atol=1e-14), \
@@ -927,7 +958,12 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                             # print("ref_conf=", ref_conf)
                             # print("onehop  =", xs[state_nr])
                             #print("cumsum_condprob_onehop[state_nr, k]=", cumsum_condprob_onehop[state_nr, k])
-                            print("state_nr=", state_nr, "k=", k, "cond_prob=", cond_prob_onehop[state_nr, k, :])
+                            #print("state_nr=", state_nr, "k=", k, "cond_prob=", cond_prob_onehop[state_nr, k, :])
+                            if not np.isclose(np.sum(cond_prob_onehop[state_nr, k,:]), 1.0, atol=1e-8):
+                                fh = open("FinitePrecision.dat", "a")
+                                fh.write("np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f =? 1.0 =? %16.10f" \
+                                 % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :]), cumsum_condprob_onehop[state_nr, k])+"\n")
+                                fh.close()                            
                             assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, atol=1e-8), \
                                  "np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f =? 1.0 =? %16.10f" \
                                  % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :]), cumsum_condprob_onehop[state_nr, k])
@@ -935,8 +971,14 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                             # The normalization can be fulfilled even though there are negative probabilities. 
                             #assert np.all(cond_prob_onehop[state_nr, k, :] > -LR.thresh)
                             if not np.all(cond_prob_onehop[state_nr, k, :] > -5e-8): # -0.00000
-                                print(cond_prob_onehop[state_nr, k, :])
-                                exit(1)
+                                print("Error: Negative probabilities")
+                                print("state_nr=", state_nr, "k=", k)
+                                fh = open("NegativeProbabilities.dat", "a")
+                                fh.write("state_nr=%d, k=%d\n" %(state_nr, k))
+                                fh.write(" ".join([str(s) for s  in cond_prob_onehop[state_nr, k, :].flatten()]) + "\n")
+                                fh.close()
+                                #print("Exiting ...")                                
+                                #exit(1)
 
         return cond_prob_onehop.reshape(-1, self.N*self.D), cond_prob_ref.reshape((self.N*self.D,))
 

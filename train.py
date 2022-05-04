@@ -13,19 +13,19 @@ torch.autograd.set_detect_anomaly(True)
 
 # set random number seed
 use_cuda = False
-seed = 33
+seed = 34
 torch.manual_seed(seed)
 if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 
-max_iter = 3000 #1000 
-num_samples = 20 # 100  # samples per batch
-num_bin = 10 #50
-Nx = 8  # 15
-Ny = 8
+max_iter = 4000 #1000 
+num_samples = 100 # 100  # samples per batch
+num_bin = 50 #50
+Nx = 4  # 15
+Ny = 4
 Nsites = Nx*Ny  # 15  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
-Nparticles = 32
+Nparticles = 7
 
 Vint = 3.0
 # for debugging 
@@ -116,10 +116,10 @@ phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, 
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
-(_, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none")
+(eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none")
 np.savetxt("eigvecs.dat", eigvecs)
 #(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
-Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
+Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, eigvals=eigvals, naive=False)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2, deactivate_Jastrow=deactivate_Jastrow)
 
 VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
@@ -130,7 +130,7 @@ E_exact = -3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832
 
 if True: 
     t0 = time.time()
-    for i, (energy, precision) in enumerate(train(VMCmodel_, learning_rate = 0.1, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda)):
+    for i, (energy, precision) in enumerate(train(VMCmodel_, learning_rate=0.2, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda)):
         t1 = time.time()
         print('Step %d, dE/|E| = %.4f, elapsed = %.4f' % (i, -(energy - E_exact)/E_exact, t1-t0))
         _update_curve(energy, precision)
