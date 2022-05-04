@@ -24,7 +24,7 @@ from monitoring import logger
 import lowrank_update as LR
 from lowrank_update import ErrorFinitePrecision
 
-from profilehooks import profile
+#from profilehooks import profile
 import matplotlib.pyplot as plt 
 
 class SlaterDetSampler_ordered(torch.nn.Module):
@@ -419,7 +419,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         """
         return 2 * torch.log(torch.abs(self.psi_amplitude(samples)))
         
-    @profile
+    #@profile
     def lowrank_kinetic(self, ref_I, xs_I, rs_pos, print_stats=True):
         """
         Probability density estimation on states connected to I_ref by the kinetic operator `kinetic_operator`,
@@ -561,6 +561,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                     Gnum_inv_reuse[k][i] = Gnum_inv
                 except np.linalg.LinAlgError as e:
                     print("Cond. prob. of reference state is zero: det_Gnum=%16.12f\n" % (det_Gnum), e)
+                    # Since the matrix inversion failed, Gnum_inv_reuse[k][i] == None. 
+                    assert Gnum_inv_reuse[k][i] is None
+                    # This will be checked for later before reusing Gnum_in_reuse[k][i]. 
                 
                 cond_prob_ref[k, i] = (-1) * det_Gnum / det_Gdenom
                 t1 = time() 
@@ -609,36 +612,45 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
                             if r < s:
                                 if k > 1 and k <= k_s[state_nr]: # k=0 can always be copied from the reference state 
-                                    try:
-                                        corr_factor = LR.remove_r(Gnum_inv_reuse[k][i], Gdenom_inv_reuse[k], r=r)
-                                        # NOTE: The cond. probs. for (k-1)-th particle are computed retroactively while the 
-                                        # cond. probs. for k-th particle of the reference state are being computed. 
-                                        cond_prob_onehop[state_nr, k-1, i] = corr_factor * cond_prob_ref[k, i] # update: (k-1) -> k
-                                        assert -1e-10 <= cond_prob_onehop[state_nr, k-1, i] <= 1.0 + 1e-10, "cond prob = %16.10f" %(cond_prob_onehop[state_nr, k-1, i])
-                                    except ErrorFinitePrecision:
-                                        print("Excepting finite precision error, state_nr=", state_nr, "k=", k, "i=", i)
-                                        cond_prob_onehop[state_nr, k-1, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-2], i=i)
-                                        assert -1e-10 <= cond_prob_onehop[state_nr, k-1, i] <= 1.0 + 1e-10, "cond prob = %16.10f" %(cond_prob_onehop[state_nr, k-1, i])
+                                    if Gnum_inv_reuse[k][i] is not None:
+                                        try:
+                                            corr_factor = LR.remove_r(Gnum_inv_reuse[k][i], Gdenom_inv_reuse[k], r=r)
+                                            # NOTE: The cond. probs. for (k-1)-th particle are computed retroactively while the 
+                                            # cond. probs. for k-th particle of the reference state are being computed. 
+                                            cond_prob_onehop[state_nr, k-1, i] = corr_factor * cond_prob_ref[k, i] # update: (k-1) -> k
+                                            assert -1e-10 <= cond_prob_onehop[state_nr, k-1, i] <= 1.0 + 1e-10, "cond prob = %16.10f" %(cond_prob_onehop[state_nr, k-1, i])
+                                        except ErrorFinitePrecision:
+                                            print("Excepting finite precision error, state_nr=", state_nr, "k=", k, "i=", i)
+                                            cond_prob_onehop[state_nr, k-1, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-2], i=i)                                            
+                                    else:
+                                        print("Gnum_inv_reuse is None (i.e. zero cond. prob. of reference state)")
+                                        cond_prob_onehop[state_nr, k-1, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-2], i=i)                                        
+                                    assert -1e-10 <= cond_prob_onehop[state_nr, k-1, i] <= 1.0 + 1e-10, "cond prob = %16.10f" %(cond_prob_onehop[state_nr, k-1, i])
+
 
                                 # additionally ...
                                 ###if k == self.N-1 or k == k_s[state_nr]: 
                                 if k == k_s[state_nr]:     
                                     # Special case: cond. probs. for last particle (for 1D system with pbc) or 
                                     # last particle whose support involves position `s` (for 2D system).      
-                                    if i > xs_pos[state_nr, k-1]: # support is smaller than in the reference state                                     
-                                        try:
-                                            Gnum_inv_, corr1 = LR.adapt_Ainv(Gnum_inv_reuse[k][xs_pos[state_nr, k-1]], Gglobal=GG, r=r, s=s, i_start=xs_pos[state_nr, k-1]+1, i_end=i)                                       
-                                            corr2 = LR.corr_factor_remove_r(Gnum_inv_, r=r)                                               
-                                            corr_factor_Gnum = corr1 * corr2                                     
-                                            Gdenom_inv_ = Gnum_inv_reuse[k][xs_pos[state_nr, k-1]]
-                                            corr_factor_Gdenom = LR.corr_factor_remove_r(Gdenom_inv_, r=r) * ( det_Gnum / det_Gdenom )
-                                            corr_factor = corr_factor_Gnum / corr_factor_Gdenom 
-                                            cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
-                                            assert -1e-10 <= cond_prob_onehop[state_nr, k, i] <= 1.0, "cond_prob=%16.10f" % (cond_prob_onehop[state_nr, k, i])
-                                        except np.linalg.LinAlgError as e: # from inverting singular matrix in LR.adapt_Ainv()
-                                            print("Excepting LinAlgError 1, state_nr=", state_nr, "k=", k, "i=", i)
+                                    if i > xs_pos[state_nr, k-1]: # support is smaller than in the reference state      
+                                        if Gnum_inv_reuse[k][xs_pos[state_nr, k-1]] is not None:                               
+                                            try:
+                                                Gnum_inv_, corr1 = LR.adapt_Ainv(Gnum_inv_reuse[k][xs_pos[state_nr, k-1]], Gglobal=GG, r=r, s=s, i_start=xs_pos[state_nr, k-1]+1, i_end=i)                                       
+                                                corr2 = LR.corr_factor_remove_r(Gnum_inv_, r=r)                                               
+                                                corr_factor_Gnum = corr1 * corr2                                     
+                                                Gdenom_inv_ = Gnum_inv_reuse[k][xs_pos[state_nr, k-1]]
+                                                corr_factor_Gdenom = LR.corr_factor_remove_r(Gdenom_inv_, r=r) * ( det_Gnum / det_Gdenom )
+                                                corr_factor = corr_factor_Gnum / corr_factor_Gdenom 
+                                                cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
+                                                assert -1e-10 <= cond_prob_onehop[state_nr, k, i] <= 1.0, "cond_prob=%16.10f" % (cond_prob_onehop[state_nr, k, i])
+                                            except np.linalg.LinAlgError as e: # from inverting singular matrix in LR.adapt_Ainv()
+                                                print("Excepting LinAlgError 1, state_nr=", state_nr, "k=", k, "i=", i)
+                                                cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
+                                        else:
+                                            print("Gnum_inv_reuse is None (i.e. zero cond. prob. of reference state)")
                                             cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
-                                            assert -1e-10 <= cond_prob_onehop[state_nr, k, i] <= 1.0
+                                        assert -1e-10 <= cond_prob_onehop[state_nr, k, i] <= 1.0                                            
 
                                 # Yet another special case (only relevant in 2D since there i > s is possible)
                                 # k is the component in the reference state 
@@ -708,14 +720,18 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                                 else:
                                                     corr_factor_Gdenom = LR.corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s)
 
-                                                corr_factor_Gnum = LR.corr_factor_add_s(Gnum_inv_reuse[k-1][j_add], s=s) # CAREFUL: This is not a marginal probability of an actually sampled state.
-                                                if not np.isclose(corr_factor_Gdenom, 0.0, atol=1e-15): # don't divide by zero 
-                                                    corr_factor = corr_factor_Gnum / corr_factor_Gdenom
-                                                    cond_prob_onehop[state_nr, k, j_add] = corr_factor * cond_prob_ref[k-1, j_add]
+                                                if Gnum_inv_reuse[k-1][j_add] is not None:
+                                                    corr_factor_Gnum = LR.corr_factor_add_s(Gnum_inv_reuse[k-1][j_add], s=s) # CAREFUL: This is not a marginal probability of an actually sampled state.
+                                                    if not np.isclose(corr_factor_Gdenom, 0.0, atol=1e-15): # don't divide by zero 
+                                                        corr_factor = corr_factor_Gnum / corr_factor_Gdenom
+                                                        cond_prob_onehop[state_nr, k, j_add] = corr_factor * cond_prob_ref[k-1, j_add]
+                                                    else:
+                                                        cond_prob_onehop[state_nr, k, j_add] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=j_add)
                                                 else:
+                                                    print("Gnum_inv_reuse is None (i.e. zero cond. prob. of reference state)")
                                                     cond_prob_onehop[state_nr, k, j_add] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=j_add)
-                                                # update cumul. probs. explicitly because this is inside the body of an extra loop
-                                                assert -1e-10 <= cond_prob_onehop[state_nr, k, j_add] <= 1.0 + 1e-10
+                                                assert -1e-10 <= cond_prob_onehop[state_nr, k, j_add] <= 1.0 + 1e-10  
+                                                # update cumul. probs. explicitly because this is inside the body of an extra loop                                              
                                                 cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, j_add]
 
                                         if k == k_copy_ + 1:
