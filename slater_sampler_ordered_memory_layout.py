@@ -19,7 +19,7 @@ from memory_layout import store_G_linearly, idx_linearly_stored_G, \
 
 from block_update import block_update_inverse 
 
-from profilehooks import profile
+#from profilehooks import profile
 from time import time 
 
 

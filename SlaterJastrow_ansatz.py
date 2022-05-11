@@ -20,7 +20,7 @@ from bitcoding import int2bin, bin2pos
 from utils import default_dtype_torch
 
 import sys
-from profilehooks import profile 
+#from profilehooks import profile 
 
 __all__ = ['SlaterJastrow_ansatz']
 

@@ -1,6 +1,6 @@
 import numpy as np
 import torch 
-from profilehooks import profile
+#from profilehooks import profile
 
 def store_G_linearly(G):
    assert len(G.shape) == 2 and G.shape[0] == G.shape[1]

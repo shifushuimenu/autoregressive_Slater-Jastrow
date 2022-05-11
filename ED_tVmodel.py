@@ -12,11 +12,11 @@ import matplotlib.pyplot as plt
 t_hop = 1.0 # t_hop > 0, since kinetic_term() provides already a minus sign 
 V_nnint = 0.0
 
-for V_nnint in np.linspace(3.0, 3.0, 1):
-    Nx = 3
-    Ny = 3
+for V_nnint in np.linspace(1.0, 1.0, 1):
+    Nx = 4
+    Ny = 4
     Ns = Nx*Ny # 13
-    Np = 4 #5
+    Np = 7 #5
 
 
     dimH = int(binom(Ns, Np))
@@ -92,6 +92,7 @@ for V_nnint in np.linspace(3.0, 3.0, 1):
 
     # measurements on the ground state 
     GS = vecs[:, 0]
+    deg = 6 # Enter the ground state degeneracy here ! 
     szsz_corr = np.zeros(Ns)
     corr_ = np.zeros(Ns)
 
@@ -101,7 +102,8 @@ for V_nnint in np.linspace(3.0, 3.0, 1):
         corr_[:] = 0.0
         for k in range(0, Ns):
             corr_[k] = (np.roll(config_sz, shift=-k) * config_sz).sum(axis=-1) / Ns
-        szsz_corr[:] += corr_[:] * abs(GS[ii])**2 # CAREFUL if ground state is degenerate ! Sum over degenerate states. 
+        ww = sum([ abs(vecs[ii, dd])**2  for dd in range(deg) ]) / float(deg)
+        szsz_corr[:] += corr_[:] * ww # CAREFUL if ground state is degenerate ! Sum over degenerate states. 
 
     np.savetxt('ED_szsz_corr_Nx%dNy%dNp%dV%4.4f.dat' % (Nx, Ny, Np, V_nnint), szsz_corr[:, None])
 

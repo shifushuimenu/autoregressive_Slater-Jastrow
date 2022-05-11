@@ -29,11 +29,19 @@
 
 [x] verify speedup of advanced update of slater sampler  
 
+[ ] test joint optimization of Slater determinant and Jastrow factor 
+
 [ ] How can a Pfaffian be expanded in terms of Slater determinants ?
 
 [ ] backflow transformation
 
+[ ] Add network for correcting the sign structure. Use a residual neural network. 
+
+[ ] Can the autoregressive property be combined with the convolutional structure of the neural network ? 
+
 [ ] Use an ansatz with complex numbers 
+
+[ ] Time evolution via time-dependent variational principle. 
 
 [ ] Use the Thouless theorem to find a non-redundant parametrization of any Slater determinant. 
     There are 2*Np*(Ns-Np) parameters, or Np*(Ns-Np) complex parameters, rather than Ns*Ns parameters.

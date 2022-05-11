@@ -19,15 +19,15 @@ if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 
 max_iter = 4000 #1000 
-num_samples = 100 # 100  # samples per batch
+num_samples = 2 # 100  # samples per batch
 num_bin = 50 #50
-Nx = 4  # 15
-Ny = 4
+Nx = 8  # 15
+Ny = 8
 Nsites = Nx*Ny  # 15  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
-Nparticles = 7
+Nparticles = 32
 
-Vint = 3.0
+Vint = 1.0
 # for debugging 
 deactivate_Jastrow = False
 

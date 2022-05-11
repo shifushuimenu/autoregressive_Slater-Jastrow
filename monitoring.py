@@ -6,6 +6,9 @@ class _info_refstate(object):
     of conditional probabilities of one-hop states based on a reference state.
     """
     def __init__(self):
+        self.reset()
+
+    def reset(self):
         self.num_onehop_states = 0
         self.elapsed_ref = 0.0
         self.elapsed_connecting_states = 0.0

@@ -671,7 +671,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                     except np.linalg.LinAlgError as e: # from inverting singular matrix in LR.adapt_Ainv() 
                                         print("Excepting LinAlgError 2, state_nr=", state_nr, "k=", k, "i=", i)
                                         cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
-                                    assert -assert_margin <= cond_prob_onehop[state_nr, k, i] <= 1.0 + assert_margin, "cond_prob=%16.10f" % (cond_prob_onehop[state_nr, k, i])
+                                    assert -assert_margin <= cond_prob_onehop[state_nr, k, i] <= 1.0 + assert_margin, "cond_prob[state_nr=%d, k=%d, i=%d]=%16.10f" % (state_nr, k, i, cond_prob_onehop[state_nr, k, i])
 
                                 # Yet another special case (only relevant in 2D)
                                 elif k > k_s[state_nr] + 1 and i > s:
@@ -940,6 +940,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         if print_stats:
             logger.info_refstate.print_summary()
+        logger.info_refstate.reset()
 
         if __debug__:
             fh = open("cond_prob_ref.dat", "w")

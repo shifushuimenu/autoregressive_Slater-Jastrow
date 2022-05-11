@@ -2,7 +2,7 @@ import numpy as np
 
 from utils import default_dtype_torch
 
-from profilehooks import profile
+#from profilehooks import profile
 
 #@profile
 def block_update_inverse(Ainv, B, C, D):
