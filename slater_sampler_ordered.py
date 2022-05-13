@@ -24,7 +24,7 @@ from monitoring import logger
 import lowrank_update as LR
 from lowrank_update import ErrorFinitePrecision
 
-#from profilehooks import profile
+from profilehooks import profile
 import matplotlib.pyplot as plt 
 
 class SlaterDetSampler_ordered(torch.nn.Module):
@@ -46,25 +46,24 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         as columns, the first `Nparticles` columns are chosen to form the 
         Slater determinant.
     """
-    def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, eigvals=None, naive=True):
+    def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, eigvals=None, naive_update=True, optimize_orbitals=False):
         super(SlaterDetSampler_ordered, self).__init__()
         self.epsilon = 1e-5
         self.D = Nsites 
         self.N = Nparticles         
         assert(self.N<=self.D)  
-        self.naive_update = naive
+        self.naive_update = naive_update
+        # co-optimize also the columns of the Slater determinant
+        self.optimize_orbitals = optimize_orbitals
+
         if single_particle_eigfunc is not None: 
-           self.optimize_orbitals = False 
            self.eigfunc = np.array(single_particle_eigfunc)
            assert Nsites == self.eigfunc.shape[0]
-           # P-matrix representation of Slater determinant, (D x N)-matrix
            self.P = torch.tensor(self.eigfunc[:,0:self.N])
            self.P_ortho = self.P 
-           # U is the key matrix representing the Slater determinant for sampling purposes.
-           # Its principal minors are the probabilities of certain particle configurations.            
            self.U = torch.matmul(self.P, self.P.transpose(-1,-2)) 
-           # Green's function 
            self.G = torch.eye(self.D) - self.U    
+           self.reortho_orbitals()
        
         #    # TEST
         #    # Green's function at finite temperature 
@@ -75,7 +74,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         #    print("total particle number = ", np.sum(np.diag(self.Gtherm)))
         #    # TEST
 
-        else: # optimize also the columns of the Slater determinant 
+        else: # random initialization of orbitals  
            self.optimize_orbitals = True 
            self.P = nn.Parameter(torch.rand(self.D, self.N, requires_grad=True)) # leaf Variable, updated during SGD; columns are not (!) orthonormal 
            self.reortho_orbitals()  # orthonormalize columns 
@@ -91,7 +90,10 @@ class SlaterDetSampler_ordered(torch.nn.Module):
            with torch.no_grad():
               self.P_ortho, R = torch.linalg.qr(self.P, mode='reduced') # P-matrix with orthonormal columns; on the other hand, it is self.P which is updated during SGD.
 
+           # P-matrix representation of Slater determinant, (D x N)-matrix
            self.P = nn.Parameter(self.P_ortho.detach())
+           # U is the key matrix representing the Slater determinant for sampling purposes.
+           # Its principal minors are the probabilities of certain particle configurations.            
            self.U = torch.matmul(self.P, self.P.transpose(-1,-2))
            # Green's function 
            self.G = torch.eye(self.D) - self.U    
@@ -197,7 +199,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         return ratio 
 
 
-    #@profile
+    @profile
     def get_cond_prob(self, k):
         r""" Conditional probability for the position x of the k-th particle.
 
@@ -301,7 +303,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         
         return self.occ_vec, prob_sample
 
-    #@profile
+    @profile
     def update_state(self, pos_i):
 
         assert type(pos_i) == int 
@@ -419,7 +421,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         """
         return 2 * torch.log(torch.abs(self.psi_amplitude(samples)))
         
-    #@profile
+    @profile
     def lowrank_kinetic(self, ref_I, xs_I, rs_pos, print_stats=True):
         """
         Probability density estimation on states connected to I_ref by the kinetic operator `kinetic_operator`,
@@ -1009,9 +1011,9 @@ if __name__ == "__main__":
     Nparticles = 200
     num_samples = 2
 
-    SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
-    SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
-    SDsampler2 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
+    SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
+    SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
+    SDsampler2 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=False)
 
     t0 = time()
     for _ in range(num_samples):

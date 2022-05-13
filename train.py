@@ -18,16 +18,16 @@ torch.manual_seed(seed)
 if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 
-max_iter = 4000 #1000 
-num_samples = 2 # 100  # samples per batch
+max_iter = 1000 #1000 
+num_samples = 100 # 100  # samples per batch
 num_bin = 50 #50
-Nx = 8  # 15
-Ny = 8
+Nx = 6  # 15
+Ny = 1
 Nsites = Nx*Ny  # 15  # Nsites = 64 => program killed because it is using too much memory
-space_dim = 2
-Nparticles = 32
+space_dim = 1
+Nparticles = 2
 
-Vint = 1.0
+Vint = 3.0
 # for debugging 
 deactivate_Jastrow = False
 
@@ -119,7 +119,7 @@ phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, 
 (eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none")
 np.savetxt("eigvecs.dat", eigvecs)
 #(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
-Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, eigvals=eigvals, naive=False)
+Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, eigvals=eigvals, naive_update=False, optimize_orbitals=True)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2, deactivate_Jastrow=deactivate_Jastrow)
 
 VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
