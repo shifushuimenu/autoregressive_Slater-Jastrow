@@ -996,7 +996,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                 #print("Exiting ...")                                
                                 #exit(1)
 
-        assert not torch.any(torch.isnan(cond_prob_onehop))
+        assert not np.any(np.isnan(cond_prob_onehop))
 
         return cond_prob_onehop.reshape(-1, self.N*self.D), cond_prob_ref.reshape((self.N*self.D,))
 

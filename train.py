@@ -4,9 +4,17 @@
 from Slater_Jastrow_simple import *
 #from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 from slater_sampler_ordered import SlaterDetSampler_ordered
+from test_suite import prepare_test_system_zeroT, HartreeFock_tVmodel
+
 import time
 import matplotlib.pyplot as plt
-from test_suite import prepare_test_system_zeroT, HartreeFock_tVmodel
+
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
+MPI_rank = comm.Get_rank()
+MPI_size = comm.Get_size()
+print("MPI: proc %d of %d" % (MPI_rank, MPI_size))
+
 
 torch.set_default_dtype(default_dtype_torch)
 torch.autograd.set_detect_anomaly(True)
@@ -21,13 +29,14 @@ np.random.seed(seed)
 max_iter = 1000 #1000 
 num_samples = 100 # 100  # samples per batch
 num_bin = 50 #50
-Nx = 6  # 15
-Ny = 1
+Nx = 3  # 15
+Ny = 3
 Nsites = Nx*Ny  # 15  # Nsites = 64 => program killed because it is using too much memory
-space_dim = 1
+space_dim = 2
 Nparticles = 2
 
-Vint = 3.0
+Vint_array = np.array([0.01, 0.1, 1.0, 2.0, 3.0, 4.0, 5.0])
+Vint = Vint_array[MPI_rank]
 # for debugging 
 deactivate_Jastrow = False
 
