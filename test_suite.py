@@ -135,18 +135,20 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=True):
                 j = lattice.neigh[i, nd]
                 H_HF[i,i] += Vint*OBDM[j,j]
                 H_HF[i,j] = -t_hop - Vint*OBDM[j,i]
-                H_HF[j,i] = -t_hop - Vint*OBDM[i,j]
+                H_HF[j,i] = -t_hop - Vint*OBDM[i,j] 
 
         eigvals, U = linalg.eigh(H_HF)
         if verbose:
             print("min(eigvals)=", min(eigvals))
             print(eigvals[0:num_particles+1])
+            print("E_GS_HF)", sum(eigvals[0:num_particles]))
         OBDM_new = Slater2spOBDM(U[:, 0:num_particles])
 
         if np.all(np.isclose(OBDM_new, OBDM, rtol=1e-8)) or counter == 1000: 
             converged = True
             if verbose:
                 print("converged:")
+                print("counter=", counter)
                 print("OBDM_new=", OBDM_new)
                 print("g.s. energy=", np.sum(eigvals[0:num_particles]))
         else:
@@ -214,6 +216,7 @@ def prepare_test_system_zeroT(Nsites=21, potential='parabolic', PBC=True, HF=Tru
 
             eigvals, U = linalg.eigh(H)
             print("min(eigvals)=", min(eigvals))
+            print("E_GS_HF=", sum(eigvals[0:Nparticles]))
             print(eigvals[0:Nparticles+1])
             OBDM_new = Slater2spOBDM(U[:, 0:Nparticles])
 

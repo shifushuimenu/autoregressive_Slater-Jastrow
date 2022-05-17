@@ -164,7 +164,7 @@ phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Ns, num_particles=Np, D=2, Vint=3.
 
 P = U[:, 0:Np]
 G = np.eye(Ns) - np.matmul(P, P.transpose(-1,-2))
-SDsampler = SlaterDetSampler_ordered(Nsites=Ns, Nparticles=Np, single_particle_eigfunc=U, naive=False)
+SDsampler = SlaterDetSampler_ordered(Nsites=Ns, Nparticles=Np, single_particle_eigfunc=U, naive_update=False)
 
 for jj in range(10):
     print("jj=", jj)

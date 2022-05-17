@@ -23,19 +23,22 @@ class _info_refstate(object):
         # during the simulation.
         self.Gdenom_cond_max = 0
 
-    def print_summary(self):        
-        print( "Low-rank update of cond. probs. for one-hop states based on their reference state:\n"
-               "  num. onehop states = %d" % (self.num_onehop_states) + "\n" +
-               "  elapsed_ref [s] =         %16.8f" % (self.elapsed_ref) + "\n" +
-               "  elapsed_connecting_states=%16.8f" % (self.elapsed_connecting_states) + "\n" +
-               "  elapsed_singular=         %16.8f" % (self.elapsed_singular) + "\n" +
-               "  elapsed_adapt=            %d" % (self.elapsed_adapt) + "\n" +              
-               "  counter_singular=         %d" % (self.counter_singular) + "\n" +
-               "  counter_skip=             %d" % (self.counter_skip) + "\n" +
-               "  counter_nonsingular=      %d" % (self.counter_nonsingular) + "\n" + 
-               "  max. cond. number (Gdenom) = %16.8f" % (self.Gdenom_cond_max) + "\n"
-             )
+    def accumulate(self):
+        pass
 
+    def print_summary(self, outfile="lowrank_stats.dat"):
+        fh = open(outfile, "w")
+        fh.write( "Low-rank update of cond. probs. for one-hop states based on their reference state:\n")
+        fh.write( "  num. onehop states = %d" % (self.num_onehop_states) + "\n")
+        fh.write( "  elapsed_ref [s] =         %16.8f" % (self.elapsed_ref) + "\n")
+        fh.write( "  elapsed_connecting_states=%16.8f" % (self.elapsed_connecting_states) + "\n")
+        fh.write( "  elapsed_singular=         %16.8f" % (self.elapsed_singular) + "\n")
+        fh.write( "  elapsed_adapt=            %d" % (self.elapsed_adapt) + "\n")        
+        fh.write( "  counter_singular=         %d" % (self.counter_singular) + "\n")
+        fh.write( "  counter_skip=             %d" % (self.counter_skip) + "\n")
+        fh.write( "  counter_nonsingular=      %d" % (self.counter_nonsingular) + "\n")
+        fh.write( "  max. cond. number (Gdenom) = %16.8f" % (self.Gdenom_cond_max))             
+        fh.close()
 
 class logger(object):
     info_refstate = _info_refstate()        

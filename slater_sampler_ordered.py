@@ -276,6 +276,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # clamp negative values which are in absolute magnitude below machine precision
         probs = torch.where(abs(probs) > 1e-15, probs, torch.tensor([0.0]))
 
+        assert not torch.any(torch.isnan(probs))
 
         return probs 
 
@@ -994,6 +995,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                 fh.close()
                                 #print("Exiting ...")                                
                                 #exit(1)
+
+        assert not torch.any(torch.isnan(cond_prob_onehop))
 
         return cond_prob_onehop.reshape(-1, self.N*self.D), cond_prob_ref.reshape((self.N*self.D,))
 

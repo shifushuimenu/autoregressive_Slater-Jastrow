@@ -1,4 +1,10 @@
+[ ] Hartree-Fock energy must be variational. 
+
+[ ] How can convergence towards an excited state be prevented ? Is this a problem at all ? 
+
 [ ] symmetry projection 
+
+[ ] Use tensorboard to visualize the learning progess. 
 
 [x] in kinetic_term(): 
 [x]    M[...] = 2**i + 2**j => too large ints cannot be represented by C-long 
@@ -35,7 +41,9 @@
 
 [ ] backflow transformation
 
-[ ] Add network for correcting the sign structure. Use a residual neural network. 
+[ ] Add network for correcting the sign structure. Use a residual neural network as in Stokes at el. (2020). Since configurations are sampled 
+    according to the square of the wavefunction amplitude, the sign structure does not affect the sampling, but only 
+    the evaluation of the local energy. 
 
 [ ] Can the autoregressive property be combined with the convolutional structure of the neural network ? 
 

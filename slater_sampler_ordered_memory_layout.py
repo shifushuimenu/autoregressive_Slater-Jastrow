@@ -42,14 +42,14 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         as columns, the first `Nparticles` columns are chosen to form the 
         Slater determinant.
     """
-    def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, naive=True, eps_norm_probs=None):
+    def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, naive_update=True, eps_norm_probs=None):
         super(SlaterDetSampler_ordered, self).__init__()
         self.epsilon = 1e-5
         self.eps_norm_probs = 1.0 - 1e-6 if eps_norm_probs is None else eps_norm_probs
         self.D = Nsites 
         self.N = Nparticles         
         assert(self.N<=self.D)  
-        self.naive_update = naive
+        self.naive_update = naive_update
         if single_particle_eigfunc is not None: 
            self.optimize_orbitals = False 
            self.eigfunc = np.array(single_particle_eigfunc)
@@ -503,9 +503,9 @@ if __name__ == "__main__":
         Nparticles = 100 #L//2
         num_samples = 5 # 1000
 
-        #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
-        #SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=True)
-        SDsampler2 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive=False)
+        #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
+        #SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
+        SDsampler2 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=False)
 
         print("Nsites=", Nsites, "Nparticles=", Nparticles, "num_samples=", num_samples)
 

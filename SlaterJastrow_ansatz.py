@@ -71,7 +71,7 @@ class SlaterJastrow_ansatz(selfMADE):
            assert kwargs['D'] == slater_sampler.D
         else:         
            slater_sampler = SlaterDetSampler_ordered(Nsites=self.D, Nparticles=self.num_components,
-                   single_particle_eigfunc=None, naive=True)
+                   single_particle_eigfunc=None, naive_update=True)
         
         slater_sampler.reset_sampler() # make sure sampling can start from the first component
         kwargs['bias_zeroth_component'] = slater_sampler.get_cond_prob(k=0)
