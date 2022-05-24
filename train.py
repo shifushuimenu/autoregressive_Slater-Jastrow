@@ -5,6 +5,7 @@ from Slater_Jastrow_simple import *
 #from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 from slater_sampler_ordered import SlaterDetSampler_ordered
 from test_suite import prepare_test_system_zeroT, HartreeFock_tVmodel
+from monitoring import logger 
 
 import time
 import matplotlib.pyplot as plt
@@ -14,7 +15,6 @@ comm = MPI.COMM_WORLD
 MPI_rank = comm.Get_rank()
 MPI_size = comm.Get_size()
 print("MPI: proc %d of %d" % (MPI_rank, MPI_size))
-
 
 torch.set_default_dtype(default_dtype_torch)
 torch.autograd.set_detect_anomaly(True)
@@ -26,18 +26,23 @@ torch.manual_seed(seed)
 if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 
-max_iter = 1000 #1000 
-num_samples = 100 # 100  # samples per batch
-num_bin = 50 #50
-Nx = 3  # 15
-Ny = 3
+max_iter = 10 #1000 
+num_samples = 10 # 100  # samples per batch
+num_bin = 5 #50
+Nx = 2  # 15
+Ny = 2
 Nsites = Nx*Ny  # 15  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
 Nparticles = 2
 
 Vint_array = np.array([0.01, 0.1, 1.0, 2.0, 3.0, 4.0, 5.0])
 Vint = Vint_array[MPI_rank]
-# for debugging 
+
+param_suffix = "_Nx{}Ny{}Np{}V{}".format(Nx, Ny, Nparticles, Vint)
+logger.info_refstate.outfile = "lowrank_stats"+param_suffix+".dat"
+
+# for debugging:
+# If deactivate_Jastrow == True, samples are drawn from the Slater determinant without the Jastrow factor. 
 deactivate_Jastrow = False
 
 def train(VMCmodel, learning_rate, num_samples=100, num_bin=50, use_cuda=False):
@@ -97,20 +102,20 @@ def _update_curve(energy, precision):
     sigma_list.append(sigma)
     if len(energy_list)%(max_iter-1) == 0:
         xvals = np.arange(1, len(energy_list) + 1)
-        plt.errorbar(xvals, energy_list, yerr=precision_list, capsize=3, label="Slater-Jastrow")
-        plt.errorbar(xvals, av_list, yerr=sigma_list, capsize=3)
-        # dashed line for exact energy
-        plt.axhline(E_exact, ls='--', label="exact")
-        plt.title("$L$=%d, $N$=%d, $V/t$ = %4.4f" % (Nsites, Nparticles, Vint))
-        plt.legend(loc="upper right")
-        plt.show()
+        #plt.errorbar(xvals, energy_list, yerr=precision_list, capsize=3, label="Slater-Jastrow")
+        #plt.errorbar(xvals, av_list, yerr=sigma_list, capsize=3)
+        ## dashed line for exact energy
+        #plt.axhline(E_exact, ls='--', label="exact")
+        #plt.title("$L$=%d, $N$=%d, $V/t$ = %4.4f" % (Nsites, Nparticles, Vint))
+        #plt.legend(loc="upper right")
+        #plt.show()
 
     MM = np.hstack((np.array(energy_list)[:,None], np.array(precision_list)[:,None],
                     np.array(av_list)[:,None], np.array(sigma_list)[:,None]))
-    np.savetxt("energies_Nx{}Ny{}Np{}V{}.dat".format(Nx, Ny, Nparticles, Vint), MM)
+    np.savetxt("energies"+param_suffix+".dat", MM)
 
 
-ckpt_outfile = 'state_Nx{}Ny{}Np{}V{}.pt'.format(Nx, Ny, Nparticles, Vint)
+ckpt_outfile = "state"+param_suffix+".pt"
 def _checkpoint(VMCmodel):
     """Save most recent SJA state to disk."""
     state = {
@@ -125,7 +130,8 @@ phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, 
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
-(eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none")
+fh = open("HF_energy"+param_suffix+".dat", "w")
+(eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none", outfile=fh)
 np.savetxt("eigvecs.dat", eigvecs)
 #(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
 Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, eigvals=eigvals, naive_update=False, optimize_orbitals=True)
@@ -159,7 +165,7 @@ corr_2D_ = np.zeros((phys_system.nx, phys_system.ny))
 print("Now sample from the converged ansatz")
 state_checkpointed = torch.load(ckpt_outfile)
 VMCmodel_.ansatz.load_state_dict(state_checkpointed['net'])
-num_samples = 1000
+num_samples = 10
 for _ in range(num_samples):
     sample_unfolded, sample_prob = VMCmodel_.ansatz.sample_unfolded()
     config = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
@@ -182,8 +188,8 @@ for _ in range(num_samples):
 szsz_corr[:] /= num_samples
 szsz_corr_2D[:,:] /= num_samples
 
-np.savetxt("szsz_corr_Nx{}Ny{}Np{}V{}.dat".format(Nx, Ny, Nparticles, Vint), szsz_corr)
+np.savetxt("szsz_corr"+param_suffix+".dat", szsz_corr)
 np.savetxt("szsz_corr_2D.dat", szsz_corr_2D)
 
-plt.plot(range(Nsites), szsz_corr[:], '--b')
-plt.show()
+#plt.plot(range(Nsites), szsz_corr[:], '--b')
+#plt.show()

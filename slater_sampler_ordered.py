@@ -9,6 +9,7 @@
 #  - Make sure reference_state_2D.py is synchronized after the above corrections have been made. 
 #  - Raise an error ErrorFinitePrecision wherever this can occur ( also in lowrank update for n.n. hopping)
 #  - Document each and every type of lowrank update. 
+#  - In critical points scipy.linalg is used instead of np.linalg as the former supports float128. 
 
 import torch
 import torch.nn as nn
@@ -24,7 +25,7 @@ from monitoring import logger
 import lowrank_update as LR
 from lowrank_update import ErrorFinitePrecision
 
-from profilehooks import profile
+#from profilehooks import profile
 import matplotlib.pyplot as plt 
 
 class SlaterDetSampler_ordered(torch.nn.Module):
@@ -133,12 +134,33 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # return np.linalg.det(Gnum) / np.linalg.det(Gdenom)
         return ratio 
 
+
     def _detratio_from_scratch(self, G, occ_vec, base_pos, i):
+        """
+        Calculate ratio of determinants of numerator and denominator matrices from scratch.    
+        """
+        from scipy import linalg  # scipy.linalg supports float128, np.linalg does not 
+        G = np.array(G, dtype=np.float128)  # use quadruple precision 
+
+        base = list(range(0, base_pos+1))
+        occ_vec_base = list(occ_vec[0:base_pos + 1])
+        Gdenom = G[np.ix_(base, base)] - np.diag(occ_vec_base)
+        extend = list(range(0, i+1))
+        occ_vec_add = [1] if (i - base_pos == 1) else [0] * (i - base_pos - 1) + [1]
+        occ_vec_extend = occ_vec_base + occ_vec_add
+        Gnum = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
+
+        ratio = linalg.det(Gnum) / linalg.det(Gdenom)
+        return ratio 
+
+
+    def _detratio_from_scratch_tmp(self, G, occ_vec, base_pos, i):
         """
         Calculate ratio of determinants of numerator and denominator matrices from scratch.  
         Use singular value decomposition to separate scales in matrix-matrix multiplication.   
         Cancel the denominator determinant: det(Gdenom)
         """
+        from scipy import linalg 
         occ_vec_base = list(occ_vec[0:base_pos + 1])
         occ_vec_add = [1] if (i - base_pos == 1) else [0] * (i - base_pos - 1) + [1]
         K1 = list(range(0, base_pos+1))
@@ -157,49 +179,18 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         if __debug__:
             occ_vec_extend = occ_vec_base + occ_vec_add
             extend = list(range(0, i+1))
+            G = np.array(G, dtype=np.float128)
             Gnum = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
-            Gdenom = X
+            Gdenom = G[np.ix_(K1, K1)] - np.diag(occ_vec_base)
 
+            ratio2 = linalg.det(Gnum) / linalg.det(Gdenom)
 
-            sign_num, logdet_num = np.linalg.slogdet(Gnum)
-            sign_denom, logdet_denom = np.linalg.slogdet(Gdenom)
-
-            #np.savetxt("Pmat.dat", self.P)
-            #np.savetxt("Gnum.dat", Gnum)
-            #np.savetxt("Gdenom.dat", Gdenom)
-            #print("exp(logdet_num)=", np.exp(logdet_num), "exp(logdet_denom)=", np.exp(logdet_denom))
-            #test1 = np.linalg.det( D - C @ np.linalg.inv(X) @ B )
-            #print("test1=", test1, "ratio=", ratio)
-
-            ratio2 = sign_num * sign_denom * np.exp(logdet_num - logdet_denom)
             print("ratio2=", ratio2, "ratio=", ratio)
-            # if ratio2 > 0:                    
-                #print("Error: ratio > 0 ! logdet_num=", logdet_num, "logdet_denom=", logdet_denom)
-                #print("exp(logdet_num)=", np.exp(logdet_num), "exp(logdet_denom)=", np.exp(logdet_denom), "sign_num=", sign_num, "sign_denom=", sign_denom, \
-                #        "cond_num=", np.linalg.cond(Gnum), "cond_denom=", np.linalg.cond(Gdenom))
-                #print("np.linalg.cond(Gdenom)=", np.linalg.cond(Gdenom))
-                #np.savetxt("Gdenom.dat", Gdenom)
-                #fig, axs = plt.subplots(nrows=2,ncols=1)
-                #axs[0].set_title("blablabla")
-                #axs[0].imshow(Gnum)
-                #axs[1].imshow(Gdenom)
-                #axs[0].colorbar()
-                #axs[1].colorbar()
-                #plt.show()
-                # print("ratio=", ratio)
-                # print((C @  vv.T))
-                # print(np.diag(1.0/ss))
-                # print(np.diag(1.0/ss) @ (uu.T @ B))
-                # print(( (C @  vv.T) @ np.diag(1.0/ss) @ (uu.T @ B) ))
-                # print("singular values=", ss)
-                # test1 = np.linalg.det( D - C @ np.linalg.inv(X) @ B )
-                #print("test1=", test1, "ratio=", ratio)
-                #exit(1)
 
         return ratio 
 
 
-    @profile
+    #@profile
     def get_cond_prob(self, k):
         r""" Conditional probability for the position x of the k-th particle.
 
@@ -304,7 +295,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         
         return self.occ_vec, prob_sample
 
-    @profile
+    #@profile
     def update_state(self, pos_i):
 
         assert type(pos_i) == int 
@@ -422,7 +413,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         """
         return 2 * torch.log(torch.abs(self.psi_amplitude(samples)))
         
-    @profile
+    #@profile
     def lowrank_kinetic(self, ref_I, xs_I, rs_pos, print_stats=True):
         """
         Probability density estimation on states connected to I_ref by the kinetic operator `kinetic_operator`,
@@ -470,7 +461,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         num_onehop_states = len(xs_I)
         xs = int2bin(xs_I, ns=self.D)
         ref_conf = int2bin(ref_I, ns=self.D)    
-        logger.info_refstate.num_onehop_states = num_onehop_states
+        #logger.info_refstate.num_onehop_states = num_onehop_states
+        logger.info_refstate.accumulator["num_onehop_states"] = num_onehop_states
 
         # special case of 1d n.n. hopping matrix
         # assert np.all([abs(r-s) == 1 or abs(r-s) == Ns-1 for r,s in rs_pos])
@@ -572,7 +564,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 
                 cond_prob_ref[k, i] = (-1) * det_Gnum / det_Gdenom
                 t1 = time() 
-                logger.info_refstate.elapsed_ref += (t1 - t0)
+                #logger.info_refstate.elapsed_ref += (t1 - t0)
+                logger.info_refstate.accumulator["elapsed_ref"] = (t1 - t0)
 
                 if (i,k) in SK_s_lt_r:
                     det_Gnum_reuse.update({k : det_Gnum})
@@ -612,7 +605,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                             # testing this conditions again `
                             if cumsum_condprob_onehop[state_nr, k] > eps_norm_probs and i > xs_pos[state_nr, k]:  
                                 cond_prob_onehop[state_nr, k, i:] = 0.0
-                                logger.info_refstate.counter_skip += (xmax - i) 
+                                #logger.info_refstate.counter_skip += (xmax - i)
+                                logger.info_refstate.accumulator["counter_skip"] = (xmax - i)  
                                 continue
 
                             if r < s:
@@ -937,7 +931,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                         cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i]                    
 
                 t1_conn = time()
-                logger.info_refstate.elapsed_connecting_states += (t1_conn - t0_conn)                    
+                #logger.info_refstate.elapsed_connecting_states += (t1_conn - t0_conn)
+                logger.info_refstate.accumulator["elapsed_connecting_states"] = (t1_conn - t0_conn)                    
                         
         _copy_cond_probs(cond_prob_ref, cond_prob_onehop, onehop_info)
 
