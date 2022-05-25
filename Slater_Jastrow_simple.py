@@ -15,7 +15,7 @@ from test_suite import local_OBDM, ratio_Slater
 from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 from k_copy import sort_onehop_states
 
-from profilehooks import profile
+#from profilehooks import profile
 from time import time 
 
 
@@ -95,7 +95,7 @@ class PhysicalSystem(object):
         return acc, abspsi
 
 
-    @profile
+    #@profile
     def local_energy(self, config, psi_loc, ansatz, lowrank_flag=True):
         '''
         Local energy of periodic 1D or 2D t-V model
@@ -176,7 +176,7 @@ class Lattice_rectangular(object):
         self.neigh = np.vstack((up, right, down, left)).transpose().astype('object') # idxs: sitenr, direction (up=0, right=1, down=2, left=3)        
 ###############################
 
-@profile        
+#@profile        
 def kinetic_term( I, lattice, t_hop=1.0 ):
     """
         Parameters:
@@ -253,7 +253,7 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
     return ( hop_from_to, I_prime, matrix_elem )
 
 
-@profile
+#@profile
 def kinetic_term2( I, lattice, t_hop=1.0 ):
     """
         NO BATCH DIMENSION. 
@@ -339,7 +339,7 @@ def kinetic_term2( I, lattice, t_hop=1.0 ):
 
 
 
-@profile
+#@profile
 def vmc_measure(local_measure, sample_list, sample_probs, num_bin=50):
     '''
     perform measurements on samples
@@ -416,7 +416,7 @@ class VMCKernel(object):
         self.ansatz = ansatz
         self.energy_loc = energy_loc
 
-    @profile
+    #@profile
     def prob(self,config):
         '''
         probability of configuration.
@@ -430,7 +430,7 @@ class VMCKernel(object):
         config = np.array(config)
         return self.ansatz.prob(config)
 
-    @profile
+    #@profile
     def local_measure(self, config):
         '''
         get local quantities energy_loc, grad_loc.

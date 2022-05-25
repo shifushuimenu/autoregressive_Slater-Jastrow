@@ -21,7 +21,7 @@ from bitcoding import bin2pos, int2bin
 #for lowrank_kinetic()
 from time import time 
 from k_copy import calc_k_copy
-from monitoring import logger 
+from monitoring_old import logger 
 import lowrank_update as LR
 from lowrank_update import ErrorFinitePrecision
 
@@ -461,8 +461,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         num_onehop_states = len(xs_I)
         xs = int2bin(xs_I, ns=self.D)
         ref_conf = int2bin(ref_I, ns=self.D)    
-        #logger.info_refstate.num_onehop_states = num_onehop_states
-        logger.info_refstate.accumulator["num_onehop_states"] = num_onehop_states
+        logger.info_refstate.num_onehop_states = num_onehop_states
+        #logger.info_refstate.accumulator["num_onehop_states"] = num_onehop_states
 
         # special case of 1d n.n. hopping matrix
         # assert np.all([abs(r-s) == 1 or abs(r-s) == Ns-1 for r,s in rs_pos])
@@ -564,8 +564,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 
                 cond_prob_ref[k, i] = (-1) * det_Gnum / det_Gdenom
                 t1 = time() 
-                #logger.info_refstate.elapsed_ref += (t1 - t0)
-                logger.info_refstate.accumulator["elapsed_ref"] = (t1 - t0)
+                logger.info_refstate.elapsed_ref += (t1 - t0)
+                #logger.info_refstate.accumulator["elapsed_ref"] = (t1 - t0)
 
                 if (i,k) in SK_s_lt_r:
                     det_Gnum_reuse.update({k : det_Gnum})
@@ -605,8 +605,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                             # testing this conditions again `
                             if cumsum_condprob_onehop[state_nr, k] > eps_norm_probs and i > xs_pos[state_nr, k]:  
                                 cond_prob_onehop[state_nr, k, i:] = 0.0
-                                #logger.info_refstate.counter_skip += (xmax - i)
-                                logger.info_refstate.accumulator["counter_skip"] = (xmax - i)  
+                                logger.info_refstate.counter_skip += 1 #(xmax - i)
+                                #logger.info_refstate.accumulator["counter_skip"] = (xmax - i)  
                                 continue
 
                             if r < s:
@@ -931,8 +931,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                         cumsum_condprob_onehop[state_nr, k] += cond_prob_onehop[state_nr, k, i]                    
 
                 t1_conn = time()
-                #logger.info_refstate.elapsed_connecting_states += (t1_conn - t0_conn)
-                logger.info_refstate.accumulator["elapsed_connecting_states"] = (t1_conn - t0_conn)                    
+                logger.info_refstate.elapsed_connecting_states += (t1_conn - t0_conn)
+                #logger.info_refstate.accumulator["elapsed_connecting_states"] = (t1_conn - t0_conn)                    
                         
         _copy_cond_probs(cond_prob_ref, cond_prob_onehop, onehop_info)
 

@@ -1,4 +1,6 @@
 [ ] Hartree-Fock energy must be variational. 
+    Something with the calculation of Hartree-Fock ground state energy is wrong. 
+    The HF eigenstates seem to be correct, though. 
 
 [ ] How can convergence towards an excited state be prevented ? Is this a problem at all ? 
 
@@ -13,7 +15,11 @@
 
 [ ] speed up bitcoding using bitarray.py  
 
-[ ] stochastic reconfiguration or LBFGS instead of stochastic gradient descent optimization 
+[ ] Better optimization techniques:
+    - stochastic reconfiguration or LBFGS instead of stochastic gradient descent optimization
+    - Obtain the spectrum of the Fisher information matrix to characterize the learning manifold.  
+    - AMSgrad 
+    - Linear Method 
 
 [ ] argparse 
 
@@ -35,9 +41,9 @@
 
 [x] verify speedup of advanced update of slater sampler  
 
-[ ] test joint optimization of Slater determinant and Jastrow factor 
+[x] test joint optimization of Slater determinant and Jastrow factor => unstable with SGD => try stochastic reconfiguration
 
-[ ] How can a Pfaffian be expanded in terms of Slater determinants ?
+[x] How can a Pfaffian be expanded in terms of Slater determinants ?
 
 [ ] backflow transformation
 
@@ -59,7 +65,7 @@
     in the Hartree-Fock spectrum ?  
 
 [ ] Singular matrices in lowrank_kinetic(). What is the root cause ? Is there a connection with degeneracies in the Hartree-Fock spectrum ? 
-Could the problem be solved by adding invertibility noise ?  
+    Could the problem be solved by adding invertibility noise ?  
 
 [ ] Check division by zero in slater_sampler_ordered.py:535 (549, 691)
 
