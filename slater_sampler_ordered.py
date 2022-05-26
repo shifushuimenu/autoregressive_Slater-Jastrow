@@ -442,7 +442,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # The kinetic energy does not need to be backpropagated. 
         GG = self.G.detach().numpy()
 
-        assert_margin = 1e-8
+        assert_margin = 1e-4
 
         # normalization needs to be satisfied up to 
         #     \sum_i p(i)  > `eps_norm_probs``
@@ -581,14 +581,18 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                         # of k_copy_, i.e. this condition is also fulfilled for all subsequent onehop states.
                         break 
                     else: # k_copy < k  
-                        # # SOME SPECIAL CASES 
                         xmin_onehop = xs_pos[state_nr, k-1] + 1; xmax_onehop = xmax                         
+                        if ii == 0:
+                            logger.info_refstate.size_support += xmax_onehop - xmin_onehop
+                        # # SOME SPECIAL CASES 
                         if xmin_onehop == xmax_onehop-1 and i == xmin_onehop: #and r < i and s < i: # and (r < s and s < i) or (s < r and r < i): #
-                            # print("certainly 1")
+                            print("certainly 1")
                             # print("r=", r, "s=", s)
-                            # print("k=", k, "i=", i, "state_nr=", state_nr)
-                            # print(ref_conf)
-                            # print(xs[state_nr])
+                            print("xmin_onehop=", xmin_onehop, "xmax_onehop=", xmax_onehop)
+                            print("k=", k, "i=", i, "state_nr=", state_nr)
+                            print(ref_conf)
+                            print(xs[state_nr])
+                            print(" xs_pos[state_nr, k-1]=",  xs_pos[state_nr, k-1])
                             # exit(1)
                         # In this case it is clear that every subsequent empty site needs to be occupied to accomodate 
                         # all particles both in the reference state and in the one-hop state. Don't calculate probabilities. 
@@ -952,6 +956,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 fh = open("cond_prob_onehop%d.dat" % (state_nr), "w")
                 fh.write("# ref_state ["+" ".join(str(item) for item in ref_conf)+"]\n")
                 fh.write("# 1hop      ["+" ".join(str(item) for item in xs[state_nr])+"]\n")
+                (k_copy, (r, s)) = onehop_info[state_nr]
+                fh.write("# k_copy=%d, r=%r, s=%s \n" % (k_copy, r, s))
+
                 for k in range(cond_prob_onehop.shape[1]):
                     for i in range(cond_prob_onehop.shape[2]):
                         fh.write("%d %d %20.19f\n" % (k, i, cond_prob_onehop[state_nr, k, i]))
