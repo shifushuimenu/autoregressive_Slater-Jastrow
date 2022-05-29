@@ -34,6 +34,7 @@ class _info_refstate(object):
         self.counter_nonsingular = 0
         self.counter_singular = 0
         self.counter_skip = 0
+        self.size_support = 0 # size of the support of the conditional probs. (for all connecting states)
 
         # Maximum condition number of the denominator matrix encountered 
         # during the simulation.
@@ -54,6 +55,7 @@ class _info_refstate(object):
         fh.write( "  elapsed_adapt=            %d" % (self.elapsed_adapt) + "\n")        
         fh.write( "  counter_singular=         %d" % (self.counter_singular) + "\n")
         fh.write( "  counter_skip=             %d" % (self.counter_skip) + "\n")
+        fh.write( "  size_support=             %d" % (self.size_support) + "\n")
         fh.write( "  counter_nonsingular=      %d" % (self.counter_nonsingular) + "\n")
         fh.write( "  max. cond. number (Gdenom) = %16.8f" % (self.Gdenom_cond_max))             
         fh.close()
