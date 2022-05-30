@@ -11,7 +11,7 @@ from block_update_numpy import ( block_update_inverse,
                            block_update_det_correction2 )
 
 eps = np.finfo(float).eps
-thresh = 1.5 * eps
+thresh = 10 * eps
 
 class ErrorFinitePrecision(Exception):
     pass 
@@ -26,18 +26,24 @@ def corr_factor_removeadd_rs(Ainv, r, s):
     """
     #print("removeadd_rs=", Ainv[r,r], Ainv[s,s], Ainv[r,s], Ainv[s,r])
     cf = (1 + Ainv[r,r]) * (1 - Ainv[s,s]) + Ainv[r,s] * Ainv[s,r]
+    if abs(cf) < thresh: 
+        raise ErrorFinitePrecision
     return cf
 
 
 def corr_factor_add_s(Ainv, s):
     """add a particle at position s without removing any particle"""
     cf = (1 - Ainv[s,s])
+    if abs(cf) < thresh: 
+        raise ErrorFinitePrecision    
     return cf 
 
 
 def corr_factor_remove_r(Ainv, r):
     """remove a particle at position r without adding any particle"""
     cf = (1 + Ainv[r,r])
+    if abs(cf) < thresh: 
+        raise ErrorFinitePrecision    
     return cf  
 
 

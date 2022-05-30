@@ -21,7 +21,7 @@ torch.autograd.set_detect_anomaly(True)
 
 # set random number seed
 use_cuda = False
-seed = 41
+seed = 44
 torch.manual_seed(seed)
 if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
@@ -29,13 +29,13 @@ np.random.seed(seed)
 max_iter = 10 #1000 
 num_samples = 10 # 100  # samples per batch
 num_bin = 5 #50
-Nx = 3  # 15
-Ny = 3
+Nx = 6  # 15
+Ny = 6
 Nsites = Nx*Ny  # 15  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
-Nparticles = 4
+Nparticles = 9
 
-Vint_array = np.array([6.0, 0.01, 0.1, 1.0, 2.0, 3.0, 4.0, 5.0])
+Vint_array = np.array([1.0, 0.1, 1.0, 2.0, 3.0, 4.0, 5.0])
 Vint = Vint_array[MPI_rank]
 
 param_suffix = "_Nx{}Ny{}Np{}V{}".format(Nx, Ny, Nparticles, Vint)
