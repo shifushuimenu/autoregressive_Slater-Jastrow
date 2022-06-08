@@ -417,7 +417,7 @@ class SlaterJastrow_ansatz(selfMADE):
             b_relsign[i] = np.sign(ratio_Slater(OBDM_loc, alpha=config_ref, beta=x, r=r, s=s))
 
         E_kin_loc = np.dot(matrix_elem[:], b_absamp[:] * b_relsign[:]) / abs(psi_loc)
-        
+
         return E_kin_loc, b_absamp
 
         

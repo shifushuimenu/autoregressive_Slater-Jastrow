@@ -504,20 +504,21 @@ if __name__ == "__main__":
         num_samples = 5 # 1000
 
         #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
-        #SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
+        SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
         SDsampler2 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=False)
 
         print("Nsites=", Nsites, "Nparticles=", Nparticles, "num_samples=", num_samples)
 
-        # t0 = time()
-        # for _ in range(num_samples):
-        #     occ_vec, _ = SDsampler1.sample()
-        # t1 = time()
-        # print("naive, elapsed=", (t1-t0) )
+        t0 = time()
+        for _ in range(num_samples):
+            occ_vec, _ = SDsampler1.sample()
+        t1 = time()
+        print("naive, elapsed=", (t1-t0) )
 
         t0 = time()
         for _ in range(num_samples):
             occ_vec, prob_sample = SDsampler2.sample()
+            print("prob_sample=", prob_sample)
             print("log(prob_sample)=", np.log(prob_sample))
         t1 = time()
         print("block update, elapsed=", (t1-t0) )

@@ -10,18 +10,26 @@ from monitoring_old import logger
 import time
 import matplotlib.pyplot as plt
 
-from mpi4py import MPI
-comm = MPI.COMM_WORLD
-MPI_rank = comm.Get_rank()
-MPI_size = comm.Get_size()
-print("MPI: proc %d of %d" % (MPI_rank, MPI_size))
+Parallel = False 
+
+if Parallel:
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+    MPI_rank = comm.Get_rank()
+    MPI_size = comm.Get_size()
+    master = 0
+    print("MPI: proc %d of %d" % (MPI_rank, MPI_size))
+else:
+    MPI_rank = 0
+    MPI_size = 1
+    master = 0
 
 torch.set_default_dtype(default_dtype_torch)
 torch.autograd.set_detect_anomaly(True)
 
 # set random number seed
 use_cuda = False
-seed = 44
+seed = 44 + MPI_rank
 torch.manual_seed(seed)
 if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
@@ -29,14 +37,17 @@ np.random.seed(seed)
 max_iter = 10 #1000 
 num_samples = 10 # 100  # samples per batch
 num_bin = 5 #50
-Nx = 6  # 15
-Ny = 6
+Nx = 3  # 15
+Ny = 3
 Nsites = Nx*Ny  # 15  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
-Nparticles = 9
+Nparticles = 2
 
-Vint_array = np.array([1.0, 0.1, 1.0, 2.0, 3.0, 4.0, 5.0])
-Vint = Vint_array[MPI_rank]
+optimize_orbitals = True # whether to include columns of P-matrix in optimization
+learning_rate_SD = 0.02
+
+#Vint_array = np.array([1.0, 0.1, 1.0, 2.0, 3.0, 4.0, 5.0])
+Vint = 10.0 #  Vint_array[MPI_rank]
 
 param_suffix = "_Nx{}Ny{}Np{}V{}".format(Nx, Ny, Nparticles, Vint)
 logger.info_refstate.outfile = "lowrank_stats"+param_suffix+".dat"
@@ -45,7 +56,7 @@ logger.info_refstate.outfile = "lowrank_stats"+param_suffix+".dat"
 # If deactivate_Jastrow == True, samples are drawn from the Slater determinant without the Jastrow factor. 
 deactivate_Jastrow = False
 
-def train(VMCmodel, learning_rate, num_samples=100, num_bin=50, use_cuda=False):
+def train(VMCmodel, learning_rate, learning_rate_SD, num_samples=100, num_bin=50, use_cuda=False):
     '''
     train a model using stochastic gradient descent 
 
@@ -72,16 +83,22 @@ def train(VMCmodel, learning_rate, num_samples=100, num_bin=50, use_cuda=False):
 
         # update variables using stochastic gradient descent
         g_list = [eg - energy * g for eg, g in zip(energy_grad, grad)]
-        for var, g in zip(VMCmodel.ansatz.parameters(), g_list):
-            delta = learning_rate * g
-            var.data -= delta
+        for (name, par), g in zip(VMCmodel.ansatz.named_parameters(), g_list):
+            if name == 'slater_sampler.P':
+                delta = learning_rate_SD * g
+            else:
+                delta = learning_rate * g
+            par.data -= delta
 
         # re-orthogonalize the columns of the Slater determinant
         # and update bias of the zero-th component 
         if isinstance(VMCmodel.ansatz, SlaterJastrow_ansatz):
             print("slater_sampler.P.grad=", VMCmodel.ansatz.slater_sampler.P.grad)
             print("named parameters", list(VMCmodel.ansatz.named_parameters()))
-            VMCmodel.ansatz.slater_sampler.reortho_orbitals()
+
+            if VMCmodel.ansatz.slater_sampler.optimize_orbitals:
+                VMCmodel.ansatz.slater_sampler.reortho_orbitals()
+
             VMCmodel.ansatz.slater_sampler.reset_sampler()
             VMCmodel.ansatz.bias_zeroth_component[:] = VMCmodel.ansatz.slater_sampler.get_cond_prob(k=0)
 
@@ -134,8 +151,22 @@ fh = open("HF_energy"+param_suffix+".dat", "w")
 (eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none", outfile=fh, max_iter=20)
 np.savetxt("eigvecs.dat", eigvecs)
 #(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
-Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, eigvals=eigvals, naive_update=False, optimize_orbitals=True)
-SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2, deactivate_Jastrow=deactivate_Jastrow)
+
+Sdet_sampler = SlaterDetSampler_ordered(
+        Nsites=Nsites, 
+        Nparticles=Nparticles, 
+        single_particle_eigfunc=eigvecs, 
+        eigvals=eigvals, 
+        naive_update=False, 
+        optimize_orbitals=optimize_orbitals
+        )
+
+SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, 
+        num_components=Nparticles, 
+        D=Nsites, 
+        net_depth=2, 
+        deactivate_Jastrow=deactivate_Jastrow
+        )
 
 VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
 del SJA
@@ -145,7 +176,7 @@ E_exact = -3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832
 
 if True: 
     t0 = time.time()
-    for i, (energy, precision) in enumerate(train(VMCmodel_, learning_rate=0.2, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda)):
+    for i, (energy, precision) in enumerate(train(VMCmodel_, learning_rate=0.2, learning_rate_SD=learning_rate_SD, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda)):
         t1 = time.time()
         print('Step %d, dE/|E| = %.4f, elapsed = %.4f' % (i, -(energy - E_exact)/E_exact, t1-t0))
         _update_curve(energy, precision)
