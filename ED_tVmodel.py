@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 t_hop = 1.0 # t_hop > 0, since kinetic_term() provides already a minus sign 
 V_nnint = 0.0
 
-for V_nnint in (0.01, 0.1, 1.0, 3.0, 5.0): #np.linspace(3.0, 3.0, 1):
+for V_nnint in (5.0,): #np.linspace(3.0, 3.0, 1):
     Nx = 3
     Ny = 3
     Ns = Nx*Ny # 13
@@ -50,7 +50,7 @@ for V_nnint in (0.01, 0.1, 1.0, 3.0, 5.0): #np.linspace(3.0, 3.0, 1):
     H_kin = np.zeros((dimH, dimH))
     for s1 in range(dimH):
         I1 = bin2int(basis_dict[s1])
-        hop_from_to, I_primes, matrix_elems = kinetic_term2(int(I1), lattice) # kinetic_term() requires batch dim
+        hop_from_to, I_primes, matrix_elems = kinetic_term2(int(I1), lattice) 
         #print("s1=", s1, "basis state=", basis_dict[s1])
         #print("I_s1=", bin2int(basis_dict[s1]))
         for (I2, me) in zip(I_primes, matrix_elems):
@@ -84,7 +84,7 @@ for V_nnint in (0.01, 0.1, 1.0, 3.0, 5.0): #np.linspace(3.0, 3.0, 1):
     idx = np.argsort(vals)
     vals = vals[idx]
     vecs = vecs[:, idx]
-    #print("energies=", vals[0:10])
+    print("energies=", vals[0:10])
     E_gs = np.min(vals)
     #print("ground state energy =", E_gs)
     print(V_nnint, E_gs)

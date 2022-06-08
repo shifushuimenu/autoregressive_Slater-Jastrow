@@ -11,12 +11,22 @@ from Slater_Jastrow_simple import *
 from slater_sampler_ordered import SlaterDetSampler_ordered
 from test_suite import prepare_test_system_zeroT, HartreeFock_tVmodel
 
+from graph_distance import * 
+
+
 Nx = 6  # 15
 Ny = 6
+L=Nx
+
+if L==6:
+    S, num_dist = graph_distance_L6()
+elif L==4 
+    S, num_dist = graph_distance_L4()
+
 Nsites = Nx*Ny  # 15  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
-Nparticles = 15
-Vint = 6.0
+Nparticles = 17
+Vint = 0.01
 
 num_samples = 200
 
@@ -44,6 +54,8 @@ corr_ = np.zeros(Nsites)
 tmp1 = np.zeros((phys_system.nx, phys_system.ny))
 tmp2 = np.zeros((phys_system.nx, phys_system.ny))
 
+corr_graph = np.zeros(L+1)
+
 print("Now sample from the converged ansatz")
 state_checkpointed = torch.load(ckpt_outfile)
 VMCmodel_.ansatz.load_state_dict(state_checkpointed['net'])
@@ -59,6 +71,9 @@ for _ in range(num_samples):
 
     # 2D spin-spin correlations (or, alternatively, density-density correlations)
     config_2D = config.reshape((phys_system.nx, phys_system.ny))
+        
+    corr_graph[:] += graph_distance_corr(S, num_dist, config_2D, av_n = Nparticles/Nsites)
+    
     config_2D_sz = 2*config_2D - 1
     tmp1[:,:] = 0.0 
     tmp2[:,:] = 0.0
@@ -83,12 +98,18 @@ av_density[:,:] /= num_samples
 szsz_corr_2D_con = szsz_corr_2D[:,:] - av_sz[:,:]*av_sz[:,:]
 corr_2D_con = corr_2D[:,:] - av_density[:,:]*av_density[:,:]
 
+# graph distance correlations
+corr_graph /= num_samples 
+
+print("corr_graph=", corr_graph)
+np.savetxt("corr_graph_Nx{}Ny{}Np{}V{}.dat".format(Nx, Ny, Nparticles, Vint), corr_graph)
+
 np.savetxt("szsz_corr_Nx{}Ny{}Np{}V{}.dat".format(Nx, Ny, Nparticles, Vint), szsz_corr)
 np.savetxt("szsz_corr_2D_con_Nx{}Ny{}Np{}V{}.dat".format(Nx, Ny, Nparticles, Vint), szsz_corr_2D_con)
 np.savetxt("corr_2D_con_Nx{}Ny{}Np{}V{}.dat".format(Nx, Ny, Nparticles, Vint), corr_2D_con)
 
-plt.plot(range(Nsites), corr_2D_con.flatten(), '--b')
-plt.plot(range(Nsites), szsz_corr_2D_con.flatten(), '-r')
-plt.plot(range(Nsites), corr_2D.flatten(), '.b')
-plt.plot(range(Nsites), szsz_corr, '-g')
-plt.show()
+#plt.plot(range(Nsites), corr_2D_con.flatten(), '--b')
+#plt.plot(range(Nsites), szsz_corr_2D_con.flatten(), '-r')
+#plt.plot(range(Nsites), corr_2D.flatten(), '.b')
+#plt.plot(range(Nsites), szsz_corr, '-g')
+#plt.show()
