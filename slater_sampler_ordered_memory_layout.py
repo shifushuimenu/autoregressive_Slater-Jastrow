@@ -498,35 +498,33 @@ if __name__ == "__main__":
 
     from time import time 
 
-    for L in (200,): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
+    for L in (400, 500, 600, 700, 800, 900, 1000, ): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
         (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=L, potential='none', PBC=True, HF=True)
-        Nparticles = 100 #L//2
-        num_samples = 5 # 1000
+        Nparticles = L//2
+        num_samples = 50 # 1000
 
         #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
-        SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
+        #SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
         SDsampler2 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=False)
 
         print("Nsites=", Nsites, "Nparticles=", Nparticles, "num_samples=", num_samples)
 
-        t0 = time()
-        for _ in range(num_samples):
-            occ_vec, _ = SDsampler1.sample()
-        t1 = time()
-        print("naive, elapsed=", (t1-t0) )
+        #0 = time()
+        #for _ in range(num_samples):
+        #    occ_vec, _ = SDsampler1.sample()
+        #t1 = time()
+        #print("naive, elapsed=", (t1-t0) )
 
-        t0 = time()
+        t3 = time()
         for _ in range(num_samples):
-            occ_vec, prob_sample = SDsampler2.sample()
-            print("prob_sample=", prob_sample)
-            print("log(prob_sample)=", np.log(prob_sample))
-        t1 = time()
-        print("block update, elapsed=", (t1-t0) )
+            occ_vec, _ = SDsampler2.sample()
+        t4 = time()
+        print("block update, elapsed=", (t4-t3)*2 )
 
-        print("t_fetch_memory=", SDsampler2.t_fetch_memory)
-        print("t_matmul(Schur complement)=", SDsampler2.t_matmul)
-        print("t_det=", SDsampler2.t_det)
-        print("t_update_Schur=", SDsampler2.t_update_Schur)
+        #print("t_fetch_memory=", SDsampler2.t_fetch_memory)
+        #print("t_matmul(Schur complement)=", SDsampler2.t_matmul)
+        #print("t_det=", SDsampler2.t_det)
+        #print("t_update_Schur=", SDsampler2.t_update_Schur)
 
     # # Check that sampling the Slater determinant gives the correct average density. 
     # occ_vec = torch.zeros(Nsites)

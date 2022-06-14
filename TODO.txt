@@ -43,6 +43,8 @@
 
 [x] test joint optimization of Slater determinant and Jastrow factor => unstable with SGD => try stochastic reconfiguration
 
+[ ] introduce a scheduler for the learning rates of MADE and of the P-matrix 
+
 [x] How can a Pfaffian be expanded in terms of Slater determinants ?
 
 [ ] backflow transformation

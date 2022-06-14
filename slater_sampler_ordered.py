@@ -186,7 +186,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
             ratio2 = linalg.det(Gnum) / linalg.det(Gdenom)
 
-            print("ratio2=", ratio2, "ratio=", ratio, "condition number num, denom, X=", np.linalg.cond(Gnum), np.linalg.cond(Gdenom), np.linalg.cond(X))
+            # print("ratio2=", ratio2, "ratio=", ratio, "condition number num, denom, X=", np.linalg.cond(Gnum), np.linalg.cond(Gdenom), np.linalg.cond(X))
 
         return ratio 
 
@@ -1026,49 +1026,50 @@ if __name__ == "__main__":
     )
     from time import time 
 
-    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=400, potential='none', PBC=False, HF=False)
-    Nparticles = 200
-    num_samples = 2
+    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=200, potential='none', PBC=False, HF=False)
+    for Np in (110, 120, 130, 140, 150, 160, 170, 180, 190, ):
+        Nparticles = Np
+        num_samples = 5
 
-    SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
-    SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
-    SDsampler2 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=False)
+        SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
+        SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
+        SDsampler2 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=False)
 
-    t0 = time()
-    for _ in range(num_samples):
-        occ_vec, _ = SDsampler1.sample()
-    t1 = time()
-    print("naive, elapsed=", (t1-t0) )
+    #    t0 = time()
+    #    for _ in range(num_samples):
+    #        occ_vec, _ = SDsampler1.sample()
+    #    t1 = time()
+    #    print("naive, elapsed=", (t1-t0)*20 )
 
-    t0 = time()
-    for _ in range(num_samples):
-        occ_vec, _ = SDsampler2.sample()
-    t1 = time()
-    print("block update, elapsed=", (t1-t0) )
+        t0 = time()
+        for _ in range(num_samples):
+            occ_vec, _ = SDsampler2.sample()
+        t1 = time()
+        print("block update (cancel dets), elapsed=", (t1-t0) )
 
-    # Check that sampling the Slater determinant gives the correct average density. 
-    occ_vec = torch.zeros(Nsites)
-    for s in range(num_samples):
-        occ_vec_, prob_sample = SDsampler2.sample()
-        print("=================================================================")
-        print("amp_sample= %16.8f"%(np.sqrt(prob_sample)))
-        print("naive sampler: amplitude= %16.8f"%(SDsampler1.psi_amplitude(occ_vec_)))
-        print("block update sampler: amplitude=", SDsampler2.psi_amplitude(occ_vec_))
-        print("=================================================================")
-        occ_vec += occ_vec_
-       
+        ## Check that sampling the Slater determinant gives the correct average density. 
+        #occ_vec = torch.zeros(Nsites)
+        #for s in range(num_samples):
+        #    occ_vec_, prob_sample = SDsampler2.sample()
+        #    print("=================================================================")
+        #    print("amp_sample= %16.8f"%(np.sqrt(prob_sample)))
+        #    print("naive sampler: amplitude= %16.8f"%(SDsampler1.psi_amplitude(occ_vec_)))
+        #    print("block update sampler: amplitude=", SDsampler2.psi_amplitude(occ_vec_))
+        #    print("=================================================================")
+        #    occ_vec += occ_vec_
+           
 
-    #print("occ_vec=", occ_vec)    
-    density = occ_vec / float(num_samples)
-    #print("density=", density)
+        ##print("occ_vec=", occ_vec)    
+        #density = occ_vec / float(num_samples)
+        ##print("density=", density)
 
-    OBDM = Slater2spOBDM(eigvecs[:, 0:Nparticles])
+        #OBDM = Slater2spOBDM(eigvecs[:, 0:Nparticles])
 
-    f = plt.figure(figsize=(8,6))
-    ax = f.add_subplot(1,1,1)
-    ax.set_xlabel(r"site $i$")
-    ax.set_ylabel(r"av. density")
-    ax.plot(range(len(density)), density, label=r"av.density $\langle n \rangle$ (sampled)")
-    ax.plot(range(len(np.diag(OBDM))), np.diag(OBDM), label=r"$\langle n \rangle$ (from OBDM)")
-    plt.legend()
-    #plt.show()
+        #f = plt.figure(figsize=(8,6))
+        #ax = f.add_subplot(1,1,1)
+        #ax.set_xlabel(r"site $i$")
+        #ax.set_ylabel(r"av. density")
+        #ax.plot(range(len(density)), density, label=r"av.density $\langle n \rangle$ (sampled)")
+        #ax.plot(range(len(np.diag(OBDM))), np.diag(OBDM), label=r"$\langle n \rangle$ (from OBDM)")
+        #plt.legend()
+        ##plt.show()

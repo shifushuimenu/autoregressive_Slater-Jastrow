@@ -20,6 +20,7 @@ from bitcoding import int2bin, bin2pos
 from utils import default_dtype_torch
 
 import sys
+from time import time 
 #from profilehooks import profile 
 
 __all__ = ['SlaterJastrow_ansatz']
@@ -87,7 +88,7 @@ class SlaterJastrow_ansatz(selfMADE):
     def sample_unfolded(self, seed=None):
         """
             Sample particle positions componentwise including, for each component,
-            the probability coming from componentwise sampling of the Slater determinant. 
+            :the probability coming from componentwise sampling of the Slater determinant. 
 
             The internal state of the Slater determinant sampler is reset so that 
             sampling can start from the first component.
@@ -107,14 +108,25 @@ class SlaterJastrow_ansatz(selfMADE):
                 duplicate_entries=False)   
             pos_one_hot = torch.zeros(self.D).unsqueeze(dim=0)
 
+            ##fh = open("timing.dat", "a")
+            ##t_SD = 0
+            ##t_net = 0
+
             # The particle sampled first should be on the leftmost position. 
             # Pauli_blocker is part of Softmax layer. 
             # x_hat_bias is not affected by the Pauli blocker in the Softmax layer 
             # and is overwritten in selfMADE.__init__().            
             for i in range(0, self.num_components):
-                x_hat = self.forward(x_out)
 
+                ##t1 = time()
+                x_hat = self.forward(x_out)
+                ##t2 = time()
+                ##t_net += (t2-t1)
+
+                ##t1 = time()
                 cond_prob_fermi = self.slater_sampler.get_cond_prob(k=i)
+                ##t2 = time()
+                ##t_SD += (t2-t1)
 
                 # Make sure that an ordering of the particles is enforced.
                 # The position of particle i, k_i, is always to the left of k_{i+1},
@@ -157,6 +169,9 @@ class SlaterJastrow_ansatz(selfMADE):
         # log_prob = self.log_prob(occ_numbers_collapse(x_out, self.D))
         # print("log_prob.requires_grad=", log_prob.requires_grad)
         # assert(log_prob.requires_grad)
+
+        ##print("## t_SD=%10.6f, t_net=%10.6f" %(t_SD, t_net), file=fh)
+        ##fh.close()
 
         return x_out, prob_sample
 

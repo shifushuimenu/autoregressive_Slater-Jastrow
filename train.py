@@ -37,11 +37,11 @@ np.random.seed(seed)
 max_iter = 10 #1000 
 num_samples = 10 # 100  # samples per batch
 num_bin = 5 #50
-Nx = 3  # 15
-Ny = 3
+Nx = 4  # 15
+Ny = 4
 Nsites = Nx*Ny  # 15  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
-Nparticles = 2
+Nparticles = 7
 
 optimize_orbitals = True # whether to include columns of P-matrix in optimization
 learning_rate_SD = 0.02
