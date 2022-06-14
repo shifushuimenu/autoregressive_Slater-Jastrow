@@ -7,7 +7,7 @@ from slater_sampler_ordered import SlaterDetSampler_ordered
 from test_suite import prepare_test_system_zeroT, HartreeFock_tVmodel
 from monitoring_old import logger 
 
-import time
+from time import time 
 import matplotlib.pyplot as plt
 
 Parallel = False 
@@ -37,11 +37,11 @@ np.random.seed(seed)
 max_iter = 10 #1000 
 num_samples = 10 # 100  # samples per batch
 num_bin = 5 #50
-Nx = 4  # 15
-Ny = 4
+Nx = 5  # 15
+Ny = 5
 Nsites = Nx*Ny  # 15  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
-Nparticles = 7
+Nparticles = 12
 
 optimize_orbitals = True # whether to include columns of P-matrix in optimization
 learning_rate_SD = 0.02
@@ -71,15 +71,18 @@ def train(VMCmodel, learning_rate, learning_rate_SD, num_samples=100, num_bin=50
         # get expectation values for energy, gradient and their product,
         # as well as the precision of energy.        
         sample_list = np.zeros((num_samples, Nsites)) 
-        sample_probs = np.zeros((num_samples,))
+        log_probs = np.zeros((num_samples,))
         print("before sampling")
         with torch.no_grad():
+            t1 = time()
             for i in range(num_samples):
-                sample_unfolded, sample_prob = VMCmodel.ansatz.sample_unfolded()
-                sample_probs[i] = sample_prob
+                sample_unfolded, log_prob_sample = VMCmodel.ansatz.sample_unfolded()
+                log_probs[i] = log_prob_sample
                 sample_list[i] = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
+            t2 = time()
+            VMCmodel.t_sampling += (t2-t1)
 
-        energy, grad, energy_grad, precision = vmc_measure(VMCmodel.local_measure, sample_list, sample_probs, num_bin=num_bin)
+        energy, grad, energy_grad, precision = vmc_measure(VMCmodel.local_measure, sample_list, log_probs, num_bin=num_bin)
 
         # update variables using stochastic gradient descent
         g_list = [eg - energy * g for eg, g in zip(energy_grad, grad)]
@@ -175,17 +178,27 @@ E_exact = -3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832
 
 
 if True: 
-    t0 = time.time()
+    t0 = time()
+    t0_tmp = t0
     for i, (energy, precision) in enumerate(train(VMCmodel_, learning_rate=0.2, learning_rate_SD=learning_rate_SD, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda)):
-        t1 = time.time()
-        print('Step %d, dE/|E| = %.4f, elapsed = %.4f' % (i, -(energy - E_exact)/E_exact, t1-t0))
+        t1_tmp = time()
+        print('Step %d, dE/|E| = %.4f, elapsed = %.4f' % (i, -(energy - E_exact)/E_exact, t1_tmp-t0_tmp))
         _update_curve(energy, precision)
         _checkpoint(VMCmodel_)
-        t0 = time.time()
-
+        t0_tmp = time()
         # stop condition
         if i >= max_iter:
             break
+    t1 = time()
+    print("## Timings:")
+    print("## elapsed =%10.6f for %d samples per iteration with %d iterations" % (t1-t0, num_samples, max_iter))
+    print("## t_psiloc=", VMCmodel_.t_psiloc)
+    print("## t_logprob_B=", VMCmodel_.ansatz.t_logprob_B)
+    print("## t_logprob_F=", VMCmodel_.ansatz.t_logprob_F)
+    print("## t_sampling=", VMCmodel_.t_sampling)
+    print("## t_locE=", VMCmodel_.t_locE)
+    print("## t_grads=", VMCmodel_.t_grads)
+
 
 szsz_corr = np.zeros(Nsites)
 szsz_corr_2D = np.zeros((phys_system.nx, phys_system.ny))
@@ -198,7 +211,7 @@ state_checkpointed = torch.load(ckpt_outfile)
 VMCmodel_.ansatz.load_state_dict(state_checkpointed['net'])
 num_samples = 10
 for _ in range(num_samples):
-    sample_unfolded, sample_prob = VMCmodel_.ansatz.sample_unfolded()
+    sample_unfolded, log_prob_sample = VMCmodel_.ansatz.sample_unfolded()
     config = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
     print("config=", config) 
     config_sz = 2*config - 1

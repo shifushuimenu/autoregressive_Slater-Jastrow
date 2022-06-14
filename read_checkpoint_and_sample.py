@@ -60,7 +60,7 @@ print("Now sample from the converged ansatz")
 state_checkpointed = torch.load(ckpt_outfile)
 VMCmodel_.ansatz.load_state_dict(state_checkpointed['net'])
 for _ in range(num_samples):
-    sample_unfolded, sample_prob = VMCmodel_.ansatz.sample_unfolded()
+    sample_unfolded, log_prob_sample = VMCmodel_.ansatz.sample_unfolded()
     config = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
     print("config=", config) 
     config_sz = 2*config - 1

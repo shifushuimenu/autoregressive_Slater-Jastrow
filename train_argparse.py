@@ -78,8 +78,8 @@ def train(VMCmodel, learning_rate, num_samples=100, num_bin=50, use_cuda=False):
         print("before sampling")
         with torch.no_grad():
             for i in range(num_samples):
-                sample_unfolded, sample_prob = VMCmodel.ansatz.sample_unfolded()
-                sample_probs[i] = sample_prob
+                sample_unfolded, log_prob_sample = VMCmodel.ansatz.sample_unfolded()
+                sample_probs[i] = np.exp(log_prob_sample)
                 sample_list[i] = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
 
         energy, grad, energy_grad, precision = vmc_measure(VMCmodel.local_measure, sample_list, sample_probs, num_bin=num_bin)
@@ -181,7 +181,7 @@ state_checkpointed = torch.load(ckpt_outfile)
 VMCmodel_.ansatz.load_state_dict(state_checkpointed['net'])
 num_samples = 10
 for _ in range(num_samples):
-    sample_unfolded, sample_prob = VMCmodel_.ansatz.sample_unfolded()
+    sample_unfolded, log_prob_sample = VMCmodel_.ansatz.sample_unfolded()
     config = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
     print("config=", config) 
     config_sz = 2*config - 1

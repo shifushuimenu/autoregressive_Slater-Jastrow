@@ -340,13 +340,14 @@ def kinetic_term2( I, lattice, t_hop=1.0 ):
 
 
 @profile
-def vmc_measure(local_measure, sample_list, sample_probs, num_bin=50):
+def vmc_measure(local_measure, sample_list, log_probs, num_bin=50):
     '''
     perform measurements on samples
 
     Args:
         local_measure (func): local measurements function, input configuration, return local energy and local gradient.
-        sample_list (list): a list of spin configurations.
+        sample_list (list): a list of configurations.
+        log_probs (lit): the log probs for the configurations.
         num_bin (int): number of bins in binning statistics.
 
     Returns:
@@ -355,10 +356,10 @@ def vmc_measure(local_measure, sample_list, sample_probs, num_bin=50):
     print("inside VMC measure")
     # measurements
     energy_loc_list, grad_loc_list = [], []
-    for i, config in enumerate(sample_list):
+    for i, (config, log_prob) in enumerate(zip(sample_list, log_probs)):
         print("local energy: sample nr=", i)
         # back-propagation is used to get gradients.
-        energy_loc, grad_loc = local_measure([config]) # ansatz.psi requires batch dim)
+        energy_loc, grad_loc = local_measure([config], log_prob) # ansatz.psi requires batch dim)
         energy_loc_list.append(energy_loc)
         grad_loc_list.append(grad_loc)
 
@@ -416,6 +417,11 @@ class VMCKernel(object):
         self.ansatz = ansatz
         self.energy_loc = energy_loc
 
+        self.t_psiloc = 0 # total time for calculating psi_loc for gradients and local energy
+        self.t_sampling = 0 # total time for generating samples
+        self.t_grads = 0 # total time for calculating gradients 
+        self.t_locE = 0  # totcal time for calculating local energy 
+
     @profile
     def prob(self,config):
         '''
@@ -431,19 +437,29 @@ class VMCKernel(object):
         return self.ansatz.prob(config)
 
     @profile
-    def local_measure(self, config):
+    def local_measure(self, config, log_prob):
         '''
         get local quantities energy_loc, grad_loc.
 
         Args:
            config (1darray): the bit string as a configuration.
+           log_prob : the log prob of the configuration 
 
         Returns:
            number, list: local energy and local gradient for variables. 
         '''
         config = np.array(config)
         assert len(config.shape) == 2 and config.shape[0] == 1 # Convention: batch dimension required, but only one sample per batch allowed
+        t0 = time()
         psi_loc = self.ansatz.psi_amplitude(torch.from_numpy(config))
+        print("psi_loc**2=", psi_loc.item()**2)
+        print("np.exp(log_prob)=", np.exp(log_prob))
+        sign = torch.sign(self.ansatz.slater_sampler.psi_amplitude([config]))
+        psi_loc2 = np.sqrt(np.exp(log_prob)) * sign
+        print("psi_loc=", psi_loc)
+        print("psi_loc2=", psi_loc2)
+        t1 = time()
+        self.t_psiloc += (t1-t0)
         if not self.ansatz.deactivate_Jastrow or not self.ansatz.input_orbitals:
             assert(psi_loc.requires_grad)
             with torch.autograd.set_detect_anomaly(True):
@@ -454,9 +470,13 @@ class VMCKernel(object):
         else:
             # for debugging 
             grad_loc = [torch.zeros_like(p) for p in self.ansatz.parameters()]
-
+        t2 = time()
+        self.t_grads += (t2-t1)
         # E_{loc}
+        t3 = time()
         eloc = self.energy_loc(config, psi_loc.data, ansatz=self.ansatz).item()
+        t4 = time()
+        self.t_locE += (t4-t3)
         return eloc, grad_loc
 
 
@@ -482,11 +502,11 @@ if __name__ == "__main__":
     SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)
 
     sample_list = np.zeros((num_samples, Nsites)) # a numpy array
-    sample_probs = np.zeros((num_samples,))
+    log_probs = np.zeros((num_samples,))
     for i in range(num_samples):
-        sample_unfolded, sample_prob = SJA.sample_unfolded()
+        sample_unfolded, log_prob_sample = SJA.sample_unfolded()
         sample_list[i] = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
-        sample_probs[i] = sample_prob
+        log_probs[i] = log_prob_sample
         print("amplitude=", SJA.psi_amplitude([sample_list[i]]))
         exit(1)
     print("SJ.sample()", sample_list)
@@ -505,5 +525,5 @@ if __name__ == "__main__":
     e_loc, grad_loc = VMC.local_measure([[0,1,0,0,1]])
 
     energy, gradient_mean, energy_gradient, energy_precision = vmc_measure(
-        VMC.local_measure, sample_list, sample_probs, num_bin=10)
+        VMC.local_measure, sample_list, log_probs, num_bin=10)
 

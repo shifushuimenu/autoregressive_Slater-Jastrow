@@ -21,7 +21,7 @@ from utils import default_dtype_torch
 
 import sys
 from time import time 
-#from profilehooks import profile 
+from profilehooks import profile 
 
 __all__ = ['SlaterJastrow_ansatz']
 
@@ -79,10 +79,13 @@ class SlaterJastrow_ansatz(selfMADE):
         super(SlaterJastrow_ansatz, self).__init__(**kwargs)
 
         self.slater_sampler = slater_sampler
+
+        self.t_logprob_B = 0
+        self.t_logprob_F = 0
         
     #@profile
     def sample(self):
-        sample_unfolded, prob_sample = self.sample_unfolded()
+        sample_unfolded, log_prob_sample = self.sample_unfolded()
         return occ_numbers_collapse(sample_unfolded, self.D)
 
     def sample_unfolded(self, seed=None):
@@ -93,16 +96,22 @@ class SlaterJastrow_ansatz(selfMADE):
             The internal state of the Slater determinant sampler is reset so that 
             sampling can start from the first component.
 
-            Parameter:
-            ----------
+            Parameter
+            ---------
                 seed: int (optional)
                     Seed the random number generator with a fixed seed (so as to aid 
                     reproducibility during debugging)
+
+            Returns
+            -------
+                x_out 
+                log_prob_sample
         """
         if seed:
             torch.manual_seed(seed)
         with torch.no_grad():
             prob_sample = 1.0 # probability of the generated sample
+            log_prob_sample = 1.0
             self.slater_sampler.reset_sampler()
             x_out = occ_numbers_unfold(sample=torch.zeros(self.D).unsqueeze(dim=0), unfold_size=self.num_components,
                 duplicate_entries=False)   
@@ -147,13 +156,14 @@ class SlaterJastrow_ansatz(selfMADE):
                        assert(np.all(np.isclose(probs.numpy(), cond_prob_fermi)))
 
                 pos_one_hot = OneHotCategorical(probs).sample() 
-                k_i = torch.nonzero(pos_one_hot[0])[0][0].item()                         
+                k_i = torch.nonzero(pos_one_hot[0])[0][0]
 
-                prob_sample *= probs[0, k_i].item() # index 0: just one sample per batch                
+                prob_sample *= probs[0, k_i].item()  # index 0: just one sample per batch
+                log_prob_sample += np.log(probs[0, k_i].item())
 
                 x_out[:,i*self.D:(i+1)*self.D] = pos_one_hot
 
-                self.slater_sampler.update_state(pos_i = k_i)
+                self.slater_sampler.update_state(pos_i = k_i.item())
 
                 # init Pauli blocker/orderer for next pass 
                 if i < self.num_components-1:
@@ -173,7 +183,7 @@ class SlaterJastrow_ansatz(selfMADE):
         ##print("## t_SD=%10.6f, t_net=%10.6f" %(t_SD, t_net), file=fh)
         ##fh.close()
 
-        return x_out, prob_sample
+        return x_out, log_prob_sample
 
     #@profile 
     def log_prob(self, samples):
@@ -213,15 +223,24 @@ class SlaterJastrow_ansatz(selfMADE):
             # for debugging 
             x_hat_B = torch.ones_like(samples_unfold_flat, requires_grad=False)
         else:
+            # for MADE a single forward pass gives all probabilities 
+            t1 = time()
             x_hat_B = self.forward(samples_unfold_flat)
+            t2 = time()
+            self.t_logprob_B += (t2-t1)
 
         x_hat_F = torch.zeros_like(x_hat_B, requires_grad=False)
         self.slater_sampler.reset_sampler()
+        # for Slater sampler we need to go through all sampling steps because it has an internal state,
+        # which needs to be updated 
+        t1 = time()
         for k in range(0, self.num_components): 
             x_hat_F[..., k*self.D:(k+1)*self.D] = self.slater_sampler.get_cond_prob(k)
             self.slater_sampler.update_state(pos[k].item())
         x_hat = x_hat_B * x_hat_F
         x_hat[..., 0:self.D] = x_hat_F[..., 0:self.D]  # cond_prob_fermi(i=0) is already contained as 'bias_zeroth_component' in MADE.
+        t2 = time()
+        self.t_logprob_F += (t2-t1)
         for k in range(self.num_components):
             norm = torch.sum(x_hat[..., k*self.D:(k+1)*self.D])
             x_hat[..., k*self.D:(k+1)*self.D] /= norm
@@ -237,7 +256,7 @@ class SlaterJastrow_ansatz(selfMADE):
         # reshape leading dimensions back to original shape (last dim is missing now)
         return log_prob.view(*samples.shape[:-1])            
 
-
+    @profile
     def psi_amplitude(self, samples):
         """
             Wavefunction amplitude on an occupation number state. 
@@ -535,7 +554,7 @@ if __name__ == '__main__':
 
     batch = torch.zeros(num_samples, N_particles*N_sites)
     for i in range(num_samples):
-        sample_unfolded, prob_sample = SJA.sample_unfolded() # returns one sample, but with batch dimension
+        sample_unfolded, log_prob_sample = SJA.sample_unfolded() # returns one sample, but with batch dimension
         batch[i, ...] = sample_unfolded[0]
         s = occ_numbers_collapse(sample_unfolded, N_sites)
         print("s=", s)
@@ -543,7 +562,7 @@ if __name__ == '__main__':
         print("amp^2=", SJA.psi_amplitude(s)**2)
         print("prob=", SJA.prob(s))
         model_probs[DATA.bits2int(s.squeeze(dim=0))] = torch.exp(SJA.log_prob(s)).detach().numpy()
-        model_probs2[DATA.bits2int(s.squeeze(dim=0))] = prob_sample
+        model_probs2[DATA.bits2int(s.squeeze(dim=0))] = np.exp(log_prob_sample)
         s = s.squeeze(dim=0)
         hist[DATA.bits2int(s)] += 1
     hist /= num_samples
