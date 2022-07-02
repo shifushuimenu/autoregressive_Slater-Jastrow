@@ -14,19 +14,19 @@ from test_suite import prepare_test_system_zeroT, HartreeFock_tVmodel
 from graph_distance import * 
 
 
-Nx = 6  # 15
-Ny = 6
+Nx = 4  # 15
+Ny = 4
 L=Nx
 
 if L==6:
     S, num_dist = graph_distance_L6()
-elif L==4 
+elif L==4: 
     S, num_dist = graph_distance_L4()
 
 Nsites = Nx*Ny  # 15  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
-Nparticles = 17
-Vint = 0.01
+Nparticles = 7
+Vint = 1.0
 
 num_samples = 200
 
@@ -58,7 +58,7 @@ corr_graph = np.zeros(L+1)
 
 print("Now sample from the converged ansatz")
 state_checkpointed = torch.load(ckpt_outfile)
-VMCmodel_.ansatz.load_state_dict(state_checkpointed['net'])
+VMCmodel_.ansatz.load_state_dict(state_checkpointed['net'], strict=False)
 for _ in range(num_samples):
     sample_unfolded, log_prob_sample = VMCmodel_.ansatz.sample_unfolded()
     config = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
@@ -69,23 +69,23 @@ for _ in range(num_samples):
         corr_[k] = (np.roll(config_sz, shift=-k) * config_sz).sum(axis=-1) / Nsites
     szsz_corr[:] += corr_[:]
 
-    # 2D spin-spin correlations (or, alternatively, density-density correlations)
-    config_2D = config.reshape((phys_system.nx, phys_system.ny))
+    # # 2D spin-spin correlations (or, alternatively, density-density correlations)
+    # config_2D = config.reshape((phys_system.nx, phys_system.ny))
         
-    corr_graph[:] += graph_distance_corr(S, num_dist, config_2D, av_n = Nparticles/Nsites)
+    # corr_graph[:] += graph_distance_corr(L, S, num_dist, config_2D, av_n = Nparticles/Nsites)
     
-    config_2D_sz = 2*config_2D - 1
-    tmp1[:,:] = 0.0 
-    tmp2[:,:] = 0.0
-    for x in range(0, phys_system.nx):
-        for y in range(0, phys_system.ny):
-           tmp1[x, y] = (np.roll(np.roll(config_2D_sz, shift=-x, axis=0), shift=-y, axis=1) * config_2D_sz).sum() / phys_system.ns
-           tmp2[x, y] = (np.roll(np.roll(config_2D, shift=-x, axis=0), shift=-y, axis=1) * config_2D).sum() / phys_system.ns
-    szsz_corr_2D[:,:] += tmp1[:,:]
-    corr_2D[:,:] += tmp2[:,:]
+    # config_2D_sz = 2*config_2D - 1
+    # tmp1[:,:] = 0.0 
+    # tmp2[:,:] = 0.0
+    # for x in range(0, phys_system.nx):
+    #     for y in range(0, phys_system.ny):
+    #        tmp1[x, y] = (np.roll(np.roll(config_2D_sz, shift=-x, axis=0), shift=-y, axis=1) * config_2D_sz).sum() / phys_system.ns
+    #        tmp2[x, y] = (np.roll(np.roll(config_2D, shift=-x, axis=0), shift=-y, axis=1) * config_2D).sum() / phys_system.ns
+    # szsz_corr_2D[:,:] += tmp1[:,:]
+    # corr_2D[:,:] += tmp2[:,:]
 
-    av_sz[:,:] += config_2D_sz[:,:]
-    av_density[:,:] += config_2D[:,:]
+    # av_sz[:,:] += config_2D_sz[:,:]
+    # av_density[:,:] += config_2D[:,:]
 
 szsz_corr[:] /= num_samples
 szsz_corr_2D[:,:] /= num_samples

@@ -1,26 +1,31 @@
-"""Read network parameters from checkpoint file and sample from the (hopefully converged) ansatz."""
 import numpy as np
-import torch 
-import matplotlib.pyplot as plt 
 import itertools
-
+import argparse
+from time import time 
+#
+import torch 
 from utils import default_dtype_torch 
 torch.set_default_dtype(default_dtype_torch)
-
-from Slater_Jastrow_simple import *
-#from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
+#
+from one_hot import occ_numbers_collapse
+from Slater_Jastrow_simple import PhysicalSystem, VMCKernel
+from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 from slater_sampler_ordered import SlaterDetSampler_ordered
-from test_suite import prepare_test_system_zeroT, HartreeFock_tVmodel
-
-
-
-###### define model parameters ######
-Lx, Ly = 6, 6 # linear dimension of spin 1 2d lattice
-N_2d = Lx*Ly # number of sites
-Np = 9  # number of particles 
+from test_suite import HartreeFock_tVmodel
+#
+desc_str = "Read network parameters from checkpoint file and sample from the (hopefully converged) ansatz."
+parser = argparse.ArgumentParser(description=desc_str)
+parser.add_argument('Lx', type=int, help='width of square lattice')
+parser.add_argument('Ly', type=int, help='height of square lattice')
+parser.add_argument('Np', metavar='N', type=int, help='number of particles')
+parser.add_argument('Vint', metavar='V/t', type=float, help='nearest neighbout interaction (V/t > 0 is repulsive)')
+parser.add_argument('num_samples', type=int, help="number of samples")
+#
+args = parser.parse_args()
+Lx = args.Lx; Ly = args.Ly; Np = args.Np; Vint = args.Vint; num_samples = args.num_samples 
 #
 J=1.0 # hopping matrix element
-Vint=1.0 # nearest-neighbour interaction
+N_2d = Lx*Ly # number of sites
 paramstr = "Lx%dLy%dNp%dVint%f"%(Lx, Ly, Np, Vint)
 #
 ###### setting up user-defined symmetry transformations for 2d lattice ######
@@ -37,11 +42,9 @@ def translate(s, n, T_d):
     for _ in range(n):
         s = T_d[s]
     return s
-
-num_samples = 2000
-
+#
 phys_system = PhysicalSystem(nx=Lx, ny=Ly, ns=N_2d, num_particles=Np, D=2, Vint=Vint)
-
+#
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
 (eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none", max_iter=2)
@@ -49,29 +52,76 @@ np.savetxt("eigvecs.dat", eigvecs)
 #(_, eigvecs) = prepare_test_system_zeroT(N_2d=N_2d, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
 Sdet_sampler = SlaterDetSampler_ordered(Nsites=N_2d, Nparticles=Np, single_particle_eigfunc=eigvecs, eigvals=eigvals, naive_update=False, optimize_orbitals=False)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Np, D=N_2d, net_depth=2)
-
+#
 VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
 del SJA
-
+#
 ckpt_outfile = 'state_Nx{}Ny{}Np{}V{}.pt'.format(Lx, Ly, Np, Vint)
-
+#
 print("Now sample from the converged ansatz")
 state_checkpointed = torch.load(ckpt_outfile)
-VMCmodel_.ansatz.load_state_dict(state_checkpointed['net'], strict=False)
-
+VMCmodel_.ansatz.load_state_dict(state_checkpointed['net'], strict=True)
+#
 # init observables 
 SzSzcorr = np.zeros((Lx, Ly))
-
-for _ in range(num_samples):
-    sample_unfolded, log_prob_sample = VMCmodel_.ansatz.sample_unfolded()
+nncorr = np.zeros((Lx, Ly))
+#
+# for calculating error bar
+SzSzcorr2 = np.zeros((Lx, Ly))
+nncorr2 = np.zeros((Lx, Ly))
+#
+energy_av = 0
+energy2_av = 0
+energy_list = np.zeros((num_samples, 1))
+#
+t_sample = 0
+for ii in range(num_samples):
+    t1 = time() 
+    with torch.no_grad():
+        sample_unfolded, log_prob_sample = VMCmodel_.ansatz.sample_unfolded()
+    t2 = time()
+    t_sample += (t2 - t1)
     config = occ_numbers_collapse(sample_unfolded, N_2d).squeeze().numpy()
-    print("config=", config) 
     config_sz = 2*config - 1
-
+#
+    # local energy 
+    ene, _ = VMCmodel_.local_measure([config], log_prob_sample)
+    print("ene=", ene)
+    energy_list[ii] = ene
+    energy_av += ene
+    energy2_av += ene**2 
+#
     for tx, ty in itertools.product(range(Lx), range(Ly)):
         pair_list = [[i, translate(translate(i, tx, T_x), ty, T_y)] for i in range(N_2d)]
-        SzSzcorr[tx, ty] += sum([config_sz[i] * config_sz[j] for (i,j) in pair_list]) / N_2d
-
+        ss1 = sum([config_sz[i] * config_sz[j] for (i,j) in pair_list]) / N_2d
+        SzSzcorr[tx, ty] += ss1 
+        ss2 = sum([config[i] * config[j] for (i,j) in pair_list]) / N_2d
+        nncorr[tx, ty] += ss2 
+#
+        SzSzcorr2[tx, ty] += ss1**2 
+        nncorr2[tx, ty] += ss2**2
+#
 SzSzcorr[:,:] /= num_samples
-
+nncorr[:,:] /= num_samples 
+SzSzcorr2[:,:] /= num_samples 
+nncorr2[:,:] /= num_samples
+err_SzSzcorr = np.sqrt(SzSzcorr2[:,:] - SzSzcorr[:,:]**2) / np.sqrt(num_samples)
+err_nncorr = np.sqrt(nncorr2[:,:] - nncorr[:,:]**2) / np.sqrt(num_samples)
+#
 np.savetxt("SzSzcorr_VMC_"+paramstr+".dat", SzSzcorr)
+np.savetxt("err_SzSzcorr_VMC_"+paramstr+".dat", err_SzSzcorr)
+np.savetxt("nncorr_VMC_"+paramstr+".dat", nncorr)
+# Store also the connected density-density correlation function (valid only for translationally invariant systems)
+##np.savetxt("nncorr_conn_VMC_"+paramstr+".dat", nncorr[:,:] - (Np / N_2d)**2 )
+np.savetxt("err_nncorr_VMC_"+paramstr+".dat", err_nncorr)
+#
+energy_av /= num_samples 
+energy2_av /= num_samples 
+#
+err_energy = np.sqrt(energy2_av - energy_av**2) / np.sqrt(num_samples)
+with open("energy_VMC_"+paramstr+".dat", "w") as fh:
+    fh.write("energy = %16.10f +/- %16.10f" % (energy_av, err_energy))
+# store timeseries => make histogram of non-Gaussian statistics 
+np.savetxt("energy_TS_"+paramstr+".dat", energy_list)
+#
+print("## %d samples in %f seconds" % ( num_samples, t_sample))

@@ -197,7 +197,7 @@ if True:
     print("## t_logprob_F=", VMCmodel_.ansatz.t_logprob_F)
     print("## t_sampling=", VMCmodel_.t_sampling)
     print("## t_locE=", VMCmodel_.t_locE)
-    print("## t_grads=", VMCmodel_.t_grads)
+    print("## t_backward=", VMCmodel_.t_grads)
 
 
 szsz_corr = np.zeros(Nsites)

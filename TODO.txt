@@ -72,3 +72,7 @@
 [ ] Check division by zero in slater_sampler_ordered.py:535 (549, 691)
 
 [ ] Test calculation of kinetic energy (separate file) and benchmark the speedup. Make a figure for the publication.
+
+
+# UNCLEAR THINGS
+[ ] Where is `bias_zeroth_component` acting ?

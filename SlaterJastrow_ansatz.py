@@ -21,7 +21,7 @@ from utils import default_dtype_torch
 
 import sys
 from time import time 
-from profilehooks import profile 
+#from profilehooks import profile 
 
 __all__ = ['SlaterJastrow_ansatz']
 
@@ -83,7 +83,6 @@ class SlaterJastrow_ansatz(selfMADE):
         self.t_logprob_B = 0
         self.t_logprob_F = 0
         
-    #@profile
     def sample(self):
         sample_unfolded, log_prob_sample = self.sample_unfolded()
         return occ_numbers_collapse(sample_unfolded, self.D)
@@ -256,7 +255,7 @@ class SlaterJastrow_ansatz(selfMADE):
         # reshape leading dimensions back to original shape (last dim is missing now)
         return log_prob.view(*samples.shape[:-1])            
 
-    @profile
+    #@profile
     def psi_amplitude(self, samples):
         """
             Wavefunction amplitude on an occupation number state. 

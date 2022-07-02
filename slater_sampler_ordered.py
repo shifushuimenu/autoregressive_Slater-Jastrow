@@ -25,7 +25,7 @@ from monitoring_old import logger as mylogger
 import lowrank_update as LR
 from lowrank_update import ErrorFinitePrecision
 
-from profilehooks import profile
+#from profilehooks import profile
 import matplotlib.pyplot as plt 
 
 class SlaterDetSampler_ordered(torch.nn.Module):
@@ -45,6 +45,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         From the matrix containing the single-particle eigenfunctions 
         as columns, the first `Nparticles` columns are chosen to form the 
+
         Slater determinant.
     """
     def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, eigvals=None, naive_update=True, optimize_orbitals=False):
@@ -340,7 +341,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         self.state_index += 1 
 
-    @profile
+    #@profile
     def psi_amplitude(self, samples):
         """
             Wavefunction amplitude for a basis state, i.e. the overlap
