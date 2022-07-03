@@ -12,6 +12,7 @@ from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 from slater_sampler_ordered import SlaterDetSampler_ordered
 from test_suite import HartreeFock_tVmodel
 
+import itertools
 from time import time 
 import argparse 
 
@@ -47,23 +48,25 @@ parser.add_argument('Np', metavar='N', type=int, help='number of particles')
 parser.add_argument('Vint', metavar='V/t', type=float, help='nearest-neighbour interaction (V/t > 0 is repulsive)')
 parser.add_argument('max_iter', metavar='max_epochs', type=int, help="number of training epochs")
 parser.add_argument('num_samples', type=int, help="number of samples per epoch")
+parser.add_argument('num_meas_samples', type=int, help="number of samples in measurement phase")
 parser.add_argument('--optimize_orbitals', type=bool, default=False, help="co-optimize orbitals of Slater determinant (default=False)")
 args = parser.parse_args()
 
-Nx = args.Lx # 5  # 15
-Ny = args.Ly # 5
+Lx = args.Lx # 5  # 15
+Ly = args.Ly # 5
 Nparticles = args.Np # 12
 Vint = args.Vint #  Vint_array[MPI_rank]
 max_iter = args.max_iter # 10 #1000 
 num_samples = args.num_samples # 10 # 100  # samples per batch
-num_bin = num_samples // 2 # 50 
+num_bin = num_samples // 20 # 50 
+num_meas_samples = args.num_meas_samples
 optimize_orbitals = args.optimize_orbitals  # whether to include columns of P-matrix in optimization
 learning_rate_SD = 0.02
 
-Nsites = Nx*Ny  # 15  # Nsites = 64 => program killed because it is using too much memory
+Nsites = Lx*Ly  # 15  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
-param_suffix = "_Lx{}Ly{}Np{}V{}".format(Nx, Ny, Nparticles, Vint)
-logger.info_refstate.outfile = "lowrank_stats"+param_suffix+".dat"
+paramstr = "_Lx{}Ly{}Np{}V{}".format(Lx, Ly, Nparticles, Vint)
+logger.info_refstate.outfile = "lowrank_stats"+paramstr+".dat"
 
 # for debugging:
 # If deactivate_Jastrow == True, samples are drawn from the Slater determinant without the Jastrow factor. 
@@ -140,10 +143,10 @@ def _update_curve(energy, precision):
 
     MM = np.hstack((np.array(energy_list)[:,None], np.array(precision_list)[:,None],
                     np.array(av_list)[:,None], np.array(sigma_list)[:,None]))
-    np.savetxt("energies"+param_suffix+".dat", MM)
+    np.savetxt("energies"+paramstr+".dat", MM)
 
 
-ckpt_outfile = "state"+param_suffix+".pt"
+ckpt_outfile = "state"+paramstr+".pt"
 def _checkpoint(VMCmodel):
     """Save most recent SJA state to disk."""
     state = {
@@ -154,11 +157,11 @@ def _checkpoint(VMCmodel):
     torch.save(state, ckpt_outfile)
 
 
-phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, D=space_dim, Vint=Vint)
+phys_system = PhysicalSystem(nx=Lx, ny=Ly, ns=Nsites, num_particles=Nparticles, D=space_dim, Vint=Vint)
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determi
-with open("HF_energy"+param_suffix+".dat", "w") as fh:
+with open("HF_energy"+paramstr+".dat", "w") as fh:
     (eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none", outfile=fh, max_iter=20)
 np.savetxt("eigvecs.dat", eigvecs)
 
@@ -215,31 +218,88 @@ corr_ = np.zeros(Nsites)
 corr_2D_ = np.zeros((phys_system.nx, phys_system.ny))
 
 
+ # ====================================================================================
 print("Now sample from the converged ansatz")
+###### setting up user-defined symmetry transformations for 2d lattice ######
+s = np.arange(Nsites) # sites [0,1,2,....]
+x = s%Lx # x positions for sites
+y = s//Lx # y positions for sites
+T_x = (x+1)%Lx + Lx*y # translation along x-direction
+T_y = x +Lx*((y+1)%Ly) # translation along y-direction
+P_x = x + Lx*(Ly-y-1) # reflection about x-axis
+P_y = (Lx-x-1) + Lx*y # reflection about y-axis
+#
+def translate(s, n, T_d):
+    """translate set of sites `s` using mapping `T_d` for n times"""
+    for _ in range(n):
+        s = T_d[s]
+    return s
+
+
 state_checkpointed = torch.load(ckpt_outfile)
-VMCmodel_.ansatz.load_state_dict(state_checkpointed['net'])
-num_samples = 10
-for _ in range(num_samples):
-    sample_unfolded, log_prob_sample = VMCmodel_.ansatz.sample_unfolded()
-    config = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
-    print("config=", config) 
+VMCmodel_.ansatz.load_state_dict(state_checkpointed['net'], strict=True)
+#
+# init observables 
+SzSzcorr = np.zeros((Lx, Ly))
+nncorr = np.zeros((Lx, Ly))
+#
+# for calculating error bar
+SzSzcorr2 = np.zeros((Lx, Ly))
+nncorr2 = np.zeros((Lx, Ly))
+#
+energy_av = 0
+energy2_av = 0
+energy_list = np.zeros((num_meas_samples, 1))
+#
+t_sample = 0
+for ii in range(num_meas_samples):
+    t1 = time() 
+    with torch.no_grad():
+        sample_unfolded, log_prob_sample = VMCmodel_.ansatz.sample_unfolded()
+    t2 = time()
+    t_sample += (t2 - t1)
+    config = occ_numbers_collapse(sample_unfolded, Nsites).squeeze().numpy()
     config_sz = 2*config - 1
-    corr_[:] = 0.0
-    for k in range(0, Nsites):
-        corr_[k] = (np.roll(config_sz, shift=-k) * config_sz).sum(axis=-1) / Nsites
-    szsz_corr[:] += corr_[:]
-
-    # 2D spin-spin correlations 
-    config_2D = config.reshape((phys_system.nx, phys_system.ny))
-    config_2D_sz = 2*config_2D - 1
-    corr_2D_[:,:] = 0.0
-    for kx in range(0, phys_system.nx):
-        for ky in range(0, phys_system.ny):
-           corr_2D_[kx, ky] = (np.roll(np.roll(config_2D_sz, shift=-kx, axis=0), shift=-ky, axis=1) * config_2D_sz).sum() / phys_system.ns
-    szsz_corr_2D[:,:] += corr_2D_[:, :]
-
-szsz_corr[:] /= num_samples
-szsz_corr_2D[:,:] /= num_samples
-
-np.savetxt("szsz_corr"+param_suffix+".dat", szsz_corr)
-np.savetxt("szsz_corr_2D.dat", szsz_corr_2D)
+#
+    # local energy 
+    ene, _ = VMCmodel_.local_measure([config], log_prob_sample)
+    print("ene=", ene)
+    energy_list[ii] = ene
+    energy_av += ene
+    energy2_av += ene**2 
+#
+    for tx, ty in itertools.product(range(Lx), range(Ly)):
+        pair_list = [[i, translate(translate(i, tx, T_x), ty, T_y)] for i in range(Nsites)]
+        ss1 = sum([config_sz[i] * config_sz[j] for (i,j) in pair_list]) / Nsites
+        SzSzcorr[tx, ty] += ss1 
+        ss2 = sum([config[i] * config[j] for (i,j) in pair_list]) / Nsites
+        nncorr[tx, ty] += ss2 
+#
+        SzSzcorr2[tx, ty] += ss1**2 
+        nncorr2[tx, ty] += ss2**2
+#
+SzSzcorr[:,:] /= num_meas_samples
+nncorr[:,:] /= num_meas_samples 
+SzSzcorr2[:,:] /= num_meas_samples 
+nncorr2[:,:] /= num_meas_samples
+# Central Limit Theorem for uncorrelated samples 
+err_SzSzcorr = np.sqrt(SzSzcorr2[:,:] - SzSzcorr[:,:]**2) / np.sqrt(num_meas_samples)
+err_nncorr = np.sqrt(nncorr2[:,:] - nncorr[:,:]**2) / np.sqrt(num_meas_samples)
+#
+np.savetxt("SzSzcorr_VMC_"+paramstr+".dat", SzSzcorr)
+np.savetxt("err_SzSzcorr_VMC_"+paramstr+".dat", err_SzSzcorr)
+np.savetxt("nncorr_VMC_"+paramstr+".dat", nncorr)
+# Store also the connected density-density correlation function (valid only for translationally invariant systems)
+##np.savetxt("nncorr_conn_VMC_"+paramstr+".dat", nncorr[:,:] - (Np / Nsites)**2 )
+np.savetxt("err_nncorr_VMC_"+paramstr+".dat", err_nncorr)
+#
+energy_av /= num_meas_samples 
+energy2_av /= num_meas_samples 
+#
+err_energy = np.sqrt(energy2_av - energy_av**2) / np.sqrt(num_meas_samples)
+with open("energy_VMC_"+paramstr+".dat", "w") as fh:
+    fh.write("energy = %16.10f +/- %16.10f" % (energy_av, err_energy))
+# store timeseries => make histogram of non-Gaussian statistics 
+np.savetxt("energy_TS_"+paramstr+".dat", energy_list)
+#
+print("## %d samples in %f seconds" % ( num_meas_samples, t_sample))
