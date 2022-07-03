@@ -24,6 +24,7 @@ class SR_Preconditioner(object):
         self.counter = 0
 
     def acc_Fisher_infomatrix(self, grad):
+        """$grad_ k= \frac{\partial_k |\psi\rangle}{|\psi\rangle}$"""
         self.counter += 1 
         grad_flat = self._flatten(grad)
         self.Fisher_matrix += np.outer(grad_flat, grad_flat)
@@ -42,9 +43,10 @@ class SR_Preconditioner(object):
 
     def apply(self, grad):
         grad_flat = self._flatten(grad)
-        e = np.linalg.eigvals(self.Fisher_matrix)
         # The Fisher information matrix, as a covariance matrix, must be positive definite. 
-        assert( np.all(e >= 0) )
+        if __debug__:
+            e = np.linalg.eigvals(self.Fisher_matrix)
+            assert( np.all(e >= 0) )
         Sinvg = np.matmul(np.linalg.inv(self.Fisher_matrix), grad_flat)
         return self._unflatten(grad, Sinvg)
 
