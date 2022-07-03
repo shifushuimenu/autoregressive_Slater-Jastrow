@@ -1,14 +1,19 @@
 # IMPROVE: Organize imports globally in a better way
 #          when making a package with an  __init__.py file. 
+import numpy as np
+import torch 
+from utils import default_dtype_torch 
 
-from Slater_Jastrow_simple import *
+from one_hot import occ_numbers_collapse
+from monitoring_old import logger 
+from Slater_Jastrow_simple import vmc_measure, PhysicalSystem, VMCKernel
+from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 #from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 from slater_sampler_ordered import SlaterDetSampler_ordered
-from test_suite import prepare_test_system_zeroT, HartreeFock_tVmodel
-from monitoring_old import logger 
+from test_suite import HartreeFock_tVmodel
 
 from time import time 
-import matplotlib.pyplot as plt
+import argparse 
 
 Parallel = False 
 
@@ -34,27 +39,36 @@ torch.manual_seed(seed)
 if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 
-max_iter = 10 #1000 
-num_samples = 10 # 100  # samples per batch
-num_bin = 5 #50
-Nx = 5  # 15
-Ny = 5
-Nsites = Nx*Ny  # 15  # Nsites = 64 => program killed because it is using too much memory
-space_dim = 2
-Nparticles = 12
+desc_str="VMC with autoregressive Slater-Jastrow ansatz for t-V model of spinless fermions"
+parser = argparse.ArgumentParser(description=desc_str)
+parser.add_argument('Lx', type=int, help='width of square lattice')
+parser.add_argument('Ly', type=int, help='height of square lattice')
+parser.add_argument('Np', metavar='N', type=int, help='number of particles')
+parser.add_argument('Vint', metavar='V/t', type=float, help='nearest-neighbour interaction (V/t > 0 is repulsive)')
+parser.add_argument('max_iter', metavar='max_epochs', type=int, help="number of training epochs")
+parser.add_argument('num_samples', type=int, help="number of samples per epoch")
+parser.add_argument('--optimize_orbitals', type=bool, default=False, help="co-optimize orbitals of Slater determinant (default=False)")
+args = parser.parse_args()
 
-optimize_orbitals = True # whether to include columns of P-matrix in optimization
+Nx = args.Lx # 5  # 15
+Ny = args.Ly # 5
+Nparticles = args.Np # 12
+Vint = args.Vint #  Vint_array[MPI_rank]
+max_iter = args.max_iter # 10 #1000 
+num_samples = args.num_samples # 10 # 100  # samples per batch
+num_bin = num_samples // 2 # 50 
+optimize_orbitals = args.optimize_orbitals  # whether to include columns of P-matrix in optimization
 learning_rate_SD = 0.02
 
-#Vint_array = np.array([1.0, 0.1, 1.0, 2.0, 3.0, 4.0, 5.0])
-Vint = 10.0 #  Vint_array[MPI_rank]
-
-param_suffix = "_Nx{}Ny{}Np{}V{}".format(Nx, Ny, Nparticles, Vint)
+Nsites = Nx*Ny  # 15  # Nsites = 64 => program killed because it is using too much memory
+space_dim = 2
+param_suffix = "_Lx{}Ly{}Np{}V{}".format(Nx, Ny, Nparticles, Vint)
 logger.info_refstate.outfile = "lowrank_stats"+param_suffix+".dat"
 
 # for debugging:
 # If deactivate_Jastrow == True, samples are drawn from the Slater determinant without the Jastrow factor. 
 deactivate_Jastrow = False
+
 
 def train(VMCmodel, learning_rate, learning_rate_SD, num_samples=100, num_bin=50, use_cuda=False):
     '''
@@ -85,6 +99,7 @@ def train(VMCmodel, learning_rate, learning_rate_SD, num_samples=100, num_bin=50
         energy, grad, energy_grad, precision = vmc_measure(VMCmodel.local_measure, sample_list, log_probs, num_bin=num_bin)
 
         # update variables using stochastic gradient descent
+        # grad = <H Delta> - <H><Delta>
         g_list = [eg - energy * g for eg, g in zip(energy_grad, grad)]
         for (name, par), g in zip(VMCmodel.ansatz.named_parameters(), g_list):
             if name == 'slater_sampler.P':
@@ -122,13 +137,6 @@ def _update_curve(energy, precision):
     sigma_list.append(sigma)
     if len(energy_list)%(max_iter-1) == 0:
         xvals = np.arange(1, len(energy_list) + 1)
-        #plt.errorbar(xvals, energy_list, yerr=precision_list, capsize=3, label="Slater-Jastrow")
-        #plt.errorbar(xvals, av_list, yerr=sigma_list, capsize=3)
-        ## dashed line for exact energy
-        #plt.axhline(E_exact, ls='--', label="exact")
-        #plt.title("$L$=%d, $N$=%d, $V/t$ = %4.4f" % (Nsites, Nparticles, Vint))
-        #plt.legend(loc="upper right")
-        #plt.show()
 
     MM = np.hstack((np.array(energy_list)[:,None], np.array(precision_list)[:,None],
                     np.array(av_list)[:,None], np.array(sigma_list)[:,None]))
@@ -149,11 +157,10 @@ def _checkpoint(VMCmodel):
 phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, D=space_dim, Vint=Vint)
 
 # Aggregation of MADE neural network as Jastrow factor 
-# and Slater determinant sampler. 
-fh = open("HF_energy"+param_suffix+".dat", "w")
-(eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none", outfile=fh, max_iter=20)
+# and Slater determi
+with open("HF_energy"+param_suffix+".dat", "w") as fh:
+    (eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none", outfile=fh, max_iter=20)
 np.savetxt("eigvecs.dat", eigvecs)
-#(_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
 
 Sdet_sampler = SlaterDetSampler_ordered(
         Nsites=Nsites, 
@@ -200,6 +207,8 @@ if True:
     print("## t_backward=", VMCmodel_.t_grads)
 
 
+
+
 szsz_corr = np.zeros(Nsites)
 szsz_corr_2D = np.zeros((phys_system.nx, phys_system.ny))
 corr_ = np.zeros(Nsites)
@@ -234,6 +243,3 @@ szsz_corr_2D[:,:] /= num_samples
 
 np.savetxt("szsz_corr"+param_suffix+".dat", szsz_corr)
 np.savetxt("szsz_corr_2D.dat", szsz_corr_2D)
-
-#plt.plot(range(Nsites), szsz_corr[:], '--b')
-#plt.show()

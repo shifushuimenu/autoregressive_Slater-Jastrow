@@ -342,7 +342,7 @@ def kinetic_term2( I, lattice, t_hop=1.0 ):
 #@profile
 def vmc_measure(local_measure, sample_list, log_probs, num_bin=50):
     '''
-    perform measurements on samples
+    get energy, gradient and there product averaged over a batch of samples 
 
     Args:
         local_measure (func): local measurements function, input configuration, return local energy and local gradient.
