@@ -12,6 +12,8 @@ from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 from slater_sampler_ordered import SlaterDetSampler_ordered
 from test_suite import HartreeFock_tVmodel
 
+from sr import SR_Preconditioner
+
 from time import time 
 import argparse 
 
@@ -70,7 +72,7 @@ logger.info_refstate.outfile = "lowrank_stats"+param_suffix+".dat"
 deactivate_Jastrow = False
 
 
-def train(VMCmodel, learning_rate, learning_rate_SD, num_samples=100, num_bin=50, use_cuda=False):
+def train(VMCmodel, learning_rate, learning_rate_SD, precond, num_samples=100, num_bin=50, use_cuda=False):
     '''
     train a model using stochastic gradient descent 
 
@@ -96,11 +98,15 @@ def train(VMCmodel, learning_rate, learning_rate_SD, num_samples=100, num_bin=50
             t2 = time()
             VMCmodel.t_sampling += (t2-t1)
 
-        energy, grad, energy_grad, precision = vmc_measure(VMCmodel.local_measure, sample_list, log_probs, num_bin=num_bin)
+        energy, grad, energy_grad, precision = vmc_measure(VMCmodel.local_measure, sample_list, log_probs, precond=precond, num_bin=num_bin)
 
         # update variables using stochastic gradient descent
         # grad = <H Delta> - <H><Delta>
         g_list = [eg - energy * g for eg, g in zip(energy_grad, grad)]
+
+        g_list = precond.apply(g_list)
+        precond.reset()
+
         for (name, par), g in zip(VMCmodel.ansatz.named_parameters(), g_list):
             if name == 'slater_sampler.P':
                 delta = learning_rate_SD * g
@@ -179,6 +185,9 @@ SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler,
         )
 
 VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
+
+SR = SR_Preconditioner(num_params=sum([np.prod(p.size()) for p in SJA.parameters()]))
+
 del SJA
 
 E_exact = -3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832 # -2.9774135797163597 #-3.3478904193465335
@@ -187,7 +196,7 @@ E_exact = -3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832
 if True: 
     t0 = time()
     t0_tmp = t0
-    for i, (energy, precision) in enumerate(train(VMCmodel_, learning_rate=0.2, learning_rate_SD=learning_rate_SD, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda)):
+    for i, (energy, precision) in enumerate(train(VMCmodel_, learning_rate=0.2, learning_rate_SD=learning_rate_SD, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda, precond=SR)):
         t1_tmp = time()
         print('Step %d, dE/|E| = %.4f, elapsed = %.4f' % (i, -(energy - E_exact)/E_exact, t1_tmp-t0_tmp))
         _update_curve(energy, precision)
