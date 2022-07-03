@@ -10,10 +10,37 @@ References:
     Neural Comput. 10, 251 (1998).
 """
 
-class SR():
-    def  __init__(self):
+import numpy as np
+import torch.nn as nn
 
-    def calc_Fisher_infomatrix(self, log_probs):
+# TODO: introduce regularization parameter before inverting S
+
+class SR(object):
+    def  __init__(self, num_params, l_reg=1e-8):
+        self.num_params = num_params 
+        assert l_reg > 0 
+        self.l_reg = l_reg
+        self.Fisher_matrix = np.zeros((num_params, num_params), dtype=np.float32)
+        self.av_grad = np.zeros((num_params,1), dtype=np.float32)
+        self.counter = 0
+
+    def acc_Fisher_infomatrix(self, grad_loc):
         """
         """
-        pass
+        self.counter += 1 
+        self.Fisher_matrix += np.outer(grad_loc, grad_loc)
+        self.av_grad += grad_loc
+
+    def av_Fisher_infomatrix(self):
+        self.Fisher_matrix /= self.counter 
+        self.av_grad /= self.counter 
+
+        self.Fisher_matrix = self.Fisher_matrix - np.outer(self.av_grad, self.av_grad)
+        #regularize 
+        self.Fisher_matrix = self.Fisher_matrix + self.l_reg * np.eye(self.num_params)
+
+    def reset(self):
+        self.__init__(self.num_params, self.l_reg)
+
+    def apply(self, grad):
+        return np.matmul(np.linalg.inv(self.Fisher_matrix), grad)
