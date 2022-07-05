@@ -58,15 +58,15 @@ Nparticles = args.Np # 12
 Vint = args.Vint #  Vint_array[MPI_rank]
 max_iter = args.max_iter # 10 #1000 
 num_samples = args.num_samples # 10 # 100  # samples per batch
-num_bin = num_samples // 20 # 50 
+num_bin = num_samples // 2 # 50 
 num_meas_samples = args.num_meas_samples
 optimize_orbitals = args.optimize_orbitals  # whether to include columns of P-matrix in optimization
 learning_rate_SD = 0.02
 
 Nsites = Lx*Ly  # 15  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
-paramstr = "_Lx{}Ly{}Np{}V{}".format(Lx, Ly, Nparticles, Vint)
-logger.info_refstate.outfile = "lowrank_stats"+paramstr+".dat"
+paramstr = "Lx{}Ly{}Np{}V{}".format(Lx, Ly, Nparticles, Vint)
+logger.info_refstate.outfile = "lowrank_stats_"+paramstr+".dat"
 
 # for debugging:
 # If deactivate_Jastrow == True, samples are drawn from the Slater determinant without the Jastrow factor. 
@@ -143,10 +143,10 @@ def _update_curve(energy, precision):
 
     MM = np.hstack((np.array(energy_list)[:,None], np.array(precision_list)[:,None],
                     np.array(av_list)[:,None], np.array(sigma_list)[:,None]))
-    np.savetxt("energies"+paramstr+".dat", MM)
+    np.savetxt("energies_"+paramstr+".dat", MM)
 
 
-ckpt_outfile = "state"+paramstr+".pt"
+ckpt_outfile = "state_"+paramstr+".pt"
 def _checkpoint(VMCmodel):
     """Save most recent SJA state to disk."""
     state = {
@@ -161,7 +161,7 @@ phys_system = PhysicalSystem(nx=Lx, ny=Ly, ns=Nsites, num_particles=Nparticles, 
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determi
-with open("HF_energy"+paramstr+".dat", "w") as fh:
+with open("HF_energy_"+paramstr+".dat", "w") as fh:
     (eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none", outfile=fh, max_iter=20)
 np.savetxt("eigvecs.dat", eigvecs)
 
