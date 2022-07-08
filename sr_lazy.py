@@ -1,13 +1,16 @@
 from scipy.sparse.linalg import LinearOperator, cg
 
 import numpy as np
+import torch 
 
-class SR_Preconditioner(object):
+__all__ = ["SR_Preconditioner_base"]
+
+class SR_Preconditioner_base(object):
     """
     $O_k(x) = \frac{\partial log \psi(x)}{\partial \theta_k}$ is the logarithmic derivative 
     of the wavefunction with respect to parameter $\theta_k$ evaluated at sample $x$. 
     """
-    def __init__(self, num_params, num_samples, diag_shift=1e-8, lazy=True, dtype=np.float64):
+    def __init__(self, num_params, num_samples, diag_shift=0.0, lazy=True, dtype=np.float64):
         self.num_params = num_params 
         self.num_samples = num_samples 
         self.diag_shift= diag_shift
@@ -55,4 +58,4 @@ class SR_Preconditioner(object):
         return v / self.scale
 
     def reset(self):
-        self.__init__(self.num_params, self.num_samples, self.diag_shift, lazy=True, dtype=self.dtype)
+        self.__init__(self.num_params, self.num_samples, self.diag_shift, lazy=True, dtype=self.dtype)     
