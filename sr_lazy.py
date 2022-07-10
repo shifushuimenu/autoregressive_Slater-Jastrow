@@ -44,7 +44,8 @@ class SR_Preconditioner_base(object):
     def _rescale_diag(self, v):
         """use as Jacobi preconditioner"""
         assert self.ctr
-        return v / self.scale
+        v_rescaled = np.where(self.scale > 1e-8, v / self.scale, v)
+        return v_rescaled
 
     def _to_dense(self):
         """convert the lazy matrix representation to a dense matrix representation"""

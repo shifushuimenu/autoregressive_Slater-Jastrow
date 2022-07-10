@@ -56,9 +56,14 @@ class MinimalUsageExample(unittest.TestCase):
         torch.set_default_dtype(default_dtype_torch)
         torch.autograd.set_detect_anomaly(True)
 
+        # it's good to be reproducible
+        seed=43
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+
         Nx=3; Ny=3; Np=2
         self.Ns=Nx*Ny
-        self.num_samples = 100
+        self.num_samples = 1000
 
         phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=self.Ns, num_particles=Np, D=2, Vint=3.0)
         (eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none", max_iter=20)
@@ -69,7 +74,7 @@ class MinimalUsageExample(unittest.TestCase):
                 single_particle_eigfunc=eigvecs, 
                 eigvals=eigvals, 
                 naive_update=False, 
-                optimize_orbitals=False
+                optimize_orbitals=True
                 )
         SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, 
                 num_components=Np, 
@@ -83,22 +88,30 @@ class MinimalUsageExample(unittest.TestCase):
 
 
     def test_joint_params_Jastrow_Sdet(self):
-        sample_list = np.zeros((self.num_samples, self.Ns))
-        log_probs = np.zeros((self.num_samples,))
-        with torch.no_grad():
-            for ii in range(self.num_samples):
-                x_out, log_prob = self.VMCmodel.ansatz.sample_unfolded()
-                log_probs[ii] = log_prob
-                sample_list[ii] = occ_numbers_collapse(x_out, self.Ns).numpy()
+        learning_rate = 0.2
+        num_epochs = 10
 
-        av_H, av_Ok, av_HtimesOk, precision = vmc_measure(self.VMCmodel.local_measure, sample_list, log_probs, self.SR, num_bin=5)
+        for ii in range(num_epochs):
+            sample_list = np.zeros((self.num_samples, self.Ns))
+            log_probs = np.zeros((self.num_samples,))
+            with torch.no_grad():
+                for ii in range(self.num_samples):
+                    x_out, log_prob = self.VMCmodel.ansatz.sample_unfolded()
+                    log_probs[ii] = log_prob
+                    sample_list[ii] = occ_numbers_collapse(x_out, self.Ns).numpy()
 
-        # gradient of the energy
-        # grad_k = <H * Delta_k> - <H>*<Delta_k>
-        grad_list = [av_HtimesOk - av_H*av_Ok for (av_HtimesOk, av_Ok) in zip(av_HtimesOk, av_Ok)]
-        grad_list = self.SR.apply_Sinv(grad_list)
+            av_H, av_Ok, av_HtimesOk, precision = vmc_measure(self.VMCmodel.local_measure, sample_list, log_probs, self.SR, num_bin=5)
 
+            # gradient of the energy
+            # grad_k = <H * Delta_k> - <H>*<Delta_k>
+            grad_list = [av_HtimesOk - av_H*av_Ok for (av_HtimesOk, av_Ok) in zip(av_HtimesOk, av_Ok)]
+            grad_list = self.SR.apply_Sinv(grad_list)
 
+            for (name, par), g in zip(self.VMCmodel.ansatz.named_parameters(), grad_list):
+                if name == 'slater_sampler.P':
+                    print("grad SD.P=", g)
+                delta = learning_rate * g
+                par.data -= delta
 
 
 if __name__ == "__main__":
