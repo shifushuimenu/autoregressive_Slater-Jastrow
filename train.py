@@ -37,7 +37,7 @@ torch.autograd.set_detect_anomaly(True)
 # set random number seed
 use_cuda = False
 seed = 44 + MPI_rank
-torch.manual_seed(seed)
+torch.manual_seed(seed) 
 if use_cuda: torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 

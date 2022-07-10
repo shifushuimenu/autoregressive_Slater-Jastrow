@@ -470,7 +470,7 @@ class VMCKernel(object):
             with torch.autograd.set_detect_anomaly(True):
                 # get gradient {d/dW}_{loc}
                 self.ansatz.zero_grad()
-                psi_loc.backward(retain_graph=True) # `retain_graph=True` appears to be necessary (?) because saved tensors are accessed after calling backward()
+                psi_loc.backward(retain_graph=False) # `retain_graph=True` appears to be necessary (only for co-optimization of SlaterDet) because saved tensors are accessed after calling backward()
             grad_loc = [p.grad.data/psi_loc.item() for p in self.ansatz.parameters()]
         else:
             # for debugging 
