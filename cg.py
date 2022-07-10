@@ -22,7 +22,13 @@ def conjugate_gradient(A, b, x0, eps, kmax):
         w = A(p)
         alpha[k] = rho[k-1] / np.dot(p, w)
         x = x + alpha[k] * p
-        r = r - alpha[k] * w
+
+        if k%5==0:
+            # every now and then compute exact residual to mitigate roundoff errors 
+            r = b - A(x)
+        else:
+            r = r - alpha[k] * w
+
         rho[k] = np.dot(r, r)
 
-    return x, rho[k], k
+    return x, rho, k

@@ -104,6 +104,8 @@ def train(VMCmodel, learning_rate, learning_rate_SD, precond, num_samples=100, n
         # grad = <H Delta> - <H><Delta>
         g_list = [eg - energy * g for eg, g in zip(energy_grad, grad)]
 
+        # stochastic reconfiguration: 
+        # g = S^{-1} * g
         g_list = precond.apply(g_list)
         precond.reset()
 
@@ -185,10 +187,10 @@ SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler,
         )
 
 VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
-
-SR = SR_Preconditioner(num_params=sum([np.prod(p.size()) for p in SJA.parameters()]))
-
 del SJA
+SR = SR_Preconditioner(num_params=sum([np.prod(p.size()) for p in VMCmodel_.ansatz.parameters()]))
+
+
 
 E_exact = -3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832 # -2.9774135797163597 #-3.3478904193465335
 

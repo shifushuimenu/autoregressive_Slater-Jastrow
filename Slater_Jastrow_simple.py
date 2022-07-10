@@ -356,7 +356,6 @@ def vmc_measure(local_measure, sample_list, log_probs, precond, num_bin=50):
     print("inside VMC measure")
     # measurements
     energy_loc_list, grad_loc_list = [], []
-    precond.reset()
     for i, (config, log_prob) in enumerate(zip(sample_list, log_probs)):
         print("local energy: sample nr=", i)
         # back-propagation is used to get gradients.
@@ -365,7 +364,7 @@ def vmc_measure(local_measure, sample_list, log_probs, precond, num_bin=50):
         grad_loc_list.append(grad_loc)
 
 
-        precond.acc_Fisher_infomatrix(grad_loc)
+        precond.accumulate(grad_loc)
 
 
     # binning statistics for energy
@@ -382,8 +381,6 @@ def vmc_measure(local_measure, sample_list, log_probs, precond, num_bin=50):
         grad_mean.append(grad_loc.mean(0))
         energy_grad.append(
             (energy_loc_list[(slice(None),) + (None,) * (grad_loc.dim() - 1)] * grad_loc).mean(0))
-
-    precond.av_Fisher_infomatrix()
 
     return energy.item(), grad_mean, energy_grad, energy_precision
 

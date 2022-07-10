@@ -1,7 +1,5 @@
-from scipy.sparse.linalg import LinearOperator, cg
-
 import numpy as np
-import torch 
+from scipy.sparse.linalg import LinearOperator, cg 
 
 __all__ = ["SR_Preconditioner_base"]
 
@@ -34,7 +32,7 @@ class SR_Preconditioner_base(object):
         self.scale = np.sum(np.array([self.O_ks[:, ii] * self.O_ks[:, ii] for ii in np.arange(self.num_samples)]), axis=0)
         self.ctr = True
 
-    def matvec(self, v):
+    def _matvec(self, v):
         """lazy matrix-vector product"""
         if not self.ctr:
             self.center()
@@ -43,6 +41,11 @@ class SR_Preconditioner_base(object):
         mv2 = np.matmul(self.O_ks, mv1)
         return mv2 + self.diag_shift*v
 
+    def _rescale_diag(self, v):
+        """use as Jacobi preconditioner"""
+        assert self.ctr
+        return v / self.scale
+
     def _to_dense(self):
         """convert the lazy matrix representation to a dense matrix representation"""
         if not self.ctr:
@@ -50,12 +53,25 @@ class SR_Preconditioner_base(object):
         S = np.zeros((self.num_params, self.num_params))
         for ii in np.arange(self.num_samples):
             S += np.outer(self.O_ks[:,ii], self.O_ks[:,ii])
-        return S
-
-    def rescale_diag(self, v):
-        """use as Jacobi preconditioner"""
-        assert self.ctr
-        return v / self.scale
+        return S        
 
     def reset(self):
-        self.__init__(self.num_params, self.num_samples, self.diag_shift, lazy=True, dtype=self.dtype)     
+        self.__init__(self.num_params, self.num_samples, diag_shift=self.diag_shift, lazy=True, dtype=np.float64)     
+
+    def apply_Sinv(self, v, tol=1e-8, Jacobi_precond=False):
+        """ x = S^{-1}@v using conjugate gradient with lazy matrix evaluation"""
+        if not self.ctr:
+            self.center()       
+
+        S = LinearOperator(shape=(self.num_params, self.num_params), matvec=self._matvec)
+        # Jacobi preconditioner (rescale by diagonal matrix elements)
+        if Jacobi_precond:
+            M = LinearOperator(shape=(self.num_params, self.num_params), matvec=self._rescale_diag)
+        else:
+            M=None
+        # preconditioned conjugate gradient method 
+        x, info = cg(S, b=v, tol=tol, atol=0, M=M)
+        assert info == 0
+
+        return x
+

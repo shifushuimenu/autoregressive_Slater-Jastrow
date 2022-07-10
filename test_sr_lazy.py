@@ -1,9 +1,7 @@
 import unittest 
-from sr_lazy import SR_Preconditioner_base
-
 import numpy as np
-from scipy.sparse.linalg import LinearOperator, cg 
 
+from sr_lazy import SR_Preconditioner_base
 
 class TestSR(unittest.TestCase):
 
@@ -15,15 +13,11 @@ class TestSR(unittest.TestCase):
         for ii in range(ns):
             SR.accumulate(O_ks[:, ii])
         SR.center()
-        S = LinearOperator(shape=(npara, npara), matvec=SR.matvec)
-        # Jacobi preconditioner
-        M = LinearOperator(shape=(npara, npara), matvec=SR.rescale_diag)
 
         b = np.random.randn(npara)
-        # Jacobi-preconditioned conjugate gradient method 
-        x1, info = cg(S, b, tol=tol, atol=0, M=M)
-        assert info == 0
  
+        x1 = SR.apply_Sinv(b, tol=tol)
+
         Smat = SR._to_dense()
         assert np.all(np.isclose(SR.scale, np.diag(Smat), atol=tol))
 
