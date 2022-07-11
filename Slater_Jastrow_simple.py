@@ -340,7 +340,7 @@ def kinetic_term2( I, lattice, t_hop=1.0 ):
 
 
 #@profile
-def vmc_measure(local_measure, sample_list, log_probs, num_bin=50):
+def vmc_measure(local_measure, sample_list, log_probs, precond, num_bin=50):
     '''
     get energy, gradient and there product averaged over a batch of samples 
 
@@ -363,6 +363,10 @@ def vmc_measure(local_measure, sample_list, log_probs, num_bin=50):
         energy_loc_list.append(energy_loc)
         grad_loc_list.append(grad_loc)
 
+
+        precond.accumulate(grad_loc)
+
+
     # binning statistics for energy
     energy_loc_list = np.array(energy_loc_list)
     energy, energy_precision = binning_statistics(energy_loc_list, num_bin=num_bin)
@@ -377,6 +381,7 @@ def vmc_measure(local_measure, sample_list, log_probs, num_bin=50):
         grad_mean.append(grad_loc.mean(0))
         energy_grad.append(
             (energy_loc_list[(slice(None),) + (None,) * (grad_loc.dim() - 1)] * grad_loc).mean(0))
+
     return energy.item(), grad_mean, energy_grad, energy_precision
 
 
@@ -452,12 +457,12 @@ class VMCKernel(object):
         assert len(config.shape) == 2 and config.shape[0] == 1 # Convention: batch dimension required, but only one sample per batch allowed
         t0 = time()
         psi_loc = self.ansatz.psi_amplitude(torch.from_numpy(config))
-        print("psi_loc**2=", psi_loc.item()**2)
-        print("np.exp(log_prob)=", np.exp(log_prob))
+        ##print("psi_loc**2=", psi_loc.item()**2)
+        ##print("np.exp(log_prob)=", np.exp(log_prob))
         sign = torch.sign(self.ansatz.slater_sampler.psi_amplitude([config]))
         psi_loc2 = np.sqrt(np.exp(log_prob)) * sign
-        print("psi_loc=", psi_loc)
-        print("psi_loc2=", psi_loc2)
+        ##print("psi_loc=", psi_loc)
+        ##print("psi_loc2=", psi_loc2)
         t1 = time()
         self.t_psiloc += (t1-t0)
         if not self.ansatz.deactivate_Jastrow or not self.ansatz.input_orbitals:
@@ -465,7 +470,7 @@ class VMCKernel(object):
             with torch.autograd.set_detect_anomaly(True):
                 # get gradient {d/dW}_{loc}
                 self.ansatz.zero_grad()
-                psi_loc.backward(retain_graph=False) # `retain_graph=True` appears to be necessary (?) because saved tensors are accessed after calling backward()
+                psi_loc.backward(retain_graph=False) # `retain_graph=True` appears to be necessary (only for co-optimization of SlaterDet) because saved tensors are accessed after calling backward()
             grad_loc = [p.grad.data/psi_loc.item() for p in self.ansatz.parameters()]
         else:
             # for debugging 
