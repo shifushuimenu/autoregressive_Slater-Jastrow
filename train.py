@@ -13,7 +13,7 @@ from slater_sampler_ordered import SlaterDetSampler_ordered
 from test_suite import HartreeFock_tVmodel
 
 import itertools
-from sr import SR_Preconditioner
+from sr_preconditioner import SR_Preconditioner
 
 from time import time 
 import argparse 
@@ -101,16 +101,15 @@ def train(VMCmodel, learning_rate, learning_rate_SD, precond, num_samples=100, n
             t2 = time()
             VMCmodel.t_sampling += (t2-t1)
 
-        energy, grad, energy_grad, precision = vmc_measure(VMCmodel.local_measure, sample_list, log_probs, precond=precond, num_bin=num_bin)
+        av_H, av_Ok, av_HtimesOk, precision = vmc_measure(VMCmodel.local_measure, sample_list, log_probs, precond=precond, num_bin=num_bin)
 
-        # update variables using stochastic gradient descent
-        # grad = <H Delta> - <H><Delta>
-        g_list = [eg - energy * g for eg, g in zip(energy_grad, grad)]
-
+        # gradient of the energy
+        # grad_k = <H * Delta_k> - <H>*<Delta_k>
+        g_list = [av_HtimesOk - av_H*av_Ok for (av_HtimesOk, av_Ok) in zip(av_HtimesOk, av_Ok)]
         # stochastic reconfiguration: 
-        # g = S^{-1} * g
-        g_list = precond.apply(g_list)
-        precond.reset()
+        # g = S^{-1} * g        
+        g_list = precond.apply_Sinv(g_list)
+
 
         for (name, par), g in zip(VMCmodel.ansatz.named_parameters(), g_list):
             if name == 'slater_sampler.P':
@@ -119,19 +118,7 @@ def train(VMCmodel, learning_rate, learning_rate_SD, precond, num_samples=100, n
                 delta = learning_rate * g
             par.data -= delta
 
-        # re-orthogonalize the columns of the Slater determinant
-        # and update bias of the zero-th component 
-        if isinstance(VMCmodel.ansatz, SlaterJastrow_ansatz):
-            print("slater_sampler.P.grad=", VMCmodel.ansatz.slater_sampler.P.grad)
-            print("named parameters", list(VMCmodel.ansatz.named_parameters()))
-
-            if VMCmodel.ansatz.slater_sampler.optimize_orbitals:
-                VMCmodel.ansatz.slater_sampler.reortho_orbitals()
-
-            VMCmodel.ansatz.slater_sampler.reset_sampler()
-            VMCmodel.ansatz.bias_zeroth_component[:] = VMCmodel.ansatz.slater_sampler.get_cond_prob(k=0)
-
-        yield energy, precision
+        yield av_H, precision
         
         
 
@@ -191,7 +178,7 @@ SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler,
 
 VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
 del SJA
-SR = SR_Preconditioner(num_params=sum([np.prod(p.size()) for p in VMCmodel_.ansatz.parameters()]))
+SR = SR_Preconditioner(num_params=sum([np.prod(p.size()) for p in VMCmodel_.ansatz.parameters()]), num_samples=num_samples, diag_shift=1e-4)
 
 
 

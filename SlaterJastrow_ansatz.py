@@ -75,7 +75,6 @@ class SlaterJastrow_ansatz(selfMADE):
                    single_particle_eigfunc=None, naive_update=True)
         
         slater_sampler.reset_sampler() # make sure sampling can start from the first component
-        kwargs['bias_zeroth_component'] = slater_sampler.get_cond_prob(k=0)
         super(SlaterJastrow_ansatz, self).__init__(**kwargs)
 
         self.slater_sampler = slater_sampler
@@ -237,7 +236,7 @@ class SlaterJastrow_ansatz(selfMADE):
             x_hat_F[..., k*self.D:(k+1)*self.D] = self.slater_sampler.get_cond_prob(k)
             self.slater_sampler.update_state(pos[k].item())
         x_hat = x_hat_B * x_hat_F
-        x_hat[..., 0:self.D] = x_hat_F[..., 0:self.D]  # cond_prob_fermi(i=0) is already contained as 'bias_zeroth_component' in MADE.
+        x_hat[..., 0:self.D] = x_hat_F[..., 0:self.D]  # The Jastrow factor does not affect the first component, which is unconditional. 
         t2 = time()
         self.t_logprob_F += (t2-t1)
         for k in range(self.num_components):
