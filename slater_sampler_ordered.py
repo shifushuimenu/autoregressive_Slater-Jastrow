@@ -78,14 +78,14 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         else:
             self.P_ortho = self.P
  
-        self.rotate_orbitals()
+        # called inside self.reset_sampler()
+        #self.rotate_orbitals()
 
         self.reset_sampler()
 
     def rotate_orbitals(self):
         if self.optimize_orbitals:
             self.R = torch.matrix_exp(self.T - self.T.t())
-            print("self.R=", self.R)
             self.P_ortho = self.R @ self.P
             # U is the key matrix representing the Slater determinant for *unordered* sampling purposes.
             # Its principal minors are the probabilities of certain particle configurations.
@@ -96,7 +96,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
             self.U = self.P_ortho @ self.P_ortho.t()
             self.G = torch.eye(self.D) - self.U   
 
-    def reset_sampler(self):        
+    def reset_sampler(self, rebuild_comp_graph=True):        
         self.occ_vec = np.zeros(self.D, dtype=np.float64)
         self.occ_positions = np.zeros(self.N, dtype=np.int64)
         self.occ_positions[:] = -10^6 # set to invalid values 
@@ -107,6 +107,13 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         # State index of the sampler: no sampling step so far 
         self.state_index = -1
+
+        # To avoid backward(retain_graph=True) when backpropagating on psi_loc for each config
+        # the computational subgraph involving the Slater determinant needs to be (unnecessarily)
+        # recomputed because of the dynamical computation graph of pytorch. 
+        # This is only necessary during density estimation. 
+        if self.optimize_orbitals and rebuild_comp_graph:
+            self.rotate_orbitals()
 
 
     def _detratio_from_scratch_v0(self, G, occ_vec, base_pos, i):
@@ -368,7 +375,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
             <BLANKLINE>
                    [[0.25, 0.2 ],
                     [0.3 , 0.  ]]])
-        """        
+        """                
         row_idx = torch.Tensor(bin2pos(samples)).to(torch.long) # tensors used as indices must be long
         assert row_idx.shape[-1] == self.P_ortho.shape[-1]
         # select 2 (3,4,...) rows from a matrix with 2 (3,4,...) columns 

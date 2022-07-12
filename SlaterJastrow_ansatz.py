@@ -110,7 +110,7 @@ class SlaterJastrow_ansatz(selfMADE):
         with torch.no_grad():
             prob_sample = 1.0 # probability of the generated sample
             log_prob_sample = 1.0
-            self.slater_sampler.reset_sampler()
+            self.slater_sampler.reset_sampler(rebuild_comp_graph=False) # we do not need the computation graph since we will not backpropagate during sampling
             x_out = occ_numbers_unfold(sample=torch.zeros(self.D).unsqueeze(dim=0), unfold_size=self.num_components,
                 duplicate_entries=False)   
             pos_one_hot = torch.zeros(self.D).unsqueeze(dim=0)

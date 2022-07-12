@@ -429,6 +429,8 @@ class VMCKernel(object):
         self.t_grads = 0 # total time for calculating gradients 
         self.t_locE = 0  # totcal time for calculating local energy 
 
+        self.tmp_cnt = -1
+
     #@profile
     def prob(self,config):
         '''
@@ -455,6 +457,7 @@ class VMCKernel(object):
         Returns:
            number, list: local energy and local gradient for variables. 
         '''
+        self.tmp_cnt += 1
         config = np.array(config)
         assert len(config.shape) == 2 and config.shape[0] == 1 # Convention: batch dimension required, but only one sample per batch allowed
         t0 = time()
@@ -465,9 +468,10 @@ class VMCKernel(object):
 
         # Co-optimizing the Slater determinant converts a simple computation graph into a mess,
         # as can be seen using torchviz.
-        #viz_graph = make_dot(psi_loc)
-        #viz_graph.view()
-        #exit(1)
+        if self.tmp_cnt  == 1:
+            viz_graph = make_dot(psi_loc)
+            viz_graph.view()
+            exit(1)
         print("config=", config)
 
         # =================================================================================================
@@ -486,11 +490,11 @@ class VMCKernel(object):
         with torch.autograd.set_detect_anomaly(True):
             # get gradient {d/dW}_{loc}
             self.ansatz.zero_grad()
-            if self.ansatz.slater_sampler.optimize_orbitals:
-                retain_graph = True  # `retain_graph = True` causes an enormous slowdown !
-            else:
-                retain_graph = False 
-            psi_loc.backward(retain_graph=retain_graph) # `retain_graph = True` appears to be necessary (only for co-optimization of SlaterDet) because saved tensors are accessed after calling backward()
+            # if self.ansatz.slater_sampler.optimize_orbitals:
+            #     retain_graph = False  # `retain_graph = True` causes an enormous slowdown !
+            # else:
+            #     retain_graph = False 
+            psi_loc.backward(retain_graph=False) # `retain_graph = True` appears to be necessary (only for co-optimization of SlaterDet) because saved tensors are accessed after calling backward()
         grad_loc = [p.grad.data/psi_loc.item() for p in self.ansatz.parameters()]
 
 

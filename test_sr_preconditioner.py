@@ -61,7 +61,7 @@ class MinimalUsageExample(unittest.TestCase):
         torch.manual_seed(seed)
         np.random.seed(seed)
 
-        Nx=3; Ny=3; Np=2
+        Nx=4; Ny=4; Np=3
         self.Ns=Nx*Ny
         self.num_samples = 1000
 
@@ -90,7 +90,7 @@ class MinimalUsageExample(unittest.TestCase):
     def test_joint_params_Jastrow_Sdet(self):
 
         learning_rate = 0.2
-        num_epochs = 10
+        num_epochs = 3
 
         for ii in range(num_epochs):
             sample_list = np.zeros((self.num_samples, self.Ns))
