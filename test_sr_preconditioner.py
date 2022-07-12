@@ -2,6 +2,7 @@ import unittest
 import numpy as np
 import torch 
 import torch.nn as nn
+
 from utils import default_dtype_torch
 
 from sr_preconditioner import SR_Preconditioner
@@ -11,7 +12,6 @@ from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 from slater_sampler_ordered import SlaterDetSampler_ordered
 from test_suite import HartreeFock_tVmodel
 from one_hot import occ_numbers_collapse
-
 
 class TestInterface(unittest.TestCase):
     def test_flatten_grads_into_vector(self):
@@ -88,6 +88,7 @@ class MinimalUsageExample(unittest.TestCase):
 
 
     def test_joint_params_Jastrow_Sdet(self):
+
         learning_rate = 0.2
         num_epochs = 10
 
@@ -112,6 +113,9 @@ class MinimalUsageExample(unittest.TestCase):
                     print("grad SD.P=", g)
                 delta = learning_rate * g
                 par.data -= delta
+            
+            print("T=", self.VMCmodel.ansatz.slater_sampler.T.data)
+            self.VMCmodel.ansatz.slater_sampler.rotate_orbitals()
 
 
 if __name__ == "__main__":

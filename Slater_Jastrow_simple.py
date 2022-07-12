@@ -15,6 +15,8 @@ from test_suite import local_OBDM, ratio_Slater
 from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 from k_copy import sort_onehop_states
 
+from torchviz import make_dot
+
 #from profilehooks import profile
 from time import time 
 
@@ -457,28 +459,41 @@ class VMCKernel(object):
         assert len(config.shape) == 2 and config.shape[0] == 1 # Convention: batch dimension required, but only one sample per batch allowed
         t0 = time()
         psi_loc = self.ansatz.psi_amplitude(torch.from_numpy(config))
-        ##print("psi_loc**2=", psi_loc.item()**2)
-        ##print("np.exp(log_prob)=", np.exp(log_prob))
-        sign = torch.sign(self.ansatz.slater_sampler.psi_amplitude([config]))
-        psi_loc2 = np.sqrt(np.exp(log_prob)) * sign
-        ##print("psi_loc=", psi_loc)
-        ##print("psi_loc2=", psi_loc2)
         t1 = time()
         self.t_psiloc += (t1-t0)
-        if not self.ansatz.deactivate_Jastrow or not self.ansatz.input_orbitals:
-            assert(psi_loc.requires_grad)
-            with torch.autograd.set_detect_anomaly(True):
-                # get gradient {d/dW}_{loc}
-                self.ansatz.zero_grad()
-                if self.ansatz.slater_sampler.optimize_orbitals:
-                    retain_graph = True # This causes an enormous slowdown. 
-                else:
-                    retain_graph = False 
-                psi_loc.backward(retain_graph=retain_graph) # `retain_graph=True` appears to be necessary (only for co-optimization of SlaterDet) because saved tensors are accessed after calling backward()
-            grad_loc = [p.grad.data/psi_loc.item() for p in self.ansatz.parameters()]
-        else:
-            # for debugging 
-            grad_loc = [torch.zeros_like(p) for p in self.ansatz.parameters()]
+        assert(psi_loc.requires_grad)
+
+        # Co-optimizing the Slater determinant converts a simple computation graph into a mess,
+        # as can be seen using torchviz.
+        #viz_graph = make_dot(psi_loc)
+        #viz_graph.view()
+        #exit(1)
+        print("config=", config)
+
+        # =================================================================================================
+        #  Comment on `backward(retain_graph = True)`
+        # =================================================================================================
+        # For each configuration that is passed through MADE the computational
+        # graph is built anew as the computations are performed (dynamic computation graph in pytorch). 
+        # Computations involving the Slater determinant, such as the orbital rotation
+        # from the Hartree-Fock determinant to an optimized set of orbitals, do not depend on 
+        # specific configurations and therefore are only performed when initializing the slater_sampler
+        # module. Therefore, these parts of the computation graph are missing after the computation graph 
+        # has been free after calling backward() for the first time. This is why `backward(retain_graph=True)`
+        # is necessary.
+        # =================================================================================================
+
+        with torch.autograd.set_detect_anomaly(True):
+            # get gradient {d/dW}_{loc}
+            self.ansatz.zero_grad()
+            if self.ansatz.slater_sampler.optimize_orbitals:
+                retain_graph = True  # `retain_graph = True` causes an enormous slowdown !
+            else:
+                retain_graph = False 
+            psi_loc.backward(retain_graph=retain_graph) # `retain_graph = True` appears to be necessary (only for co-optimization of SlaterDet) because saved tensors are accessed after calling backward()
+        grad_loc = [p.grad.data/psi_loc.item() for p in self.ansatz.parameters()]
+
+
         t2 = time()
         self.t_grads += (t2-t1)
         # E_{loc}

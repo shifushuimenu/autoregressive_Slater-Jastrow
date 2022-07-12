@@ -12,7 +12,6 @@
 #  - In critical points scipy.linalg is used instead of np.linalg as the former supports float128. 
 
 import torch
-import torch.nn as nn
 import numpy as np
 
 from torch.distributions.categorical import Categorical
@@ -61,47 +60,41 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         if single_particle_eigfunc is not None: 
            self.eigfunc = np.array(single_particle_eigfunc)
            assert Nsites == self.eigfunc.shape[0]
-           self.P = torch.tensor(self.eigfunc[:,0:self.N])
-           self.P_ortho = self.P 
-           self.U = torch.matmul(self.P, self.P.transpose(-1,-2)) 
-           self.G = torch.eye(self.D) - self.U    
-           self.reortho_orbitals()
-       
-        #    # TEST
-        #    # Green's function at finite temperature 
-        #    beta = 1.0
-        #    V = self.eigfunc[:,:]
-        #    self.Gtherm = torch.eye(self.D) - V @ np.diag( 1.0/(1.0 + np.exp(+beta*eigvals[:])) ) @ V.transpose() / np.prod(1.0 + np.exp(-beta*eigvals[:]))
-        #    print("diag=", np.diag(self.Gtherm))
-        #    print("total particle number = ", np.sum(np.diag(self.Gtherm)))
-        #    # TEST
-
         else: # random initialization of orbitals  
            self.optimize_orbitals = True 
-           self.P = nn.Parameter(torch.rand(self.D, self.N, requires_grad=True)) # leaf Variable, updated during SGD; columns are not (!) orthonormal 
-           self.reortho_orbitals()  # orthonormalize columns 
+           # generate random unitary 
+           T0 = torch.tril(torch.rand(self.N, self.N, requires_grad=False), diag=0)
+           self.eigfunc = torch.matrix_exp(T0 - T0.t())
 
-        print("requires grad ?:", self.U.requires_grad)
-        print("self.P_ortho.is_leaf =", self.P_ortho.is_leaf)
-        print("self.P.is_leaf =", self.P.is_leaf)
+        # P-matrix representation of Slater determinant, (D x N)-matrix
+        self.P = torch.tensor(self.eigfunc[:,0:self.N], requires_grad=False)
+
+        if self.optimize_orbitals:
+            # parametrized rotation matrix R for optimizing the orbitals by orbital rotation
+            self.T = torch.nn.Parameter(torch.tril(torch.zeros(self.D, self.D), diagonal=-1)) # leaf Variable, updated during SGD
+            self.R = torch.matrix_exp(self.T - self.T.t())        
+            self.P_ortho = self.R @ self.P
+            print("is leaf ? self.T=", self.T.is_leaf)
+        else:
+            self.P_ortho = self.P
+ 
+        self.rotate_orbitals()
 
         self.reset_sampler()
 
-    def reortho_orbitals(self):
+    def rotate_orbitals(self):
         if self.optimize_orbitals:
-           with torch.no_grad():
-              self.P_ortho, R = torch.linalg.qr(self.P, mode='reduced') # P-matrix with orthonormal columns; on the other hand, it is self.P which is updated during SGD.
-
-           # P-matrix representation of Slater determinant, (D x N)-matrix
-           self.P = nn.Parameter(self.P_ortho.detach())
-           # U is the key matrix representing the Slater determinant for sampling purposes.
-           # Its principal minors are the probabilities of certain particle configurations.            
-           self.U = torch.matmul(self.P, self.P.transpose(-1,-2))
-           # Green's function 
-           self.G = torch.eye(self.D) - self.U    
+            self.R = torch.matrix_exp(self.T - self.T.t())
+            print("self.R=", self.R)
+            self.P_ortho = self.R @ self.P
+            # U is the key matrix representing the Slater determinant for *unordered* sampling purposes.
+            # Its principal minors are the probabilities of certain particle configurations.
+            self.U = self.P_ortho @ self.P_ortho.t()
+            # The Green's function is the key matrix for *ordered* sampling. 
+            self.G = torch.eye(self.D) - self.U    
         else:
-           pass 
-
+            self.U = self.P_ortho @ self.P_ortho.t()
+            self.G = torch.eye(self.D) - self.U   
 
     def reset_sampler(self):        
         self.occ_vec = np.zeros(self.D, dtype=np.float64)
@@ -441,7 +434,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         -> ratios <beta|psi> / <alpha|psi> -> local kinetic energy for state |alpha> (no backpropagation required). )
         """
 
-        # The kinetic energy does not need to be backpropagated. 
         GG = self.G.detach().numpy()
 
         assert_margin = 1e-6

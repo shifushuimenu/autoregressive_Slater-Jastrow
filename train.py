@@ -118,6 +118,8 @@ def train(VMCmodel, learning_rate, learning_rate_SD, precond, num_samples=100, n
                 delta = learning_rate * g
             par.data -= delta
 
+        VMCmodel.ansatz.slater_sampler.rotate_orbitals()
+
         yield av_H, precision
         
         
