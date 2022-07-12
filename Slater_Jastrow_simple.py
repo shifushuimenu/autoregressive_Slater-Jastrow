@@ -466,13 +466,12 @@ class VMCKernel(object):
         self.t_psiloc += (t1-t0)
         assert(psi_loc.requires_grad)
 
-        # Co-optimizing the Slater determinant converts a simple computation graph into a mess,
-        # as can be seen using torchviz.
-        if self.tmp_cnt  == 1:
-            viz_graph = make_dot(psi_loc)
-            viz_graph.view()
-            exit(1)
-        print("config=", config)
+        # # Co-optimizing the Slater determinant converts a simple computation graph into a mess,
+        # # as can be seen using visualization with torchviz.
+        # if self.tmp_cnt  == 1:
+        #     viz_graph = make_dot(psi_loc)
+        #     viz_graph.view()
+        #     exit(1)
 
         # =================================================================================================
         #  Comment on `backward(retain_graph = True)`

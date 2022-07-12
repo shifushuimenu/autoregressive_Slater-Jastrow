@@ -78,8 +78,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         else:
             self.P_ortho = self.P
  
-        # called inside self.reset_sampler()
-        #self.rotate_orbitals()
+        # called also inside self.reset_sampler() if self.optimize_orbitals == True 
+        self.rotate_orbitals()
 
         self.reset_sampler()
 
