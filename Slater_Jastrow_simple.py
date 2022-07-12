@@ -15,7 +15,7 @@ from test_suite import local_OBDM, ratio_Slater
 from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 from k_copy import sort_onehop_states
 
-from torchviz import make_dot
+# from torchviz import make_dot
 
 #from profilehooks import profile
 from time import time 
