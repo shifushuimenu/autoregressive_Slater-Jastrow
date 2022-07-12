@@ -35,8 +35,8 @@ else:
 torch.set_default_dtype(default_dtype_torch)
 torch.autograd.set_detect_anomaly(True)
 
-# set random number seed
 use_cuda = False
+# set random number seed
 seed = 44 + MPI_rank
 torch.manual_seed(seed) 
 if use_cuda: torch.cuda.manual_seed_all(seed)
@@ -108,7 +108,10 @@ def train(VMCmodel, learning_rate, learning_rate_SD, precond, num_samples=100, n
         g_list = [av_HtimesOk - av_H*av_Ok for (av_HtimesOk, av_Ok) in zip(av_HtimesOk, av_Ok)]
         # stochastic reconfiguration: 
         # g = S^{-1} * g        
-        g_list = precond.apply_Sinv(g_list)
+        t1 = time()
+        g_list = precond.apply_Sinv(g_list, tol=1e-8)
+        t2 = time()
+        VMCmodel.t_SR += (t2-t1)
 
 
         for (name, par), g in zip(VMCmodel.ansatz.named_parameters(), g_list):
@@ -180,8 +183,11 @@ SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler,
 
 VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
 del SJA
-SR = SR_Preconditioner(num_params=sum([np.prod(p.size()) for p in VMCmodel_.ansatz.parameters()]), num_samples=num_samples, diag_shift=1e-4)
 
+t1 = time()
+SR = SR_Preconditioner(num_params=sum([np.prod(p.size()) for p in VMCmodel_.ansatz.parameters()]), num_samples=num_samples, diag_shift=1e-4)
+t2 = time()
+VMCmodel_.t_SR += (t2-t1)
 
 
 E_exact = -3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832 # -2.9774135797163597 #-3.3478904193465335
@@ -200,14 +206,16 @@ if True:
         if i >= max_iter:
             break
     t1 = time()
-    print("## Timings:")
-    print("## elapsed =%10.6f for %d samples per iteration with %d iterations" % (t1-t0, num_samples, max_iter))
-    print("## t_psiloc=", VMCmodel_.t_psiloc)
-    print("## t_logprob_B=", VMCmodel_.ansatz.t_logprob_B)
-    print("## t_logprob_F=", VMCmodel_.ansatz.t_logprob_F)
-    print("## t_sampling=", VMCmodel_.t_sampling)
-    print("## t_locE=", VMCmodel_.t_locE)
-    print("## t_backward=", VMCmodel_.t_grads)
+    with open("timings"+paramstr+".dat", "w") as fh:
+        print("## Timings:", file=fh)
+        print("## elapsed =%10.6f for %d samples per epochs and %d epochs" % (t1-t0, num_samples, max_iter), file=fh)
+        print("## t_psiloc=", VMCmodel_.t_psiloc, file=fh)
+        print("## t_logprob_B=", VMCmodel_.ansatz.t_logprob_B, file=fh)
+        print("## t_logprob_F=", VMCmodel_.ansatz.t_logprob_F, file=fh)
+        print("## t_sampling=", VMCmodel_.t_sampling, file=fh)
+        print("## t_locE=", VMCmodel_.t_locE, file=fh)
+        print("## t_backward=", VMCmodel_.t_grads, file=fh)
+        print("## t_stochastic_reconfiguration=", VMCmodel_.t_SR, file=fh)
 
 
 

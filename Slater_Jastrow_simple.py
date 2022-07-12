@@ -427,7 +427,8 @@ class VMCKernel(object):
         self.t_psiloc = 0 # total time for calculating psi_loc for gradients and local energy
         self.t_sampling = 0 # total time for generating samples
         self.t_grads = 0 # total time for calculating gradients 
-        self.t_locE = 0  # totcal time for calculating local energy 
+        self.t_locE = 0  # total time for calculating local energy 
+        self.t_SR = 0    # total time for stochastic reconfiguration (lazy construction of Fisher information matrix S, apply S^{-1} using conjugate gradient)
 
         self.tmp_cnt = -1
 
