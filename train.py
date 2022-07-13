@@ -15,6 +15,8 @@ from test_suite import HartreeFock_tVmodel
 import itertools
 from sr_preconditioner import SR_Preconditioner
 
+# import torch.optim._functional as F
+
 from time import time 
 import argparse 
 
@@ -63,7 +65,6 @@ num_samples = args.num_samples # 10 # 100  # samples per batch
 num_bin = num_samples // 2 # 50 
 num_meas_samples = args.num_meas_samples
 optimize_orbitals = args.optimize_orbitals  # whether to include columns of P-matrix in optimization
-learning_rate_SD = 0.02
 
 Nsites = Lx*Ly  # 15  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
@@ -112,7 +113,6 @@ def train(VMCmodel, learning_rate, learning_rate_SD, precond, num_samples=100, n
         g_list = precond.apply_Sinv(g_list, tol=1e-8)
         t2 = time()
         VMCmodel.t_SR += (t2-t1)
-
 
         for (name, par), g in zip(VMCmodel.ansatz.named_parameters(), g_list):
             if name == 'slater_sampler.P':
@@ -196,7 +196,31 @@ E_exact = -3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832
 if True: 
     t0 = time()
     t0_tmp = t0
-    for i, (energy, precision) in enumerate(train(VMCmodel_, learning_rate=0.2, learning_rate_SD=learning_rate_SD, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda, precond=SR)):
+
+    # ======================
+    initial_lr = 0.2
+    lr_gamma = 0.1 
+    lr_step = 500
+
+    initial_lr_SD = 0.02
+    lr_step_SD = 1000
+    # ======================
+    
+    for i in range(max_iter):
+
+        # ======================
+        # custom scheduler (should be replaced by torch.optim.lr_scheduler.StepLR)
+        if i == 0:
+            lr = initial_lr
+            lr_SD = initial_lr_SD
+        elif i > 0 and i%lr_step == 0:
+            lr = lr * lr_gamma
+
+        if i > 0 and i%lr_step_SD == 0:
+            lr_SD = lr_SD * lr_gamma
+        # ======================
+
+        (energy, precision) = train(VMCmodel_, learning_rate=lr, learning_rate_SD=lr_SD, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda, precond=SR)
         t1_tmp = time()
         print('Step %d, dE/|E| = %.4f, elapsed = %.4f' % (i, -(energy - E_exact)/E_exact, t1_tmp-t0_tmp))
         _update_curve(energy, precision)
