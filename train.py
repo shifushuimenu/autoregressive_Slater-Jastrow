@@ -115,15 +115,16 @@ def train(VMCmodel, learning_rate, learning_rate_SD, precond, num_samples=100, n
         VMCmodel.t_SR += (t2-t1)
 
         for (name, par), g in zip(VMCmodel.ansatz.named_parameters(), g_list):
-            if name == 'slater_sampler.P':
-                delta = learning_rate_SD * g
-            else:
-                delta = learning_rate * g
+            #if name == 'slater_sampler.T':
+            #    delta = learning_rate_SD * g
+            #else:
+            delta = learning_rate * g
             par.data -= delta
 
         VMCmodel.ansatz.slater_sampler.rotate_orbitals()
 
-        yield av_H, precision
+        #yield av_H, precision
+        return av_H, precision
         
         
 
@@ -185,7 +186,7 @@ VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
 del SJA
 
 t1 = time()
-SR = SR_Preconditioner(num_params=sum([np.prod(p.size()) for p in VMCmodel_.ansatz.parameters()]), num_samples=num_samples, diag_shift=1e-4)
+SR = SR_Preconditioner(num_params=sum([np.prod(p.size()) for p in VMCmodel_.ansatz.parameters()]), num_samples=num_samples, diag_shift=0.1)
 t2 = time()
 VMCmodel_.t_SR += (t2-t1)
 
@@ -208,7 +209,7 @@ if True:
     
     for i in range(max_iter):
 
-        # ======================
+        # ================================
         # custom scheduler (should be replaced by torch.optim.lr_scheduler.StepLR)
         if i == 0:
             lr = initial_lr
@@ -218,7 +219,10 @@ if True:
 
         if i > 0 and i%lr_step_SD == 0:
             lr_SD = lr_SD * lr_gamma
-        # ======================
+
+        if i==1500:
+            lr_SD = lr_SD * lr_gamma
+        # ================================
 
         (energy, precision) = train(VMCmodel_, learning_rate=lr, learning_rate_SD=lr_SD, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda, precond=SR)
         t1_tmp = time()
@@ -226,9 +230,22 @@ if True:
         _update_curve(energy, precision)
         _checkpoint(VMCmodel_)
         t0_tmp = time()
-        # stop condition
-        if i >= max_iter:
-            break
+
+        # save model parameters in order to monitor convergence 
+        with open("convergence_params_SD_"+paramstr+".dat", "a") as fh:
+            for name, param in VMCmodel_.ansatz.named_parameters():
+                if name in ['slater_sampler.T']:
+                    arr = param.data.numpy().flatten()
+                    fh.write( ("%16.10f " * arr.size + "\n") % (tuple(arr)) )
+
+        # save model parameters in order to monitor convergence 
+        with open("convergence_params_Jastrow_net0"+paramstr+".dat", "a") as fh:
+            for name, param in VMCmodel_.ansatz.named_parameters():
+                if name in ['net.0.weight']:
+                    arr = param.data.numpy().flatten()
+                    fh.write( ("%16.10f " * arr.size + "\n") % (tuple(arr)) )
+
+
     t1 = time()
     with open("timings"+paramstr+".dat", "w") as fh:
         print("## Timings:", file=fh)
