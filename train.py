@@ -54,6 +54,8 @@ parser.add_argument('max_iter', metavar='max_epochs', type=int, help="number of 
 parser.add_argument('num_samples', type=int, help="number of samples per epoch")
 parser.add_argument('num_meas_samples', type=int, help="number of samples in measurement phase")
 parser.add_argument('--optimize_orbitals', type=bool, default=False, help="co-optimize orbitals of Slater determinant (default=False)")
+parser.add_argument('--lr', type=float, default=0.2, help="learning rate (default=0.2)")
+parser.add_argument('--lr_SD', type=float, default=0.02, help="separate learning rate for parameters of the Slater determinant (default=0.02)")
 args = parser.parse_args()
 
 Lx = args.Lx # 5  # 15
@@ -65,6 +67,8 @@ num_samples = args.num_samples # 10 # 100  # samples per batch
 num_bin = num_samples // 2 # 50 
 num_meas_samples = args.num_meas_samples
 optimize_orbitals = args.optimize_orbitals  # whether to include columns of P-matrix in optimization
+lr = args.lr
+lr_SD = args.lr_SD
 
 Nsites = Lx*Ly  # 15  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
@@ -193,44 +197,20 @@ VMCmodel_.t_SR += (t2-t1)
 
 E_exact = -3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832 # -2.9774135797163597 #-3.3478904193465335
 
+t0 = time()
+t0_tmp = t0
 
-if True: 
-    t0 = time()
-    t0_tmp = t0
 
-    # ======================
-    initial_lr = 0.2
-    lr_gamma = 0.1 
-    lr_step = 500
+for i in range(max_iter):
 
-    initial_lr_SD = 0.02
-    lr_step_SD = 1000
-    # ======================
-    
-    for i in range(max_iter):
+    (energy, precision) = train(VMCmodel_, learning_rate=lr, learning_rate_SD=lr_SD, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda, precond=SR)
+    t1_tmp = time()
+    print('Step %d, dE/|E| = %.4f, elapsed = %.4f' % (i, -(energy - E_exact)/E_exact, t1_tmp-t0_tmp))
+    _update_curve(energy, precision)
+    _checkpoint(VMCmodel_)
+    t0_tmp = time()
 
-        # ================================
-        # custom scheduler (should be replaced by torch.optim.lr_scheduler.StepLR)
-        if i == 0:
-            lr = initial_lr
-            lr_SD = initial_lr_SD
-        elif i > 0 and i%lr_step == 0:
-            lr = lr * lr_gamma
-
-        if i > 0 and i%lr_step_SD == 0:
-            lr_SD = lr_SD * lr_gamma
-
-        if i==1500:
-            lr_SD = lr_SD * lr_gamma
-        # ================================
-
-        (energy, precision) = train(VMCmodel_, learning_rate=lr, learning_rate_SD=lr_SD, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda, precond=SR)
-        t1_tmp = time()
-        print('Step %d, dE/|E| = %.4f, elapsed = %.4f' % (i, -(energy - E_exact)/E_exact, t1_tmp-t0_tmp))
-        _update_curve(energy, precision)
-        _checkpoint(VMCmodel_)
-        t0_tmp = time()
-
+    if False:
         # save model parameters in order to monitor convergence 
         with open("convergence_params_SD_"+paramstr+".dat", "a") as fh:
             for name, param in VMCmodel_.ansatz.named_parameters():
@@ -246,17 +226,17 @@ if True:
                     fh.write( ("%16.10f " * arr.size + "\n") % (tuple(arr)) )
 
 
-    t1 = time()
-    with open("timings"+paramstr+".dat", "w") as fh:
-        print("## Timings:", file=fh)
-        print("## elapsed =%10.6f for %d samples per epochs and %d epochs" % (t1-t0, num_samples, max_iter), file=fh)
-        print("## t_psiloc=", VMCmodel_.t_psiloc, file=fh)
-        print("## t_logprob_B=", VMCmodel_.ansatz.t_logprob_B, file=fh)
-        print("## t_logprob_F=", VMCmodel_.ansatz.t_logprob_F, file=fh)
-        print("## t_sampling=", VMCmodel_.t_sampling, file=fh)
-        print("## t_locE=", VMCmodel_.t_locE, file=fh)
-        print("## t_backward=", VMCmodel_.t_grads, file=fh)
-        print("## t_stochastic_reconfiguration=", VMCmodel_.t_SR, file=fh)
+t1 = time()
+with open("timings"+paramstr+".dat", "w") as fh:
+    print("## Timings:", file=fh)
+    print("## elapsed =%10.6f for %d samples per epochs and %d epochs" % (t1-t0, num_samples, max_iter), file=fh)
+    print("## t_psiloc=", VMCmodel_.t_psiloc, file=fh)
+    print("## t_logprob_B=", VMCmodel_.ansatz.t_logprob_B, file=fh)
+    print("## t_logprob_F=", VMCmodel_.ansatz.t_logprob_F, file=fh)
+    print("## t_sampling=", VMCmodel_.t_sampling, file=fh)
+    print("## t_locE=", VMCmodel_.t_locE, file=fh)
+    print("## t_backward=", VMCmodel_.t_grads, file=fh)
+    print("## t_stochastic_reconfiguration=", VMCmodel_.t_SR, file=fh)
 
 
 
