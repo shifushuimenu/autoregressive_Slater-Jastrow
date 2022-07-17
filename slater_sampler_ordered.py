@@ -71,8 +71,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         if self.optimize_orbitals:
             # parametrized rotation matrix R for optimizing the orbitals by orbital rotation
-            self.T = torch.nn.Parameter(torch.tril(torch.zeros(self.D, self.D), diagonal=-1)) # leaf Variable, updated during SGD
-            self.R = torch.matrix_exp(self.T - self.T.t())        
+            self.T = torch.nn.Parameter(torch.zeros(self.D, self.D)) # leaf Variable, updated during SGD
+            T_ = torch.tril(self.T, diagonal=-1) # only lower triangular elements are relevant 
+            self.R = torch.matrix_exp(T_ - T_.t())        
             self.P_ortho = self.R @ self.P
             print("is leaf ? self.T=", self.T.is_leaf)
         else:
@@ -85,7 +86,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
     def rotate_orbitals(self):
         if self.optimize_orbitals:
-            self.R = torch.matrix_exp(self.T - self.T.t())
+            T_ = torch.tril(self.T, diagonal=-1) # only lower triangular elements are relevant 
+            self.R = torch.matrix_exp(T_ - T_.t())
             self.P_ortho = self.R @ self.P
             # U is the key matrix representing the Slater determinant for *unordered* sampling purposes.
             # Its principal minors are the probabilities of certain particle configurations.
