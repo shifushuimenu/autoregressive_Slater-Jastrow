@@ -50,7 +50,7 @@ phys_system = PhysicalSystem(nx=Lx, ny=Ly, ns=N_2d, num_particles=Np, D=2, Vint=
 (eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none", max_iter=2)
 np.savetxt("eigvecs.dat", eigvecs)
 #(_, eigvecs) = prepare_test_system_zeroT(N_2d=N_2d, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
-Sdet_sampler = SlaterDetSampler_ordered(Nsites=N_2d, Nparticles=Np, single_particle_eigfunc=eigvecs, eigvals=eigvals, naive_update=False, optimize_orbitals=False)
+Sdet_sampler = SlaterDetSampler_ordered(Nsites=N_2d, Nparticles=Np, single_particle_eigfunc=eigvecs, eigvals=eigvals, naive_update=False, optimize_orbitals=True)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Np, D=N_2d, net_depth=2)
 #
 VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)

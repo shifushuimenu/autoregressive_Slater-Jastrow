@@ -422,7 +422,7 @@ class VMCKernel(object):
     '''
     def __init__(self, energy_loc, ansatz):
         self.ansatz = ansatz
-        self.energy_loc = energy_loc
+        self.energy_loc = energy_loc # function(config, psi_loc.data, ansatz)
 
         self.t_psiloc = 0 # total time for calculating psi_loc for gradients and local energy
         self.t_sampling = 0 # total time for generating samples
@@ -502,7 +502,9 @@ class VMCKernel(object):
         self.t_grads += (t2-t1)
         # E_{loc}
         t3 = time()
-        eloc = self.energy_loc(config, psi_loc.data, ansatz=self.ansatz).item()
+        with torch.no_grad():
+            eloc = self.energy_loc(config, psi_loc.data, ansatz=self.ansatz).item()
+
         t4 = time()
         self.t_locE += (t4-t3)
         return eloc, grad_loc
