@@ -3,7 +3,8 @@ import torch
 from time import time 
 
 from one_hot import occ_numbers_collapse 
-from torchviz import make_dot
+#q
+# :q:from torchviz import make_dot
 
 
 def binning_statistics(obs_list, num_bin):
@@ -70,8 +71,6 @@ def train_SR(VMCmodel, learning_rate, learning_rate_SD, precond, num_samples=100
     g_list = precond.apply_Sinv(g_list, tol=1e-8)
     t2 = time()
     VMCmodel.t_SR += (t2-t1)
-    print("gradients=", g_list)
-    exit(1)
 
     for (name, par), g in zip(VMCmodel.ansatz.named_parameters(), g_list):
         #if name == 'slater_sampler.T':
@@ -209,7 +208,6 @@ class Trainer(object):
         self.optimizer.zero_grad()
         loss = self._reinforcement_loss_fn(config_list)
         loss.backward()
-
         self.optimizer.step()
 
         return self.energy, self.precision
