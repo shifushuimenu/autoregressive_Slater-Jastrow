@@ -41,6 +41,36 @@ class PhysicalSystem(object):
         elif D == 2:  
             self.lattice = Lattice_rectangular(self.nx, self.ny)    
 
+    #@profile
+    def local_energy(self, config, psi_loc, ansatz, lowrank_flag=True):
+        '''
+        Local energy of periodic 1D or 2D t-V model
+        
+        Args:
+        config (1D array): occupation numbers as bitstring.
+        psi_func (func): wave function amplitude
+        psi_loc (number): projection of wave function onto config <config|psi>
+        V (float): nearest-neighbout interaction
+
+        Returns:
+        number: local energy <config|H|psi> / <config|psi>
+        '''
+        config = np.array(config).astype(int)
+        assert len(config.shape) > 1 and config.shape[0] == 1 # just one sample per batch
+
+        if lowrank_flag:
+            # diagonal matrix element: nearest neighbour interaction
+            config_2D = config[0].reshape((self.nx, self.ny))
+            Enn_int = 0.0
+            for nd in range(self.lattice.coord // 2):
+                Enn_int += ( np.roll(config_2D, shift=-1, axis=nd) * config_2D ).sum() 
+
+            I = bin2int_nobatch(config[0])
+            E_kin_loc, b_absamp = ansatz.lowrank_kinetic(I_ref=I, psi_loc=psi_loc, lattice=self.lattice)
+            return E_kin_loc + self.Vint * Enn_int 
+        else:
+            E_tot_slow, abspsi = self.local_energy_slow(config, psi_loc, ansatz)
+            return E_tot_slow        
 
     def local_energy_slow(self, config, psi_loc, ansatz):
         """Recalculate |<psi|beta>|^2 for each beta."""
@@ -96,56 +126,7 @@ class PhysicalSystem(object):
 
         return acc, abspsi
 
-
-    #@profile
-    def local_energy(self, config, psi_loc, ansatz, lowrank_flag=True):
-        '''
-        Local energy of periodic 1D or 2D t-V model
         
-        Args:
-        config (1D array): occupation numbers as bitstring.
-        psi_func (func): wave function amplitude
-        psi_loc (number): projection of wave function onto config <config|psi>
-        V (float): nearest-neighbout interaction
-
-        Returns:
-        number: local energy <config|H|psi> / <config|psi>
-        '''
-        config = np.array(config).astype(int)
-        assert len(config.shape) > 1 and config.shape[0] == 1 # just one sample per batch
-
-        if lowrank_flag:
-            # diagonal matrix element: nearest neighbour interactions
-            Enn_int = 0.0
-            config_2D = config[0].reshape((self.nx, self.ny))
-
-            for nd in range(self.lattice.coord // 2):
-                Enn_int += ( np.roll(config_2D, shift=-1, axis=nd) * config_2D ).sum() 
-
-            I = bin2int_nobatch(config[0])
-            E_kin_loc, b_absamp = ansatz.lowrank_kinetic(I_ref=I, psi_loc=psi_loc, lattice=self.lattice)
-            # # REMOVE
-            # E_tot_slow, abspsi = self.local_energy_slow(config, psi_loc, ansatz)
-            # print("=========================")
-            # print("E_tot_slow=", E_tot_slow)
-            # print("E_tot_fast=", E_kin_loc + self.Vint * Enn_int )
-            # print("E_kin_loc=", E_kin_loc)
-            # print("=========================")
-            # # REMOVE
-            return E_kin_loc + self.Vint * Enn_int 
-        else:
-            E_tot_slow, abspsi = self.local_energy_slow(config, psi_loc, ansatz)
-            return E_tot_slow
-            # E_tot_slow
-            #print("E_tot_lowrank=", E_kin_loc + self.Vint * Enn_int)
-            # E_tot_slow, abspsi = self.local_energy_slow(config, psi_loc, ansatz)
-            #print("E_tot_slow=", E_tot_slow)
-            #print("b_absamp=", b_absamp)
-            #print("abspsi=", abspsi)
-        
-        
-
-
 class Lattice1d(object):
     """1d lattice with pbc"""
     def __init__(self, ns=4):
@@ -338,77 +319,6 @@ def kinetic_term2( I, lattice, t_hop=1.0 ):
     matrix_elem = matrix_elem[idx_unique]
 
     return ( rs_pos, I_prime, matrix_elem )
-
-
-
-#@profile
-def vmc_measure(local_measure, sample_list, log_probs, precond, num_bin=50):
-    '''
-    get energy, gradient and there product averaged over a batch of samples 
-
-    Args:
-        local_measure (func): local measurements function, input configuration, return local energy and local gradient.
-        sample_list (list): a list of configurations.
-        log_probs (lit): the log probs for the configurations.
-        num_bin (int): number of bins in binning statistics.
-
-    Returns:
-        tuple: expectation valued of energy, gradient, energy*gradient and error of energy.
-    '''
-    print("inside VMC measure")
-    # measurements
-    energy_loc_list, grad_loc_list = [], []
-    for i, (config, log_prob) in enumerate(zip(sample_list, log_probs)):
-        print("local energy: sample nr=", i)
-        # back-propagation is used to get gradients.
-        energy_loc, grad_loc = local_measure([config], log_prob) # ansatz.psi requires batch dim)
-        energy_loc_list.append(energy_loc)
-        grad_loc_list.append(grad_loc)
-
-
-        precond.accumulate(grad_loc)
-
-
-    # binning statistics for energy
-    energy_loc_list = np.array(energy_loc_list)
-    energy, energy_precision = binning_statistics(energy_loc_list, num_bin=num_bin)
-
-    # get expectation values
-    energy_loc_list = torch.from_numpy(energy_loc_list)
-    if grad_loc_list[0][0].is_cuda: energy_loc_list = energy_loc_list.cuda()
-    grad_mean = []
-    energy_grad = []
-    for grad_loc in zip(*grad_loc_list):
-        grad_loc = torch.stack(grad_loc, 0)
-        grad_mean.append(grad_loc.mean(0))
-        energy_grad.append(
-            (energy_loc_list[(slice(None),) + (None,) * (grad_loc.dim() - 1)] * grad_loc).mean(0))
-
-    return energy.item(), grad_mean, energy_grad, energy_precision
-
-
-def binning_statistics(var_list, num_bin):
-    '''
-    binning statistics for variable list.
-    '''
-    num_sample = len(var_list)
-    if num_sample % num_bin != 0:
-        raise
-    size_bin = num_sample // num_bin
-
-    # mean, variance
-    mean = np.mean(var_list, axis=0)
-    variance = np.var(var_list, axis=0)
-
-    # binned variance and autocorrelation time.
-    variance_binned = np.var(
-        [np.mean(var_list[size_bin * i:size_bin * (i + 1)]) for i in range(num_bin)])
-    t_auto = 0.5 * size_bin * \
-        np.abs(np.mean(variance_binned) / np.mean(variance))
-    stderr = np.sqrt(variance_binned / num_bin)
-    print('Binning Statistics: Energy = %.4f +- %.4f, Auto correlation Time = %.4f' %
-          (mean, stderr, t_auto))
-    return mean, stderr
 
 
 class VMCKernel(object):
