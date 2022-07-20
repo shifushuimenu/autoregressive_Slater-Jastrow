@@ -3,6 +3,7 @@ import torch
 from time import time 
 
 from one_hot import occ_numbers_collapse 
+from torchviz import make_dot
 
 
 def binning_statistics(obs_list, num_bin):
@@ -69,6 +70,8 @@ def train_SR(VMCmodel, learning_rate, learning_rate_SD, precond, num_samples=100
     g_list = precond.apply_Sinv(g_list, tol=1e-8)
     t2 = time()
     VMCmodel.t_SR += (t2-t1)
+    print("gradients=", g_list)
+    exit(1)
 
     for (name, par), g in zip(VMCmodel.ansatz.named_parameters(), g_list):
         #if name == 'slater_sampler.T':
@@ -170,14 +173,19 @@ class Trainer(object):
 
         av_local_energy = np.mean(energy_list)
 
-        # loss from reinforcement learning 
-        loss = torch.sum(torch.tensor([log_psi_list[i] * (energy_list[i] - av_local_energy) for i in range(self.num_samples)], requires_grad=True))
+        # # loss from reinforcement learning 
+        loss = torch.tensor([0.0])
+        for i in range(self.num_samples):
+            loss += log_psi_list[i] * (energy_list[i] - av_local_energy)
+
+        # viz_graph = make_dot(torch.sum(loss))
+        # viz_graph.view()
+        # loss = torch.sum(torch.tensor([log_psi_list[i] * (energy_list[i] - av_local_energy) for i in range(self.num_samples)], requires_grad=True))
 
         assert loss.requires_grad 
 
         # store current av. energy and error 
         (ene, std_ene) = binning_statistics(energy_list, num_bin=self.num_bin)
-        print("loss=", loss, "ene=", ene)
         self.energy = ene 
         self.precision = std_ene 
 
@@ -201,8 +209,7 @@ class Trainer(object):
         self.optimizer.zero_grad()
         loss = self._reinforcement_loss_fn(config_list)
         loss.backward()
+
         self.optimizer.step()
 
-        return self.energy, self.precision 
-    
-    
+        return self.energy, self.precision

@@ -1,6 +1,7 @@
 from sr_lazy import SR_Preconditioner_base
 import torch 
 import numpy as np
+from dataclasses import dataclass
 
 __all__ = ["SR_Preconditioner"]
 
@@ -34,3 +35,14 @@ class SR_Preconditioner(SR_Preconditioner_base):
         # we don't need the Fisher information matrix any longer
         self.reset()
         return self._unflatten(x, g)
+
+@dataclass
+class Identity_Preconditioner(SR_Preconditioner_base):
+    """Dummy class for performing SGD without SR"""
+    x : int = 0
+
+    def accumulate(self, O_k):
+        pass 
+
+    def apply_Sinv(self, g, tol=1e-8):
+        return g

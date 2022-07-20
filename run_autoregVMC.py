@@ -14,7 +14,7 @@ from test_suite import HartreeFock_tVmodel
 
 import itertools
 
-from sr_preconditioner import SR_Preconditioner
+from sr_preconditioner import SR_Preconditioner, Identity_Preconditioner
 from train import train_SR, Trainer
 
 from time import time 
@@ -53,7 +53,7 @@ parser.add_argument('Vint', metavar='V/t', type=float, help='nearest-neighbour i
 parser.add_argument('num_epochs', metavar='max_epochs', type=int, help="number of training epochs")
 parser.add_argument('num_samples', type=int, help="number of samples per epoch")
 parser.add_argument('num_meas_samples', type=int, help="number of samples in measurement phase")
-parser.add_argument('--optimizer', choices=['SGD', 'SR', 'Adam', 'RMSprop'], default='SR')
+parser.add_argument('--optimizer', choices=['mySGD', 'SGD', 'SR', 'Adam', 'RMSprop'], default='SR')
 parser.add_argument('--optimize_orbitals', type=bool, default=False, help="co-optimize orbitals of Slater determinant (default=False)")
 parser.add_argument('--lr', type=float, default=0.2, help="learning rate (default=0.2)")
 parser.add_argument('--lr_SD', type=float, default=0.02, help="separate learning rate for parameters of the Slater determinant (default=0.02)")
@@ -145,6 +145,8 @@ if optimizer_name in ['SR']:
     SR = SR_Preconditioner(num_params=sum([np.prod(p.size()) for p in VMCmodel_.ansatz.parameters()]), num_samples=num_samples, diag_shift=0.1)
     t2 = time()
     VMCmodel_.t_SR += (t2-t1)
+elif optimizer_name in ['mySGD']:
+    SR = Identity_Preconditioner() # dummy class, just passes unmodified gradients through 
 elif optimizer_name in ['SGD', 'Adam', 'RMSprop']:
     my_trainer = Trainer(VMCmodel_, lr, optimizer_name, num_samples, num_bin, use_cuda=False)
 
@@ -156,7 +158,7 @@ t0_tmp = t0
 
 for i in range(num_epochs):
 
-    if optimizer_name in ['SR']:
+    if optimizer_name in ['mySGD', 'SR']:
         (energy, precision) = train_SR(VMCmodel_, learning_rate=lr, learning_rate_SD=lr_SD, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda, precond=SR)
     else:
         (energy, precision) = my_trainer.train_standard_optimizer()
