@@ -128,7 +128,7 @@ def vmc_measure(local_measure, sample_list, log_probs, precond, num_bin=50):
 # =========================================================================
 
 class Trainer(object):
-    """doc string"""
+    """Employ standard optimizers by taking the gradient of the reinforcement loss function"""
     def __init__(self, VMCmodel, learning_rate, optim_name, num_samples=100, num_bin=50, use_cuda=False):
 
         if use_cuda:
@@ -177,6 +177,7 @@ class Trainer(object):
 
         # store current av. energy and error 
         (ene, std_ene) = binning_statistics(energy_list, num_bin=self.num_bin)
+        print("loss=", loss, "ene=", ene)
         self.energy = ene 
         self.precision = std_ene 
 
