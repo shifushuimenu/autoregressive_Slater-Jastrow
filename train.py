@@ -3,8 +3,7 @@ import torch
 from time import time 
 
 from one_hot import occ_numbers_collapse 
-#q
-# :q:from torchviz import make_dot
+# from torchviz import make_dot
 
 
 def binning_statistics(obs_list, num_bin):
@@ -146,9 +145,9 @@ class Trainer(object):
         if optim_name in ["SGD"]:
             self.optimizer = torch.optim.SGD(self.VMCmodel.ansatz.parameters(), lr=learning_rate)
         elif optim_name in ["Adam"]:
-            self.optimizer = torch.optim.Adam(self.VMCmodel.ansatz.parameters(), lr=learning_rate, betas=(0.9, 0.999), eps=1e-08)
+            self.optimizer = torch.optim.Adam(self.VMCmodel.ansatz.parameters(), lr=0.05, betas=(0.9, 0.999), eps=1e-08)
         elif optim_name in ["RMSprop"]:
-            self.optimizer = torch.optim.RMSprop(self.VMCmodel.ansatz.parameters(), lr=learning_rate, alpha=0.99, eps=1e-08) 
+            self.optimizer = torch.optim.RMSprop(self.VMCmodel.ansatz.parameters(), lr=0.01, alpha=0.99, eps=1e-08) 
         else:
             raise ValueError(f"Unknown optimizer name {optim_name}")
 
@@ -160,12 +159,18 @@ class Trainer(object):
         for config in config_list:
 
             # density estimation
+            t1 = time()
             psi_loc = self.VMCmodel.ansatz.psi_amplitude(torch.from_numpy(np.array([config]))) # requires batch dimension 
+            t2 = time()
+            self.VMCmodel.t_psiloc += (t2-t1)
             log_psi = torch.log(torch.abs(psi_loc))
             assert log_psi.requires_grad
             # calculation of local energy 
             with torch.no_grad():
+                t1 = time()
                 eloc = self.VMCmodel.energy_loc(np.array([config]), psi_loc.data, ansatz=self.VMCmodel.ansatz).item()
+                t2 = time()
+                self.VMCmodel.t_locE += (t2-t1)
 
             energy_list.append(eloc)
             log_psi_list.append(log_psi)
@@ -208,8 +213,11 @@ class Trainer(object):
 
         self.optimizer.zero_grad()
         loss = self._reinforcement_loss_fn(config_list)
-        loss.backward()
 
+        t1 = time()
+        loss.backward()
         self.optimizer.step()
+        t2 = time()
+        self.VMCmodel.t_backward += (t2-t1)
 
         return self.energy, self.precision

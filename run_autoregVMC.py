@@ -55,7 +55,7 @@ parser.add_argument('num_samples', type=int, help="number of samples per epoch")
 parser.add_argument('num_meas_samples', type=int, help="number of samples in measurement phase")
 parser.add_argument('--optimizer', choices=['mySGD', 'SGD', 'SR', 'Adam', 'RMSprop'], default='SR')
 parser.add_argument('--optimize_orbitals', type=bool, default=False, help="co-optimize orbitals of Slater determinant (default=False)")
-parser.add_argument('--lr', type=float, default=0.2, help="learning rate (default=0.2)")
+parser.add_argument('--lr', type=float, default=0.2, help="learning rate for SGD and SR (default=0.2); Adam and RMSprop have different learning rates.")
 parser.add_argument('--lr_SD', type=float, default=0.02, help="separate learning rate for parameters of the Slater determinant (default=0.02)")
 args = parser.parse_args()
 
@@ -74,7 +74,7 @@ lr_SD = args.lr_SD
 
 Nsites = Lx*Ly  # 15  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
-paramstr = "Lx{}Ly{}Np{}V{}".format(Lx, Ly, Nparticles, Vint)
+paramstr = "Lx{}Ly{}Np{}V{}_{}".format(Lx, Ly, Nparticles, Vint, optimizer_name)
 logger.info_refstate.outfile = "lowrank_stats_"+paramstr+".dat"
 
 # for debugging:
@@ -142,7 +142,7 @@ del SJA
 
 if optimizer_name in ['SR']:
     t1 = time()
-    SR = SR_Preconditioner(num_params=sum([np.prod(p.size()) for p in VMCmodel_.ansatz.parameters()]), num_samples=num_samples, diag_shift=0.1)
+    SR = SR_Preconditioner(num_params=sum([np.prod(p.size()) for p in VMCmodel_.ansatz.parameters()]), num_samples=num_samples, diag_shift=0.001)
     t2 = time()
     VMCmodel_.t_SR += (t2-t1)
 elif optimizer_name in ['mySGD']:
