@@ -69,9 +69,6 @@ def train_SR(VMCmodel, learning_rate, learning_rate_SD, precond, num_samples=100
     # g = S^{-1} * g        
     t1 = time()
     g_list = precond.apply_Sinv(g_list, tol=1e-8)
-    print("gradients=", g_list)
-    print("Exiting...")
-    exit(1)
     t2 = time()
     VMCmodel.t_SR += (t2-t1)
 
@@ -212,16 +209,6 @@ class Trainer(object):
         self.optimizer.zero_grad()
         loss = self._reinforcement_loss_fn(config_list)
         loss.backward()
-
-        # remove
-        fh = open("grads_standard_SGD.dat", "w")
-        for (name, par) in self.VMCmodel.ansatz.named_parameters():
-            print("name=", name, file=fh)
-            print("par.grad=", par.grad, file=fh)
-        fh.close()
-        exit(1)
-
-        # remove
 
         self.optimizer.step()
 
