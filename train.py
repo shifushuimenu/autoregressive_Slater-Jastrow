@@ -69,6 +69,9 @@ def train_SR(VMCmodel, learning_rate, learning_rate_SD, precond, num_samples=100
     # g = S^{-1} * g        
     t1 = time()
     g_list = precond.apply_Sinv(g_list, tol=1e-8)
+    print("gradients=", g_list)
+    print("Exiting...")
+    exit(1)
     t2 = time()
     VMCmodel.t_SR += (t2-t1)
 
@@ -144,7 +147,7 @@ class Trainer(object):
         self.precision = None # variance of energy in the current epoch 
 
         if optim_name in ["SGD"]:
-            self.optimizer = torch.optim.SGD(self.VMCmodel.ansatz.parameters(), lr=learning_rate, momentum=0.9)
+            self.optimizer = torch.optim.SGD(self.VMCmodel.ansatz.parameters(), lr=learning_rate)
         elif optim_name in ["Adam"]:
             self.optimizer = torch.optim.Adam(self.VMCmodel.ansatz.parameters(), lr=learning_rate, betas=(0.9, 0.999), eps=1e-08)
         elif optim_name in ["RMSprop"]:
@@ -172,10 +175,11 @@ class Trainer(object):
 
         av_local_energy = np.mean(energy_list)
 
-        # # loss from reinforcement learning 
+        # loss from reinforcement learning 
         loss = torch.tensor([0.0])
         for i in range(self.num_samples):
             loss += log_psi_list[i] * (energy_list[i] - av_local_energy)
+        loss /= self.num_samples 
 
         # viz_graph = make_dot(torch.sum(loss))
         # viz_graph.view()
@@ -208,6 +212,17 @@ class Trainer(object):
         self.optimizer.zero_grad()
         loss = self._reinforcement_loss_fn(config_list)
         loss.backward()
+
+        # remove
+        fh = open("grads_standard_SGD.dat", "w")
+        for (name, par) in self.VMCmodel.ansatz.named_parameters():
+            print("name=", name, file=fh)
+            print("par.grad=", par.grad, file=fh)
+        fh.close()
+        exit(1)
+
+        # remove
+
         self.optimizer.step()
 
         return self.energy, self.precision
