@@ -148,7 +148,7 @@ if optimizer_name in ['SR']:
 elif optimizer_name in ['mySGD']:
     SR = Identity_Preconditioner() # dummy class, just passes unmodified gradients through 
 elif optimizer_name in ['SGD', 'Adam', 'RMSprop']:
-    my_trainer = Trainer(VMCmodel_, lr, optimizer_name, num_samples, num_bin, use_cuda=False)
+    my_trainer = Trainer(VMCmodel_, lr, optimizer_name, num_samples, num_bin, clip_local_energy=5.0, use_cuda=False)
 
 
 E_exact = -3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832 # -2.9774135797163597 #-3.3478904193465335
@@ -162,7 +162,6 @@ for i in range(num_epochs):
         (energy, precision) = train_SR(VMCmodel_, learning_rate=lr, learning_rate_SD=lr_SD, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda, precond=SR)
     else:
         (energy, precision) = my_trainer.train_standard_optimizer()
-        print("my_trainer:", energy, precision)
 
     t1_tmp = time()
     print('Step %d, dE/|E| = %.4f, elapsed = %.4f' % (i, -(energy - E_exact)/E_exact, t1_tmp-t0_tmp))

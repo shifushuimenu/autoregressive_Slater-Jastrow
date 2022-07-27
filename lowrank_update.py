@@ -11,10 +11,16 @@ from block_update_numpy import ( block_update_inverse,
                            block_update_det_correction2 )
 
 eps = np.finfo(float).eps
-thresh = 10 * eps
+thresh = 1.5 * eps
 
 class ErrorFinitePrecision(Exception):
-    pass 
+    def __init__(self, *args):
+        self.msg = args[0] if args else None 
+    def __str__(self):
+        if self.msg:
+            return 'ErrorFinitePrecision: {}'.format(self.msg)
+        else:
+            return 'ErrorFinitePrecision'
 
 
 def corr_factor_removeadd_rs(Ainv, r, s):
@@ -26,24 +32,18 @@ def corr_factor_removeadd_rs(Ainv, r, s):
     """
     #print("removeadd_rs=", Ainv[r,r], Ainv[s,s], Ainv[r,s], Ainv[s,r])
     cf = (1 + Ainv[r,r]) * (1 - Ainv[s,s]) + Ainv[r,s] * Ainv[s,r]
-    if abs(cf) < thresh: 
-        raise ErrorFinitePrecision
     return cf
 
 
 def corr_factor_add_s(Ainv, s):
     """add a particle at position s without removing any particle"""
     cf = (1 - Ainv[s,s])
-    if abs(cf) < thresh: 
-        raise ErrorFinitePrecision    
     return cf 
 
 
 def corr_factor_remove_r(Ainv, r):
     """remove a particle at position r without adding any particle"""
     cf = (1 + Ainv[r,r])
-    if abs(cf) < thresh: 
-        raise ErrorFinitePrecision    
     return cf  
 
 
@@ -57,9 +57,7 @@ def removeadd_rs(Gnum_inv, Gdenom_inv, r, s):
     corr_factor_Gdenom = corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)   
     #return corr_factor_Gnum / corr_factor_Gdenom
     if abs(corr_factor_Gdenom) < thresh:
-        print("Finite Precision may be exceeded: corr_factor_Gdenom=", corr_factor_Gdenom)
-        print("corr_factor_Gnum=", corr_factor_Gnum)
-        raise ErrorFinitePrecision
+        raise ErrorFinitePrecision("corr_factor_Gdenom=%f"%(abs(corr_factor_Gdenom)))
     else: 
         return corr_factor_Gnum / corr_factor_Gdenom
 
@@ -72,7 +70,7 @@ def remove_r(Gnum_inv, Gdenom_inv, r):
     corr_factor_Gnum = corr_factor_remove_r(Gnum_inv, r=r)
     corr_factor_Gdenom = corr_factor_remove_r(Gdenom_inv, r=r)
     if abs(corr_factor_Gdenom) < thresh:
-        raise ErrorFinitePrecision
+        raise ErrorFinitePrecision("corr_factor_Gdenom=%f"%(abs(corr_factor_Gdenom)))
     else: 
         return corr_factor_Gnum / corr_factor_Gdenom    
 
@@ -98,6 +96,14 @@ def adapt_Ainv(Ainv, Gglobal, r, s, i_start, i_end):
     l = i_end+1-i_start
     DD = np.zeros((l, l))
     DD[-1, -1] = -1
+
+    Ainv_extended = block_update_inverse2(Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
+        C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD)
+    corr = block_update_det_correction2(
+        Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
+        C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD
+        )
+    return Ainv_extended, corr
 
     corr = block_update_det_correction2(
         Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
@@ -323,11 +329,3 @@ def det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal, r, s, xmin, i):
 #     """ 
 #     CGdenom_inv = np.matmul(C, Gdenom_inv) # should be precomputed
 #     Gdenom_invB = CGdenom_inv.transpose()  # should be precomputed
-#     CGB = np.matmul(CGdenom_inv, B)        # should be precomputed
-
-#     cc_inv = 1.0 / (1.0 + Gdenom_inv[r,r])
-
-#     # IMPROVE: This can be simplified due to symmetry. 
-#     CGB_updated = CGB - np.outer(CGdenom_inv[:,r], Gdenom_invB[r,:]) * cc_inv
-
-#     return np.linalg.det(D - CGB_updated)

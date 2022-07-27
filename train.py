@@ -131,7 +131,7 @@ def vmc_measure(local_measure, sample_list, log_probs, precond, num_bin=50):
 
 class Trainer(object):
     """Employ standard optimizers by taking the gradient of the reinforcement loss function"""
-    def __init__(self, VMCmodel, learning_rate, optim_name, num_samples=100, num_bin=50, clip_local_energy=5.0, use_cuda=False):
+    def __init__(self, VMCmodel, learning_rate, optim_name, num_samples=100, num_bin=50, clip_local_energy=0.0, use_cuda=False):
 
         if use_cuda:
             VMCmodel.ansatz.cuda()
