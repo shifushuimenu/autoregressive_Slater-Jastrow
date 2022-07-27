@@ -3,6 +3,7 @@ import torch
 from time import time 
 
 from one_hot import occ_numbers_collapse 
+from utils import default_dtype_torch
 # from torchviz import make_dot
 
 
@@ -130,7 +131,7 @@ def vmc_measure(local_measure, sample_list, log_probs, precond, num_bin=50):
 
 class Trainer(object):
     """Employ standard optimizers by taking the gradient of the reinforcement loss function"""
-    def __init__(self, VMCmodel, learning_rate, optim_name, num_samples=100, num_bin=50, use_cuda=False):
+    def __init__(self, VMCmodel, learning_rate, optim_name, num_samples=100, num_bin=50, clip_local_energy=5.0, use_cuda=False):
 
         if use_cuda:
             VMCmodel.ansatz.cuda()
@@ -138,6 +139,7 @@ class Trainer(object):
         self.Ns = self.VMCmodel.ansatz.D
         self.num_samples = num_samples # number of samples per training epoch
         self.num_bin = num_bin
+        self.clip_local_energy = clip_local_energy
 
         self.energy = None  # average energy in the current epoch 
         self.precision = None # variance of energy in the current epoch 
@@ -151,12 +153,12 @@ class Trainer(object):
         else:
             raise ValueError(f"Unknown optimizer name {optim_name}")
 
-    def _reinforcement_loss_fn(self, config_list):
+    def _reinforcement_loss_fn(self, config_list, clip_local_energy=0.0):
 
-        energy_list = []  # list of numbers
-        log_psi_list = [] # list of torch tensors 
+        energy_list = np.zeros(self.num_samples)     # list of numbers
+        log_psi_list = torch.zeros(self.num_samples, dtype=default_dtype_torch) # list of torch tensors 
 
-        for config in config_list:
+        for ii, config in enumerate(config_list):
 
             # density estimation
             t1 = time()
@@ -172,22 +174,29 @@ class Trainer(object):
                 t2 = time()
                 self.VMCmodel.t_locE += (t2-t1)
 
-            energy_list.append(eloc)
-            log_psi_list.append(log_psi)
+            energy_list[ii] = eloc
+            log_psi_list[ii] = log_psi
 
         av_local_energy = np.mean(energy_list)
 
+        # clipping of local energy affects the gradient, but not the mean of the local energy 
+        if clip_local_energy > 0.0:
+            tv = np.mean(np.abs(energy_list[:] - av_local_energy)) # "variance" w.r.t. l1-norm, which is more robust to outliers than l2-norm
+            energy_torch = torch.tensor(energy_list, dtype=default_dtype_torch)
+            diff = torch.clip(energy_torch, 
+                              av_local_energy - clip_local_energy * tv, 
+                              av_local_energy + clip_local_energy * tv) - av_local_energy
+        else:
+            energy_torch = torch.tensor(energy_list, dtype=default_dtype_torch)
+            diff = energy_torch[:] - av_local_energy
+
         # loss from reinforcement learning 
-        loss = torch.tensor([0.0])
-        for i in range(self.num_samples):
-            loss += log_psi_list[i] * (energy_list[i] - av_local_energy)
-        loss /= self.num_samples 
+        loss = torch.dot(log_psi_list, diff) / self.num_samples 
+        assert loss.requires_grad 
 
         # viz_graph = make_dot(torch.sum(loss))
         # viz_graph.view()
         # loss = torch.sum(torch.tensor([log_psi_list[i] * (energy_list[i] - av_local_energy) for i in range(self.num_samples)], requires_grad=True))
-
-        assert loss.requires_grad 
 
         # store current av. energy and error 
         (ene, std_ene) = binning_statistics(energy_list, num_bin=self.num_bin)
@@ -212,12 +221,12 @@ class Trainer(object):
             self.VMCmodel.t_sampling += (t2-t1)
 
         self.optimizer.zero_grad()
-        loss = self._reinforcement_loss_fn(config_list)
+        loss = self._reinforcement_loss_fn(config_list, self.clip_local_energy)
 
         t1 = time()
         loss.backward()
         self.optimizer.step()
         t2 = time()
-        self.VMCmodel.t_backward += (t2-t1)
+        self.VMCmodel.t_grads += (t2-t1)
 
         return self.energy, self.precision
