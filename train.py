@@ -144,12 +144,13 @@ class Trainer(object):
         self.energy = None  # average energy in the current epoch 
         self.precision = None # variance of energy in the current epoch 
 
+        # we put here some reasonable default parameters (in the future they should be set by a config dictionary)
         if optim_name in ["SGD"]:
-            self.optimizer = torch.optim.SGD(self.VMCmodel.ansatz.parameters(), lr=learning_rate)
+            self.optimizer = torch.optim.SGD(self.VMCmodel.ansatz.parameters(), lr=0.005)
         elif optim_name in ["Adam"]:
-            self.optimizer = torch.optim.Adam(self.VMCmodel.ansatz.parameters(), lr=0.05, betas=(0.9, 0.999), eps=1e-08)
+            self.optimizer = torch.optim.Adam(self.VMCmodel.ansatz.parameters(), lr=0.005, betas=(0.9, 0.999), eps=1e-08)
         elif optim_name in ["RMSprop"]:
-            self.optimizer = torch.optim.RMSprop(self.VMCmodel.ansatz.parameters(), lr=0.01, alpha=0.99, eps=1e-08) 
+            self.optimizer = torch.optim.RMSprop(self.VMCmodel.ansatz.parameters(), lr=0.005, alpha=0.99, eps=1e-08) 
         else:
             raise ValueError(f"Unknown optimizer name {optim_name}")
 

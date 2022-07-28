@@ -148,7 +148,7 @@ if optimizer_name in ['SR']:
 elif optimizer_name in ['mySGD']:
     SR = Identity_Preconditioner() # dummy class, just passes unmodified gradients through 
 elif optimizer_name in ['SGD', 'Adam', 'RMSprop']:
-    my_trainer = Trainer(VMCmodel_, lr, optimizer_name, num_samples, num_bin, clip_local_energy=5.0, use_cuda=False)
+    my_trainer = Trainer(VMCmodel_, lr, optimizer_name, num_samples, num_bin, clip_local_energy=3.0, use_cuda=False)
 
 
 E_exact = -3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832 # -2.9774135797163597 #-3.3478904193465335
@@ -204,7 +204,7 @@ corr_ = np.zeros(Nsites)
 corr_2D_ = np.zeros((phys_system.nx, phys_system.ny))
 
 
- # ====================================================================================
+# ====================================================================================
 print("Now sample from the converged ansatz")
 ###### setting up user-defined symmetry transformations for 2d lattice ######
 s = np.arange(Nsites) # sites [0,1,2,....]
