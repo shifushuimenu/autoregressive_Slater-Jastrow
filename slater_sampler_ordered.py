@@ -385,7 +385,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         assert row_idx.shape[-1] == self.P_ortho.shape[-1]
         # select 2 (3,4,...) rows from a matrix with 2 (3,4,...) columns 
         # submat = np.take(self.P, row_idx, axis=-2) # broadcast over leading dimensions of row_idx
-        submat = self.P_ortho[row_idx[0], :] # row_idx[0] -> NO BATCH DIMENSION
+        submat = self.P_ortho[..., row_idx, :] # row_idx[0] -> UNDO BATCH DIMENSION, but the determinant is correct even with a first batch dimension
         psi_amplitude = torch.det(submat)
         return psi_amplitude 
 
