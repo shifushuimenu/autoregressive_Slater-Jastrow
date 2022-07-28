@@ -257,7 +257,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                    self.Schur_complement = DD - torch.tensor([0.0])
                 else:
                    self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)
+                   #print("dimensions: CC.size()=", CC.size()[0], "Xinv.size()=", self.Xinv.size()[0], "self.BB.size()=", self.BB.size()[0], "Schur=", self.Schur_complement.size()[0])
                 self.Schur_complement_reuse.append(self.Schur_complement)
+                # for small matrix sizes (1,2,3), the determinant should be "hand-coded" for speed-up
                 probs[i_k] = (-1) * torch.det(self.Schur_complement)
 
         if not self.naive_update:
@@ -369,6 +371,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
             Example:  4 sites, 2 particles
             --------
             Illustrating how the batch dimension is silently taken care of by numpy / torch.
+            NOT VALID ANYMORE 
             >>> P = np.array([[0.2, 0.5],[0.25, 0.3],[0.25, 0.2], [0.3, 0.0]])
             >>> row_idx = np.array([[0,1],[2,3]]) # first dimension is batch dimension 
             >>> P[row_idx] # output should be a batch of 2x2 matrices
@@ -382,7 +385,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         assert row_idx.shape[-1] == self.P_ortho.shape[-1]
         # select 2 (3,4,...) rows from a matrix with 2 (3,4,...) columns 
         # submat = np.take(self.P, row_idx, axis=-2) # broadcast over leading dimensions of row_idx
-        submat = self.P_ortho[..., row_idx, :]
+        submat = self.P_ortho[row_idx[0], :] # row_idx[0] -> NO BATCH DIMENSION
         psi_amplitude = torch.det(submat)
         return psi_amplitude 
 
