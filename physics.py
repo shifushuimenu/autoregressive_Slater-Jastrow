@@ -127,6 +127,168 @@ def kinetic_matrix_elem( I, lattice ):
     return (torch.as_tensor(I_prime, device=default_torch_device), torch.as_tensor(matrix_elem, device=default_torch_device))
                
 
+#@profile        
+def kinetic_term( I, lattice, t_hop=1.0 ):
+    """
+        Parameters:
+        -----------
+            I: Bitcoded integer representing occupation numbers 
+               of spinless fermions. First dimension is batch dimension.
+            lattice: Lattice object 
+                Provides nearest neighbour matrix which defines the possible 
+                hopping terms. 
+            t_hop: hopping parameter in 
+                 -t_hop \sum_{(i,j) \in bonds} (c_i^{\dagger} c_j + h.c.)
+            
+        Returns:
+        --------
+            hop_from_to: list of pairs [(i1_initial, i1_final), (i2_initial, i2_final), ...]
+                where state I1_prime is obtained from I[0] by a particle hopping from i1_initial to i1_final, 
+                state I2_prime is obtained from I[0] by hopping from i2_initial to i2_final etc. 
+            I_prime: list of ints of length `max_num_connect`
+                List of states connected to I by the application of the kinetic operator K_kin.
+                `max_num_connect` is the number of distinct hopping terms in the kinetic
+                operator. If a given hopping term annihilates state |I>, the "connecting state" is still recorded, 
+                however with matrix element zero. This is to ensure that, given a batch of samples, 
+                I_prime has the same shape for every sample, although different occupation number 
+                states are connected to a different number of other states by action of the hopping operator.
+                            
+            matrix_elem: list of floats             
+                <I| K_kin |I_prime> for all possible I_prime given the lattice structure. 
+
+        Example:
+        --------
+    """
+    I = np.array(I, dtype='object') 
+    neigh = lattice.neigh
+    ns = lattice.ns
+    coord = lattice.coord 
+    max_num_connect = ns*(coord//2)
+    
+    I_prime = np.empty(I.shape + (max_num_connect,), dtype='object')
+    matrix_elem = np.empty_like(I_prime)
+    hop_from_to = []
+    count = -1
+    for d in range((coord//2)): ####### Replace this error-prone hack by a sum over hopping-bonds. 
+        for i in range(ns):     #######
+            M = np.zeros_like(I, dtype='object')
+            count += 1 
+            j = neigh[i, d]
+            M[...] = pow(2, i) + pow(2, j)
+            K = np.bitwise_and(M, I)
+            L = np.bitwise_xor(K, M)
+            STATE_EXISTS = ((K != 0) & (L != 0) & (L != K))
+            I_prime[..., count] = np.where(STATE_EXISTS, I - K + L, False)
+            ii = min(i,j)
+            jj = max(i,j)
+            matrix_elem[..., count] = -t_hop * np.where(STATE_EXISTS, fermion_parity(ns, I, ii, jj), 0)
+            # hop_from_to.append((i,j))
+
+            # CAREFUL: hop_from_to is only correct if the input is not batched.
+            if np.bitwise_and(I, 2**i) == 2**i and np.bitwise_xor(I, I+2**j) == 2**j:
+                r = i; s = j
+            elif np.bitwise_and(I, 2**j) == 2**j and np.bitwise_xor(I, I+2**i) == 2**i:
+                r = j; s = i 
+            else:
+                r = -1; s = -1
+            hop_from_to.append((r,s))
+
+    # Set states in `I_prime` which were annihilated by the hopping operator to a valid value (i.e.
+    # in the correct particle number sector) so that downstream subroutines don't crash. 
+    # This does not introduce errors, since the corresponding matrix elements are zero anyways
+    # so that their multiplicative contribution is zero. 
+    config = int2bin(I, ns=ns)
+    num_particles = np.count_nonzero(config[0])    
+    I_prime[I_prime == 0] = 2**num_particles - 1
+
+    return ( hop_from_to, I_prime, matrix_elem )
+
+
+#@profile
+def kinetic_term2( I, lattice, t_hop=1.0 ):
+    """
+        NO BATCH DIMENSION. 
+
+        Parameters:
+        -----------
+            I: Bitcoded integer representing occupation numbers 
+               of spinless fermions.
+            lattice: Lattice object 
+                Provides nearest neighbour matrix which defines the possible 
+                hopping terms. 
+            t_hop: ( optional )
+                hopping parameter 
+            
+        Returns:
+        --------
+            hop_from_to: list of pairs [(i1_initial, i1_final), (i2_initial, i2_final), ...]
+                where state I1_prime is obtained from I by a particle hopping from i1_initial to i1_final, 
+                state I2_prime is obtained from I by hopping from i2_initial to i2_final etc. 
+            I_prime: list of ints of length `max_num_connect`
+                List of states connected to I by the application of the kinetic operator K_kin.
+                `max_num_connect` is the number of distinct hopping terms in the kinetic
+                operator. If a given hopping term annihilates state |I>, the "connecting state" is still recorded, 
+                however with matrix element zero. This is to ensure that, given a batch of samples, 
+                            
+            matrix_elem: list of floats             
+                <I| K_kin |I_prime> for all possible I_prime given the lattice structure. 
+
+        Example:
+        --------
+    """
+    #I = np.asarray(I, dtype='object')
+    assert type(I) == int 
+    neigh = lattice.neigh
+    ns = lattice.ns
+    coord = lattice.coord
+
+    # preallocate
+    max_num_connect = ns*(coord//2)  # for cubic lattice   
+    I_prime = np.empty((max_num_connect,), dtype='object')
+    matrix_elem = np.empty_like(I_prime)
+    rs_pos = [] # particle hopping from position r to position s
+
+    count = 0
+    for d in range((coord//2)): ####### Replace this error-prone hack by a sum over hopping-bonds. 
+        for i in range(ns):     #######
+            j = neigh[i, d]
+            pow2i = 1 << i; pow2j = 1 << j # 2**i and 2**j
+            M = pow2i + pow2j
+            K = M & I # bitwise AND
+            L = K ^ M # bitwise XOR
+            STATE_EXISTS = ((K != 0) & (L != 0) & (L != K))
+            if STATE_EXISTS:
+                I_prime[count] = I - K + L
+                ii = min(i,j)
+                jj = max(i,j)
+                matrix_elem[count] = -t_hop * fermion_parity2(ns, I, ii, jj)
+
+                if I & pow2i == pow2i and I ^ I+pow2j == pow2j:
+                    r = i; s = j
+                elif I & pow2j == pow2j and I ^ I+pow2i == pow2i:
+                    r = j; s = i 
+                else:
+                    r = -1; s = -1
+                rs_pos.append((r,s))
+                count += 1
+
+    I_prime = I_prime[0:count]
+    matrix_elem = matrix_elem[0:count]
+
+    # make sure there are no duplicates in the hopping bonds (this happens for 2x2 lattice )
+    rs_pos_unique = []
+    idx_unique = []
+    for ii, item in enumerate(rs_pos):
+        if item not in rs_pos_unique:
+            rs_pos_unique.append(item)
+            idx_unique.append(ii)
+    rs_pos = rs_pos_unique 
+    I_prime = I_prime[idx_unique]
+    matrix_elem = matrix_elem[idx_unique]
+
+    return ( rs_pos, I_prime, matrix_elem )
+
+
 def interaction_energy( sample, V=+1.0 ):
     ####### Works only for 1D.
     sample = torch.as_tensor(sample)
