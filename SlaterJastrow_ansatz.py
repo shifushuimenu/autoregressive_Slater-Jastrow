@@ -18,6 +18,11 @@ from slater_sampler_ordered import SlaterDetSampler_ordered
 from one_hot import occ_numbers_unfold, occ_numbers_collapse
 from bitcoding import int2bin, bin2pos
 from utils import default_dtype_torch
+        
+# imports needed in lowrank_kinetic()
+from k_copy import sort_onehop_states 
+from test_suite import ratio_Slater, local_OBDM
+from physics import kinetic_term2
 
 import sys
 from time import time 
@@ -362,10 +367,6 @@ class SlaterJastrow_ansatz(selfMADE):
                                                 sqrt(| < a | \psi > |^2)
 
         """
-        # Later move imports to the top of the file 
-        from k_copy import sort_onehop_states 
-        from test_suite import ratio_Slater, local_OBDM
-        from Slater_Jastrow_simple import kinetic_term2
 
         def _log_cutoff(x):
             """
