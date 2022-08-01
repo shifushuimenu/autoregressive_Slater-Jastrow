@@ -2,7 +2,7 @@
 
 import numpy as np
 from bitcoding import *
-from Slater_Jastrow_simple import ( kinetic_term2, 
+from physics import ( kinetic_term2, 
     Lattice1d, Lattice_rectangular )
 from scipy.special import binom 
 

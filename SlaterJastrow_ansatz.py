@@ -135,10 +135,10 @@ class SlaterJastrow_ansatz(selfMADE):
                 ##t2 = time()
                 ##t_net += (t2-t1)
 
-                ##t1 = time()
+                #t1 = time()
                 cond_prob_fermi = self.slater_sampler.get_cond_prob(k=i)
-                ##t2 = time()
-                ##t_SD += (t2-t1)
+                #t2 = time()
+                #t_SD += (t2-t1)
 
                 # Make sure that an ordering of the particles is enforced.
                 # The position of particle i, k_i, is always to the left of k_{i+1},
@@ -238,7 +238,10 @@ class SlaterJastrow_ansatz(selfMADE):
         # which needs to be updated 
         t1 = time()
         for k in range(0, self.num_components): 
-            x_hat_F[..., k*self.D:(k+1)*self.D] = self.slater_sampler.get_cond_prob(k)
+            #t11 = time()
+            x_hat_F[..., k*self.D:(k+1)*self.D] = self.slater_sampler.get_cond_prob(k=k)
+            #t22 = time()
+            #print("get cond prob k-th", k, "elapsed=", t22-t11)
             self.slater_sampler.update_state(pos[k].item())
         x_hat = x_hat_B * x_hat_F
         x_hat[..., 0:self.D] = x_hat_F[..., 0:self.D]  # The Jastrow factor does not affect the first component, which is unconditional. 

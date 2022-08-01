@@ -127,40 +127,6 @@ class PhysicalSystem(object):
         return acc, abspsi
 
         
-class Lattice1d(object):
-    """1d lattice with pbc"""
-    def __init__(self, ns=4):
-        self.ns = ns 
-        self.nx = ns
-        self.ny = 1
-        self.coord = 2 
-        self.neigh = np.zeros((self.ns, self.coord), dtype='object')
-        # left neighbours 
-        self.neigh[0, 0] = self.ns-1
-        self.neigh[1:, 0] = range(0, self.ns-1)
-        # right neighbours 
-        self.neigh[:-1,1] = range(1, self.ns)
-        self.neigh[ns-1, 1] = 0
-
-
-class Lattice_rectangular(object):
-    def __init__(self, nx=4, ny=4):
-        self.nx = nx 
-        self.ny = ny 
-        self.ns = self.nx * self.ny
-        self.coord = 4
-
-        rectl = np.arange(self.ns).reshape(self.nx, self.ny) 
-        up    = np.roll(rectl, 1, axis=0).flatten()
-        right = np.roll(rectl, -1, axis=1).flatten()
-        down  = np.roll(rectl, -1, axis=0).flatten()
-        left  = np.roll(rectl, 1, axis=1).flatten()        
-
-        self.neigh = np.vstack((up, right, down, left)).transpose().astype('object') # idxs: sitenr, direction (up=0, right=1, down=2, left=3)        
-###############################
-
-
-
 class VMCKernel(object):
     '''
     variational Monte Carlo kernel.

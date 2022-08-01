@@ -13,7 +13,8 @@ from test_suite import ( prepare_test_system_zeroT,
                          HartreeFock_tVmodel )
 from bitcoding import *
 from one_hot import *
-from Slater_Jastrow_simple import kinetic_term, kinetic_term2, Lattice1d, Lattice_rectangular, PhysicalSystem
+from Slater_Jastrow_simple import PhysicalSystem
+from physics import kinetic_term, kinetic_term2, Lattice1d, Lattice_rectangular
 from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 from k_copy import *
 from lowrank_update import *
