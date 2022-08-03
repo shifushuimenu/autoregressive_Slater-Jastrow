@@ -57,6 +57,7 @@ parser.add_argument('--optimizer', choices=['mySGD', 'SGD', 'SR', 'Adam', 'RMSpr
 parser.add_argument('--optimize_orbitals', type=bool, default=False, help="co-optimize orbitals of Slater determinant (default=False)")
 parser.add_argument('--lr', type=float, default=0.2, help="learning rate for SGD and SR (default=0.2); Adam and RMSprop have different learning rates.")
 parser.add_argument('--lr_SD', type=float, default=0.02, help="separate learning rate for parameters of the Slater determinant (default=0.02)")
+parser.add_argument('--monitor_convergence', type=bool, default=False, help="store model parameters on disk at every optimization step (default=False)")
 args = parser.parse_args()
 
 Lx = args.Lx # 5  # 15
@@ -71,6 +72,7 @@ optimizer_name = args.optimizer
 optimize_orbitals = args.optimize_orbitals  # whether to include columns of P-matrix in optimization
 lr = args.lr
 lr_SD = args.lr_SD
+monitor_convergence = args.monitor_convergence 
 
 Nsites = Lx*Ly  # 15  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
@@ -169,7 +171,7 @@ for i in range(num_epochs):
     _checkpoint(VMCmodel_)
     t0_tmp = time()
 
-    if False:
+    if monitor_convergence:
         # save model parameters in order to monitor convergence 
         with open("convergence_params_SD_"+paramstr+".dat", "a") as fh:
             for name, param in VMCmodel_.ansatz.named_parameters():

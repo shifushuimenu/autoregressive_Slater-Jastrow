@@ -149,7 +149,9 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=10
                 print("converged:")
                 print("counter=", counter)
                 print("OBDM_new=", OBDM_new)
-                print("g.s. energy= %f" % (np.sum(eigvals[0:num_particles])), file=outfile)
+                print("many-body HF g.s. energy= %f" % (np.sum(eigvals[0:num_particles])), file=outfile)
+                fmt_string = "single-particle spectrum = \n" + "%f \n"*ns
+                print(fmt_string % (tuple(eigvals)), file=outfile) 
         else:
             OBDM = OBDM_new
     # END: Hartree-Fock 
