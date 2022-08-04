@@ -57,6 +57,7 @@ parser.add_argument('--optimizer', choices=['mySGD', 'SGD', 'SR', 'Adam', 'RMSpr
 parser.add_argument('--optimize_orbitals', type=bool, default=False, help="co-optimize orbitals of Slater determinant (default=False)")
 parser.add_argument('--lr', type=float, default=0.2, help="learning rate for SGD and SR (default=0.2); Adam and RMSprop have different learning rates.")
 parser.add_argument('--lr_SD', type=float, default=0.02, help="separate learning rate for parameters of the Slater determinant (default=0.02)")
+parser.add_argument('--lr_schedule', type=bool, default=False, help="use learning rate scheduler")
 parser.add_argument('--monitor_convergence', type=bool, default=False, help="store model parameters on disk at every optimization step (default=False)")
 args = parser.parse_args()
 
@@ -72,6 +73,7 @@ optimizer_name = args.optimizer
 optimize_orbitals = args.optimize_orbitals  # whether to include columns of P-matrix in optimization
 lr = args.lr
 lr_SD = args.lr_SD
+lr_schedule = args.lr_schedule
 monitor_convergence = args.monitor_convergence 
 
 Nsites = Lx*Ly  # 15  # Nsites = 64 => program killed because it is using too much memory
@@ -150,7 +152,7 @@ if optimizer_name in ['SR']:
 elif optimizer_name in ['mySGD']:
     SR = Identity_Preconditioner() # dummy class, just passes unmodified gradients through 
 elif optimizer_name in ['SGD', 'Adam', 'RMSprop']:
-    my_trainer = Trainer(VMCmodel_, lr, optimizer_name, num_samples, num_bin, clip_local_energy=3.0, use_cuda=False)
+    my_trainer = Trainer(VMCmodel_, lr, lr_schedule, optimizer_name, num_samples, num_bin, clip_local_energy=3.0, use_cuda=False)
 
 
 E_exact = -3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832 # -2.9774135797163597 #-3.3478904193465335

@@ -131,7 +131,7 @@ def vmc_measure(local_measure, sample_list, log_probs, precond, num_bin=50):
 
 class Trainer(object):
     """Employ standard optimizers by taking the gradient of the reinforcement loss function"""
-    def __init__(self, VMCmodel, learning_rate, optim_name, num_samples=100, num_bin=50, clip_local_energy=0.0, use_cuda=False):
+    def __init__(self, VMCmodel, learning_rate, lr_schedule, optim_name, num_samples=100, num_bin=50, clip_local_energy=0.0, use_cuda=False):
 
         if use_cuda:
             VMCmodel.ansatz.cuda()
@@ -140,6 +140,9 @@ class Trainer(object):
         self.num_samples = num_samples # number of samples per training epoch
         self.num_bin = num_bin
         self.clip_local_energy = clip_local_energy
+        print("lr_schedule=", lr_schedule)
+        print("optim_name=", optim_name)
+        self.lr_schedule = lr_schedule 
 
         self.energy = None  # average energy in the current epoch 
         self.precision = None # variance of energy in the current epoch 
@@ -153,6 +156,16 @@ class Trainer(object):
             self.optimizer = torch.optim.RMSprop(self.VMCmodel.ansatz.parameters(), lr=0.005, alpha=0.99, eps=1e-08) 
         else:
             raise ValueError(f"Unknown optimizer name {optim_name}")
+
+        if self.lr_schedule:
+            # parameters taken from stat-mech-van, may not be optimal 
+            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                self.optimizer, factor=0.92, patience=100, threshold=1e-4, min_lr=1e-6)
+
+        if self.lr_schedule and not optim_name in ["SGD", "Adam", "RMSprop"]:
+            print("lr_schedule set to True, but scheduler works only with standard optimizers such as Adam, SGD, RMSprop.")
+            print("exiting...").
+            exit(1)
 
     def _reinforcement_loss_fn(self, config_list, clip_local_energy=0.0):
 
@@ -192,8 +205,8 @@ class Trainer(object):
             diff = energy_torch[:] - av_local_energy
 
         # loss from reinforcement learning 
-        loss = torch.dot(log_psi_list, diff) / self.num_samples 
-        assert loss.requires_grad 
+        loss_reinforce = torch.dot(log_psi_list, diff) / self.num_samples 
+        assert loss_reinforce.requires_grad 
 
         # viz_graph = make_dot(torch.sum(loss))
         # viz_graph.view()
@@ -204,7 +217,7 @@ class Trainer(object):
         self.energy = ene 
         self.precision = std_ene 
 
-        return loss 
+        return loss_reinforce, energy_torch 
 
 
     def train_standard_optimizer(self):
@@ -222,11 +235,14 @@ class Trainer(object):
             self.VMCmodel.t_sampling += (t2-t1)
 
         self.optimizer.zero_grad()
-        loss = self._reinforcement_loss_fn(config_list, self.clip_local_energy)
+        loss_reinforce, loss = self._reinforcement_loss_fn(config_list, self.clip_local_energy)
 
         t1 = time()
-        loss.backward()
+        loss_reinforce.backward()
         self.optimizer.step()
+        if self.lr_schedule:
+            print("calling scheduler")
+            self.scheduler.step(loss.mean())
         t2 = time()
         self.VMCmodel.t_grads += (t2-t1)
 
