@@ -160,11 +160,10 @@ class Trainer(object):
         if self.lr_schedule:
             # parameters taken from stat-mech-van, may not be optimal 
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                self.optimizer, factor=0.92, patience=100, threshold=1e-4, min_lr=1e-6)
-
+                self.optimizer, factor=0.92, patience=100, threshold=1e-4, min_lr=1e-6, verbose=True)
         if self.lr_schedule and not optim_name in ["SGD", "Adam", "RMSprop"]:
             print("lr_schedule set to True, but scheduler works only with standard optimizers such as Adam, SGD, RMSprop.")
-            print("exiting...").
+            print("exiting...")
             exit(1)
 
     def _reinforcement_loss_fn(self, config_list, clip_local_energy=0.0):
@@ -241,7 +240,6 @@ class Trainer(object):
         loss_reinforce.backward()
         self.optimizer.step()
         if self.lr_schedule:
-            print("calling scheduler")
             self.scheduler.step(loss.mean())
         t2 = time()
         self.VMCmodel.t_grads += (t2-t1)

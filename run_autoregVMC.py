@@ -37,29 +37,36 @@ else:
 torch.set_default_dtype(default_dtype_torch)
 torch.autograd.set_detect_anomaly(True)
 
-use_cuda = False
-# set random number seed
-seed = 44 + MPI_rank
-torch.manual_seed(seed) 
-if use_cuda: torch.cuda.manual_seed_all(seed)
-np.random.seed(seed)
 
 desc_str="VMC with autoregressive Slater-Jastrow ansatz for t-V model of spinless fermions"
 parser = argparse.ArgumentParser(description=desc_str)
-parser.add_argument('Lx', type=int, help='width of square lattice')
-parser.add_argument('Ly', type=int, help='height of square lattice')
-parser.add_argument('Np', metavar='N', type=int, help='number of particles')
-parser.add_argument('Vint', metavar='V/t', type=float, help='nearest-neighbour interaction (V/t > 0 is repulsive)')
-parser.add_argument('num_epochs', metavar='max_epochs', type=int, help="number of training epochs")
-parser.add_argument('num_samples', type=int, help="number of samples per epoch")
-parser.add_argument('num_meas_samples', type=int, help="number of samples in measurement phase")
-parser.add_argument('--optimizer', choices=['mySGD', 'SGD', 'SR', 'Adam', 'RMSprop'], default='SR')
-parser.add_argument('--optimize_orbitals', type=bool, default=False, help="co-optimize orbitals of Slater determinant (default=False)")
-parser.add_argument('--lr', type=float, default=0.2, help="learning rate for SGD and SR (default=0.2); Adam and RMSprop have different learning rates.")
-parser.add_argument('--lr_SD', type=float, default=0.02, help="separate learning rate for parameters of the Slater determinant (default=0.02)")
-parser.add_argument('--lr_schedule', type=bool, default=False, help="use learning rate scheduler")
-parser.add_argument('--monitor_convergence', type=bool, default=False, help="store model parameters on disk at every optimization step (default=False)")
+group = parser.add_argument_group('physics parameters')
+group.add_argument('Lx', type=int, help='width of square lattice')
+group.add_argument('Ly', type=int, help='height of square lattice')
+group.add_argument('Np', metavar='N', type=int, help='number of particles')
+group.add_argument('Vint', metavar='V/t', type=float, help='nearest-neighbour interaction (V/t > 0 is repulsive)')
+group = parser.add_argument_group('training parameters')
+group.add_argument('num_epochs', metavar='max_epochs', type=int, help="number of training epochs")
+group.add_argument('num_samples', type=int, help="number of samples per epoch")
+group.add_argument('num_meas_samples', type=int, help="number of samples in measurement phase")
+group = parser.add_argument_group('optimizer parameters')
+group.add_argument('--seed', type=int, default=0, help="random seed, 0 for randomization")
+group.add_argument('--optimizer', choices=['mySGD', 'SGD', 'SR', 'Adam', 'RMSprop'], default='SR')
+group.add_argument('--optimize_orbitals', type=bool, default=False, help="co-optimize orbitals of Slater determinant (default=False)")
+group.add_argument('--lr', type=float, default=0.2, help="learning rate for SGD and SR (default=0.2); Adam and RMSprop have different learning rates.")
+group.add_argument('--lr_SD', type=float, default=0.02, help="separate learning rate for parameters of the Slater determinant (default=0.02)")
+group.add_argument('--lr_schedule', type=bool, default=False, help="use learning rate scheduler")
+group.add_argument('--monitor_convergence', type=bool, default=False, help="store model parameters on disk at every optimization step (default=False)")
 args = parser.parse_args()
+
+
+use_cuda = False
+# set random number seed
+if not args.seed or args.seed == 0:
+    args.seed = np.random.randint(1, 10**8) + MPI_rank
+    torch.manual_seed(args.seed) 
+    np.random.seed(args.seed)
+    if use_cuda: torch.cuda.manual_seed_all(args.seed)
 
 Lx = args.Lx # 5  # 15
 Ly = args.Ly # 5
