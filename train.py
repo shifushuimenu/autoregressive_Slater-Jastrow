@@ -160,7 +160,7 @@ class Trainer(object):
         if self.lr_schedule:
             # parameters taken from stat-mech-van, may not be optimal 
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                self.optimizer, factor=0.92, patience=100, threshold=1e-4, min_lr=1e-6, verbose=True)
+                self.optimizer, factor=0.6, patience=100, threshold=1e-4, min_lr=1e-6, verbose=True)
         if self.lr_schedule and not optim_name in ["SGD", "Adam", "RMSprop"]:
             print("lr_schedule set to True, but scheduler works only with standard optimizers such as Adam, SGD, RMSprop.")
             print("exiting...")

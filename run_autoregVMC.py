@@ -153,7 +153,7 @@ del SJA
 
 if optimizer_name in ['SR']:
     t1 = time()
-    SR = SR_Preconditioner(num_params=sum([np.prod(p.size()) for p in VMCmodel_.ansatz.parameters()]), num_samples=num_samples, diag_shift=0.001)
+    SR = SR_Preconditioner(num_params=sum([np.prod(p.size()) for p in VMCmodel_.ansatz.parameters()]), num_samples=num_samples, eps1=0.001, eps2=1e-6)
     t2 = time()
     VMCmodel_.t_SR += (t2-t1)
 elif optimizer_name in ['mySGD']:

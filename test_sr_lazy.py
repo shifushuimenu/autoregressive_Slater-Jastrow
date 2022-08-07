@@ -12,7 +12,7 @@ class TestSR(unittest.TestCase):
         O_ks = np.random.randn(npara, ns)
         for ii in range(ns):
             SR.accumulate(O_ks[:, ii])
-        SR.center()
+        SR._center()
 
         b = np.random.randn(npara)
  
