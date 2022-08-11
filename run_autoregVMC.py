@@ -146,7 +146,7 @@ Sdet_sampler = SlaterDetSampler_ordered(
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, 
         num_components=Nparticles, 
         D=Nsites, 
-        net_depth=2, 
+        net_depth=args.net_depth, 
         deactivate_Jastrow=deactivate_Jastrow
         )
 
