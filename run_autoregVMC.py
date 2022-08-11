@@ -45,14 +45,16 @@ group.add_argument('Lx', type=int, help='width of square lattice')
 group.add_argument('Ly', type=int, help='height of square lattice')
 group.add_argument('Np', metavar='N', type=int, help='number of particles')
 group.add_argument('Vint', metavar='V/t', type=float, help='nearest-neighbour interaction (V/t > 0 is repulsive)')
+group = parser.add_argument_group('network parameters')
+group.add_argument('--net_depth', type=int, default=2, help="number of layers in the Jastrow network (default: at least two autoregressive layers)")
+group.add_argument('--optimize_orbitals', type=bool, default=False, help="co-optimize orbitals of Slater determinant (default=False)")
 group = parser.add_argument_group('training parameters')
-group.add_argument('num_epochs', metavar='max_epochs', type=int, help="number of training epochs")
-group.add_argument('num_samples', type=int, help="number of samples per epoch")
+group.add_argument('num_epochs', metavar='max_epochs', type=int, help="number of training iterations")
+group.add_argument('num_samples', type=int, help="number of samples per iteration")
 group.add_argument('num_meas_samples', type=int, help="number of samples in measurement phase")
 group = parser.add_argument_group('optimizer parameters')
 group.add_argument('--seed', type=int, default=0, help="random seed, 0 for randomization")
 group.add_argument('--optimizer', choices=['mySGD', 'SGD', 'SR', 'Adam', 'RMSprop'], default='SR')
-group.add_argument('--optimize_orbitals', type=bool, default=False, help="co-optimize orbitals of Slater determinant (default=False)")
 group.add_argument('--lr', type=float, default=0.2, help="learning rate for SGD and SR (default=0.2); Adam and RMSprop have different learning rates.")
 group.add_argument('--lr_SD', type=float, default=0.02, help="separate learning rate for parameters of the Slater determinant (default=0.02)")
 group.add_argument('--lr_schedule', type=bool, default=False, help="use learning rate scheduler")
@@ -180,6 +182,8 @@ for i in range(num_epochs):
     _checkpoint(VMCmodel_)
     t0_tmp = time()
 
+    print("monitor_convergence=", monitor_convergence)
+    exit(1)
     if monitor_convergence:
         # save model parameters in order to monitor convergence 
         with open("convergence_params_SD_"+paramstr+".dat", "a") as fh:
