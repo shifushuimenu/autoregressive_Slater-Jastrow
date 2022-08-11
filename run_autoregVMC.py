@@ -183,7 +183,6 @@ for i in range(num_epochs):
     t0_tmp = time()
 
     print("monitor_convergence=", monitor_convergence)
-    exit(1)
     if monitor_convergence:
         # save model parameters in order to monitor convergence 
         with open("convergence_params_SD_"+paramstr+".dat", "a") as fh:
