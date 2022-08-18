@@ -55,5 +55,5 @@ class Identity_Preconditioner(SR_Preconditioner_base):
     def accumulate(self, O_k):
         pass 
 
-    def apply_Sinv(self, g, tol=1e-8):
+    def apply_Sinv(self, g, tol=1e-5):
         return g

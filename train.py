@@ -68,7 +68,7 @@ def train_SR(VMCmodel, learning_rate, learning_rate_SD, precond, num_samples=100
     # stochastic reconfiguration: 
     # g = S^{-1} * g        
     t1 = time()
-    g_list = precond.apply_Sinv(g_list, tol=1e-8)
+    g_list = precond.apply_Sinv(g_list, tol=1e-5)
     t2 = time()
     VMCmodel.t_SR += (t2-t1)
 
@@ -158,7 +158,6 @@ class Trainer(object):
             raise ValueError(f"Unknown optimizer name {optim_name}")
 
         if self.lr_schedule:
-            # parameters taken from stat-mech-van, may not be optimal 
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
                 self.optimizer, factor=0.6, patience=100, threshold=1e-4, min_lr=1e-6, verbose=True)
         if self.lr_schedule and not optim_name in ["SGD", "Adam", "RMSprop"]:
