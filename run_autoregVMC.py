@@ -57,7 +57,7 @@ group.add_argument('--seed', type=int, default=0, help="random seed, 0 for rando
 group.add_argument('--optimizer', choices=['mySGD', 'SGD', 'SR', 'Adam', 'RMSprop'], default='SR')
 group.add_argument('--lr', type=float, default=0.2, help="learning rate for SGD and SR (default=0.2); Adam and RMSprop have different learning rates.")
 group.add_argument('--lr_SD', type=float, default=0.02, help="separate learning rate for parameters of the Slater determinant (default=0.02)")
-group.add_argument('--lr_schedule', type=bool, default=False, help="use learning rate scheduler")
+group.add_argument('--lr_schedule', choices=['ReduceLROnPlateau'], default=None, help="use learning rate scheduler")
 group.add_argument('--monitor_convergence', type=bool, default=False, help="store model parameters on disk at every optimization step (default=False)")
 args = parser.parse_args()
 
@@ -83,6 +83,7 @@ optimize_orbitals = args.optimize_orbitals  # whether to include columns of P-ma
 lr = args.lr
 lr_SD = args.lr_SD
 lr_schedule = args.lr_schedule
+print("args.lr_schedule=", args.lr_schedule)
 monitor_convergence = args.monitor_convergence 
 
 Nsites = Lx*Ly  # 15  # Nsites = 64 => program killed because it is using too much memory
@@ -169,12 +170,15 @@ E_exact = -3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832
 t0 = time()
 t0_tmp = t0
 
+# list of learning rates (for monitoring)
+lrs = []
+
 for i in range(num_epochs):
 
     if optimizer_name in ['mySGD', 'SR']:
         (energy, precision) = train_SR(VMCmodel_, learning_rate=lr, learning_rate_SD=lr_SD, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda, precond=SR)
     else:
-        (energy, precision) = my_trainer.train_standard_optimizer()
+        (energy, precision) = my_trainer.train_standard_optimizer(lrs)
 
     t1_tmp = time()
     print('Step %d, dE/|E| = %.4f, elapsed = %.4f' % (i, -(energy - E_exact)/E_exact, t1_tmp-t0_tmp))
@@ -197,6 +201,10 @@ for i in range(num_epochs):
                 if name in ['net.0.weight']:
                     arr = param.data.numpy().flatten()
                     fh.write( ("%16.10f " * arr.size + "\n") % (tuple(arr)) )
+
+# remove
+np.savetxt("lrs"+paramstr+".dat", np.array(lrs))
+# remove
 
 
 t1 = time()

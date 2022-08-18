@@ -68,7 +68,7 @@ def train_SR(VMCmodel, learning_rate, learning_rate_SD, precond, num_samples=100
     # stochastic reconfiguration: 
     # g = S^{-1} * g        
     t1 = time()
-    g_list = precond.apply_Sinv(g_list, tol=1e-5)
+    g_list = precond.apply_Sinv(g_list, tol=1e-4)
     t2 = time()
     VMCmodel.t_SR += (t2-t1)
 
@@ -140,8 +140,6 @@ class Trainer(object):
         self.num_samples = num_samples # number of samples per training epoch
         self.num_bin = num_bin
         self.clip_local_energy = clip_local_energy
-        print("lr_schedule=", lr_schedule)
-        print("optim_name=", optim_name)
         self.lr_schedule = lr_schedule 
 
         self.energy = None  # average energy in the current epoch 
@@ -157,9 +155,9 @@ class Trainer(object):
         else:
             raise ValueError(f"Unknown optimizer name {optim_name}")
 
-        if self.lr_schedule:
+        if self.lr_schedule in ["ReduceLROnPlateau"]:
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                self.optimizer, factor=0.6, patience=100, threshold=1e-4, min_lr=1e-6, verbose=True)
+                self.optimizer, factor=0.6, patience=200, threshold=1e-4, min_lr=1e-6, verbose=True)
         if self.lr_schedule and not optim_name in ["SGD", "Adam", "RMSprop"]:
             print("lr_schedule set to True, but scheduler works only with standard optimizers such as Adam, SGD, RMSprop.")
             print("exiting...")
@@ -218,7 +216,8 @@ class Trainer(object):
         return loss_reinforce, energy_torch 
 
 
-    def train_standard_optimizer(self):
+    def train_standard_optimizer(self, lrs):
+        """lrs: list of learning rates for each iteration step (for output)"""
 
         # generate a list of samples for this training epoch 
         config_list = np.zeros((self.num_samples, self.Ns)) 
@@ -238,8 +237,9 @@ class Trainer(object):
         t1 = time()
         loss_reinforce.backward()
         self.optimizer.step()
-        if self.lr_schedule:
+        if self.lr_schedule in ["ReduceLROnPlateau"]:
             self.scheduler.step(loss.mean())
+            lrs.append(self.optimizer.param_groups[0]["lr"])
         t2 = time()
         self.VMCmodel.t_grads += (t2-t1)
 
