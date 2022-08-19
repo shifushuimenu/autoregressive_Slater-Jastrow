@@ -56,7 +56,9 @@ SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Np, D=N_2
 VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
 del SJA
 #
-ckpt_outfile = 'state_Nx{}Ny{}Np{}V{}.pt'.format(Lx, Ly, Np, Vint)
+extension='_Adam'
+fmt_string='state_Lx{}Ly{}Np{}V{}'+extension+'.pt'
+ckpt_outfile = fmt_string.format(Lx, Ly, Np, Vint)
 #
 print("Now sample from the converged ansatz")
 state_checkpointed = torch.load(ckpt_outfile)
@@ -86,7 +88,7 @@ for ii in range(num_samples):
 #
     # local energy 
     ene, _ = VMCmodel_.local_measure([config], log_prob_sample)
-    print("ene=", ene)
+    print("sample nr.= ", ii, "ene=", ene)
     energy_list[ii] = ene
     energy_av += ene
     energy2_av += ene**2 

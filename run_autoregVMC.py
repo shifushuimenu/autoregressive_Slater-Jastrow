@@ -202,9 +202,9 @@ for i in range(num_epochs):
                     arr = param.data.numpy().flatten()
                     fh.write( ("%16.10f " * arr.size + "\n") % (tuple(arr)) )
 
-# remove
-np.savetxt("lrs"+paramstr+".dat", np.array(lrs))
-# remove
+    # remove
+    np.savetxt("lrs"+paramstr+".dat", np.array(lrs))
+    # remove
 
 
 t1 = time()
