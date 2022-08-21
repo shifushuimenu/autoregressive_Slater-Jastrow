@@ -57,7 +57,7 @@ group.add_argument('--seed', type=int, default=0, help="random seed, 0 for rando
 group.add_argument('--optimizer', choices=['mySGD', 'SGD', 'SR', 'Adam', 'RMSprop'], default='SR')
 group.add_argument('--lr', type=float, default=0.2, help="learning rate for SGD and SR (default=0.2); Adam and RMSprop have different learning rates.")
 group.add_argument('--lr_SD', type=float, default=0.02, help="separate learning rate for parameters of the Slater determinant (default=0.02)")
-group.add_argument('--lr_schedule', choices=['ReduceLROnPlateau'], default=None, help="use learning rate scheduler")
+group.add_argument('--lr_schedule', choices=['ReduceLROnPlateau', 'CyclicLR'], default=None, help="use learning rate scheduler")
 group.add_argument('--monitor_convergence', type=bool, default=False, help="store model parameters on disk at every optimization step (default=False)")
 args = parser.parse_args()
 

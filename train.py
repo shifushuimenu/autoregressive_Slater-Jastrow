@@ -158,6 +158,9 @@ class Trainer(object):
         if self.lr_schedule in ["ReduceLROnPlateau"]:
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
                 self.optimizer, factor=0.6, patience=200, threshold=1e-4, min_lr=1e-6, verbose=True)
+        elif self.lr_schedule in ["CyclicLR"]:
+            self.scheduler = torch.optim.lr_scheduler.CyclicLR(
+                self.optimizer, base_lr=learning_rate, max_lr=6*learning_rate, step_size_up=500, verbose=False, cycle_momentum=False)
         if self.lr_schedule and not optim_name in ["SGD", "Adam", "RMSprop"]:
             print("lr_schedule set to True, but scheduler works only with standard optimizers such as Adam, SGD, RMSprop.")
             print("exiting...")
@@ -237,9 +240,10 @@ class Trainer(object):
         t1 = time()
         loss_reinforce.backward()
         self.optimizer.step()
-        if self.lr_schedule in ["ReduceLROnPlateau"]:
-            self.scheduler.step(loss.mean())
-            lrs.append(self.optimizer.param_groups[0]["lr"])
+        if self.lr_schedule in ["ReduceLROnPlateau", "CyclicLR"]:
+            lrs.append(self.optimizer.state_dict()["param_groups"][0]["lr"])
+            #self.scheduler.step(loss.mean())
+            self.scheduler.step()
         t2 = time()
         self.VMCmodel.t_grads += (t2-t1)
 
