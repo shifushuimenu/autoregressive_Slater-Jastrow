@@ -160,7 +160,7 @@ class Trainer(object):
                 self.optimizer, factor=0.6, patience=200, threshold=1e-4, min_lr=1e-6, verbose=True)
         elif self.lr_schedule in ["CyclicLR"]:
             self.scheduler = torch.optim.lr_scheduler.CyclicLR(
-                self.optimizer, base_lr=learning_rate, max_lr=6*learning_rate, step_size_up=500, verbose=False, cycle_momentum=False)
+                self.optimizer, base_lr=0.005, max_lr=0.03, step_size_up=500, verbose=False, cycle_momentum=False)
         if self.lr_schedule and not optim_name in ["SGD", "Adam", "RMSprop"]:
             print("lr_schedule set to True, but scheduler works only with standard optimizers such as Adam, SGD, RMSprop.")
             print("exiting...")
