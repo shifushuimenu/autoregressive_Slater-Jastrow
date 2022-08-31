@@ -195,12 +195,12 @@ for i in range(num_epochs):
                     arr = param.data.numpy().flatten()
                     fh.write( ("%16.10f " * arr.size + "\n") % (tuple(arr)) )
 
-        # save model parameters in order to monitor convergence 
-        with open("convergence_params_Jastrow_net0"+paramstr+".dat", "a") as fh:
-            for name, param in VMCmodel_.ansatz.named_parameters():
-                if name in ['net.0.weight']:
-                    arr = param.data.numpy().flatten()
-                    fh.write( ("%16.10f " * arr.size + "\n") % (tuple(arr)) )
+        ## save model parameters in order to monitor convergence 
+        #with open("convergence_params_Jastrow_net0"+paramstr+".dat", "a") as fh:
+        #    for name, param in VMCmodel_.ansatz.named_parameters():
+        #        if name in ['net.0.weight']:
+        #            arr = param.data.numpy().flatten()
+        #            fh.write( ("%16.10f " * arr.size + "\n") % (tuple(arr)) )
 
     # remove
     np.savetxt("lrs"+paramstr+".dat", np.array(lrs))
@@ -218,6 +218,11 @@ with open("timings"+paramstr+".dat", "w") as fh:
     print("## t_locE=", VMCmodel_.t_locE, file=fh)
     print("## t_backward=", VMCmodel_.t_grads, file=fh)
     print("## t_stochastic_reconfiguration=", VMCmodel_.t_SR, file=fh)
+    print("## total time det Schur complement=", VMCmodel_.ansatz.slater_sampler.t_det_Schur_complement, file=fh)
+    print("## t_npix_=", VMCmodel_.ansatz.slater_sampler.t_npix_, file=fh)
+    print("## t_get_cond_prob=", VMCmodel_.ansatz.slater_sampler.t_get_cond_prob, file=fh)
+    print("## t_update_state=", VMCmodel_.ansatz.slater_sampler.t_update_state, file=fh)
+    print("## t_lowrank_linalg=",VMCmodel_.ansatz.slater_sampler.t_lowrank_linalg, file=fh)
 
 
 szsz_corr = np.zeros(Nsites)

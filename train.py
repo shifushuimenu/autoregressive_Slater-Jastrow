@@ -185,6 +185,7 @@ class Trainer(object):
                 t1 = time()
                 eloc = self.VMCmodel.energy_loc(np.array([config]), psi_loc.data, ansatz=self.VMCmodel.ansatz).item()
                 t2 = time()
+                print("eloc1=", t2-t1)
                 self.VMCmodel.t_locE += (t2-t1)
 
             energy_list[ii] = eloc
@@ -242,8 +243,10 @@ class Trainer(object):
         self.optimizer.step()
         if self.lr_schedule in ["ReduceLROnPlateau", "CyclicLR"]:
             lrs.append(self.optimizer.state_dict()["param_groups"][0]["lr"])
-            #self.scheduler.step(loss.mean())
-            self.scheduler.step()
+            if self.lr_schedule in ["ReduceLROnPlateau"]:
+                self.scheduler.step(loss.mean())
+            else:
+                self.scheduler.step()
         t2 = time()
         self.VMCmodel.t_grads += (t2-t1)
 

@@ -8,8 +8,9 @@
 #    Other exceptional cases should have a customized solution (using a lowrank update).
 #  - Make sure reference_state_2D.py is synchronized after the above corrections have been made. 
 #  - Raise an error ErrorFinitePrecision wherever this can occur ( also in lowrank update for n.n. hopping)
-#  - Document each and every type of lowrank update. 
+#  - Document each and every type of lowrank update (DONE)
 #  - In critical points scipy.linalg is used instead of np.linalg as the former supports float128. 
+#  - Replace np.isclose() by something faster.
 
 import torch
 import numpy as np
@@ -24,7 +25,7 @@ from monitoring_old import logger as mylogger
 import lowrank_update as LR
 from lowrank_update import ErrorFinitePrecision
 
-#from profilehooks import profile
+from profilehooks import profile
 import matplotlib.pyplot as plt 
 
 class SlaterDetSampler_ordered(torch.nn.Module):
@@ -56,6 +57,12 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.naive_update = naive_update
         # co-optimize also the columns of the Slater determinant
         self.optimize_orbitals = optimize_orbitals
+
+        self.t_det_Schur_complement = 0.0
+        self.t_npix_ = 0.0
+        self.t_get_cond_prob = 0.0
+        self.t_update_state = 0.0
+        self.t_lowrank_linalg = 0.0
 
         if single_particle_eigfunc is not None: 
            self.eigfunc = np.array(single_particle_eigfunc)
@@ -200,6 +207,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
              The support x \in [xmin, xmax-1] of the distribution changes with `k`.
         """
+        t_tot1=time()
         self.xmin = 0 if k==0 else self.occ_positions[k-1] + 1 
         self.xmax = self.D - self.N + k + 1
 
@@ -240,9 +248,12 @@ class SlaterDetSampler_ordered(torch.nn.Module):
             else: # use block determinant formula
                 Ksites_add = list(range(self.xmin, i_k+1))
                 occ_vec_add = torch.tensor([0] * (i_k - self.xmin) + [1])
+                t1 = time()
                 NN = torch.diag(occ_vec_add[:])
                 DD = self.G[np.ix_(Ksites_add, Ksites_add)] - NN
                 self.BB = self.G[np.ix_(self.Ksites, Ksites_add)]
+                t2 = time()
+                self.t_npix_ += (t2-t1)
                 if len(self.BB) == 0:
                    CC = self.BB
                 else:
@@ -260,7 +271,11 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                    #print("dimensions: CC.size()=", CC.size()[0], "Xinv.size()=", self.Xinv.size()[0], "self.BB.size()=", self.BB.size()[0], "Schur=", self.Schur_complement.size()[0])
                 self.Schur_complement_reuse.append(self.Schur_complement)
                 # for small matrix sizes (1,2,3), the determinant should be "hand-coded" for speed-up
+                t1 = time()
                 probs[i_k] = (-1) * torch.det(self.Schur_complement)
+                t2 = time()
+                self.t_det_Schur_complement += (t2-t1)
+                #print("Schur_complement.shape=", self.Schur_complement.shape, "det, elapsed=", t2-t1)
 
         if not self.naive_update:
             assert len(self.BB_reuse) == len(self.Schur_complement_reuse) == (mm+1) # IMPROVE: remove this as well as the variable mm
@@ -274,6 +289,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         probs = torch.where(abs(probs) > 1e-15, probs, torch.tensor([0.0]))
 
         assert not torch.any(torch.isnan(probs))
+        t_tot2=time()
+        self.t_get_cond_prob += (t_tot2 - t_tot1)
 
         return probs 
 
@@ -303,7 +320,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
     #@profile
     def update_state(self, pos_i):
-
+        t_tot1 = time()
         assert type(pos_i) == int 
         assert( 0 <= pos_i < self.D )
         k = self.state_index + 1
@@ -334,7 +351,12 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 Schur_complement_ = self.Schur_complement_reuse[mm]
 
                 XinvB = torch.matmul(self.Xinv, BB_) 
+                t1 = time()
                 Sinv = torch.linalg.inv(Schur_complement_)
+                t2 = time()
+                #remove
+                #print("Schur_complement_.shape=", Schur_complement_.shape, "linalg.inv, elapsed=", t2-t1)
+                #remove
                 Ablock = (self.Xinv + 
                     torch.matmul(torch.matmul(XinvB, Sinv), XinvB.transpose(-1,-2)))
                 Bblock = - torch.matmul(XinvB, Sinv)
@@ -344,6 +366,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 self.Xinv = self.Xinv_new
 
         self.state_index += 1 
+        t_tot2 = time()
+        self.t_update_state += (t_tot2 - t_tot1)
 
     #@profile
     def psi_amplitude(self, samples):
@@ -420,7 +444,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         """
         return 2 * torch.log(torch.abs(self.psi_amplitude(samples)))
         
-    #@profile
+    @profile
     def lowrank_kinetic(self, ref_I, xs_I, rs_pos, print_stats=True):
         """
         Probability density estimation on states connected to I_ref by the kinetic operator `kinetic_operator`,
@@ -536,12 +560,15 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                         mylogger.info_refstate.Gdenom_cond_max = cond 
                         if cond > 1e5:
                             print("Gdenom_cond_max=", mylogger.info_refstate.Gdenom_cond_max)            
-            
+
+            t1 = time()
             det_Gdenom = np.linalg.det(Gdenom)
 
             # Internal state used during low-rank update of conditional probabilities 
             # of the connnecting states. 
             Gdenom_inv = np.linalg.inv(Gdenom)
+            t2 = time()
+            self.t_lowrank_linalg += (t2 -t1)
 
             # Needed for low-rank update for onehop states differing from the reference 
             # state by long-range hopping between positions r and s. 
@@ -556,12 +583,18 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 Ksites_add += [i]
                 occ_vec_add = occ_vec[0:xmin] + [0]*ii + [1]
                 Gnum = GG[np.ix_(Ksites_add, Ksites_add)] - np.diag(occ_vec_add)
-
+                
+                t6 = time()
                 det_Gnum = np.linalg.det(Gnum)
+                t7 = time()
+                self.t_lowrank_linalg += (t7-t6)
 
                 # In case a cond. prob. of the reference state is zero:
-                try:    
+                try:
+                    t6 = time()
                     Gnum_inv = np.linalg.inv(Gnum)
+                    t7 = time()
+                    self.t_lowrank_linalg += (t7-t6)
                     Gnum_inv_reuse[k][i] = Gnum_inv
                 except np.linalg.LinAlgError as e:
                     print("Cond. prob. of reference state is zero: det_Gnum=%16.12f\n" % (det_Gnum), e)

@@ -220,8 +220,8 @@ class VMCKernel(object):
         t3 = time()
         with torch.no_grad():
             eloc = self.energy_loc(config, psi_loc.data, ansatz=self.ansatz).item()
-
         t4 = time()
+        print("eloc2=", t4-t3)
         self.t_locE += (t4-t3)
         return eloc, grad_loc
 

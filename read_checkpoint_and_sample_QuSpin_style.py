@@ -8,6 +8,7 @@ from utils import default_dtype_torch
 torch.set_default_dtype(default_dtype_torch)
 #
 from one_hot import occ_numbers_collapse
+from bitcoding import bin2pos
 from Slater_Jastrow_simple import PhysicalSystem, VMCKernel
 from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 from slater_sampler_ordered import SlaterDetSampler_ordered
@@ -56,9 +57,20 @@ SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Np, D=N_2
 VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
 del SJA
 #
+# ===================
+# Read checkpoint file 
+# ===================
 extension='_Adam'
 fmt_string='state_Lx{}Ly{}Np{}V{}'+extension+'.pt'
 ckpt_outfile = fmt_string.format(Lx, Ly, Np, Vint)
+#
+# ===================================================================
+# Read columns of Hartree-Fock Slater determinant 
+# (for comparing sign structure with co-optimized Slater determinant)
+# ===================================================================
+fmt_string = 'eigvecsLx{}Ly{}Np{}V{}'+extension+'.dat'
+eigvecs_file = fmt_string.format(Lx, Ly, Np, Vint)
+U_HF = np.loadtxt(eigvecs_file)
 #
 print("Now sample from the converged ansatz")
 state_checkpointed = torch.load(ckpt_outfile)
@@ -75,6 +87,10 @@ nncorr2 = np.zeros((Lx, Ly))
 energy_av = 0
 energy2_av = 0
 energy_list = np.zeros((num_samples, 1))
+#
+# average change of sign structure between optimized Slater determinant 
+# (in presence of Jastrow) and Hartree-Fock Slater determinant
+av_rel_sign = 0
 #
 t_sample = 0
 for ii in range(num_samples):
@@ -103,12 +119,24 @@ for ii in range(num_samples):
         SzSzcorr2[tx, ty] += ss1**2 
         nncorr2[tx, ty] += ss2**2
 #
+    # average sign change relative to Hartree-Fock Slater determinant 
+    psi_coopt = VMCmodel_.ansatz.slater_sampler.psi_amplitude([config]).item()
+    pos = bin2pos([config])
+    submat = U_HF[pos, 0:Np]
+    psi_HF = np.linalg.det(submat)
+    av_rel_sign += np.sign(psi_coopt) * np.sign(psi_HF)
+    print("psi_HF=", psi_HF, "psi_coopt=", psi_coopt)
+
+
 SzSzcorr[:,:] /= num_samples
 nncorr[:,:] /= num_samples 
 SzSzcorr2[:,:] /= num_samples 
 nncorr2[:,:] /= num_samples
 err_SzSzcorr = np.sqrt(SzSzcorr2[:,:] - SzSzcorr[:,:]**2) / np.sqrt(num_samples)
 err_nncorr = np.sqrt(nncorr2[:,:] - nncorr[:,:]**2) / np.sqrt(num_samples)
+#
+av_rel_sign /= num_samples 
+np.savetxt("av_rel_sign_"+paramstr+".dat", np.array([av_rel_sign]))
 #
 np.savetxt("SzSzcorr_VMC_"+paramstr+".dat", SzSzcorr)
 np.savetxt("err_SzSzcorr_VMC_"+paramstr+".dat", err_SzSzcorr)

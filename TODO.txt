@@ -1,3 +1,7 @@
+[ ] Calculation of determinant of the Schur complement.
+    The matrixes are typically very small (1, 2x2, 3x3, 4x4). Calling np.linalg.det
+    is around 100-times slower than the Sarrus formula. 
+
 [ ] Hartree-Fock energy must be variational. 
     Something with the calculation of Hartree-Fock ground state energy is wrong. 
     The HF eigenstates seem to be correct, though. 

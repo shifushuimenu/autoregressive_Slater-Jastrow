@@ -405,11 +405,12 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 Xinv_new = torch.vstack(( torch.hstack((Ablock, Bblock)), torch.hstack((Cblock, Dblock)) ))  # np.block([[Ablock, Bblock], [Cblock, Dblock]])
                 self.Xinv = Xinv_new
 
-                # REMOVE
-                cond = np.linalg.cond(Xinv_new)
-                if cond > self.cond_max:
-                    self.cond_max = cond
-                    print("cond_max=", self.cond_max)
+                # suppress asserts and debug sections by using the flag -O
+                if __debug__:
+                    cond = np.linalg.cond(Xinv_new)
+                    if cond > self.cond_max:
+                        self.cond_max = cond
+                        print("cond_max=", self.cond_max)
 
 
         self.state_index += 1 
