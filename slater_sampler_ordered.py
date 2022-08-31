@@ -14,6 +14,7 @@
 
 import torch
 import numpy as np
+import math 
 
 from torch.distributions.categorical import Categorical
 from bitcoding import bin2pos, int2bin
@@ -766,7 +767,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
                                                     if Gnum_inv_reuse[k-1][j_add] is not None:                                            
                                                         corr_factor_Gnum = LR.corr_factor_add_s(Gnum_inv_reuse[k-1][j_add], s=s) # CAREFUL: This is not a marginal probability of an actually sampled state.
-                                                        if not np.isclose(corr_factor_Gdenom, 0.0, atol=1e-15): # don't divide by zero 
+                                                        if not math.isclose(corr_factor_Gdenom, 0.0, abs_tol=1e-15): # don't divide by zero 
                                                             corr_factor = corr_factor_Gnum / corr_factor_Gdenom
                                                             cond_prob_onehop[state_nr, k, j_add] = corr_factor * cond_prob_ref[k-1, j_add]
                                                         else:
@@ -793,7 +794,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                                     #print("state_nr=", state_nr, "k=", k, "i=", i, "corr_Gnum=", corr_factor_Gnum, "corr_Gdenom=", corr_factor_Gdenom)        
                                             else:                 
                                                 corr_factor_Gdenom= LR.corr_factor_add_s(Gdenom_inv_reuse[k-1], s=s) 
-                                            if not np.isclose(corr_factor_Gdenom, 0.0, atol=1e-15): # do not divide by zero
+                                            if not math.isclose(corr_factor_Gdenom, 0.0, abs_tol=1e-15): # do not divide by zero
                                                 corr_factor_Gnum = LR.corr_factor_removeadd_rs(Gnum_inv, r=pos_vec[k-1], s=s)
                                                 corr_factor = corr_factor_Gnum / corr_factor_Gdenom
                                                 cond_prob_onehop[state_nr, k, i] = corr_factor * (det_Gdenom / det_Gdenom_reuse[k-1]) * cond_prob_ref[k, i]    
@@ -1016,7 +1017,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         if True: #__debug__:
                 for state_nr, (k_copy_, (r,s)) in enumerate(onehop_info):
                     for k in range(self.N):
-                        assert np.isclose(np.sum(cond_prob_ref[k,:]), 1.0, atol=1e-14), \
+                        assert math.isclose(np.sum(cond_prob_ref[k,:]), 1.0, abs_tol=1e-14), \
                             "np.sum(cond_prob_ref[k=%d,:])=%16.10f" % (k, np.sum(cond_prob_ref[k,:]))
                         if k > k_copy_:
                             # print("state_nr=", state_nr, "k=", k, "rs_pos[state_nr]=", rs_pos[state_nr])
@@ -1024,7 +1025,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                             # print("onehop  =", xs[state_nr])
                             #print("cumsum_condprob_onehop[state_nr, k]=", cumsum_condprob_onehop[state_nr, k])
                             #print("state_nr=", state_nr, "k=", k, "cond_prob=", cond_prob_onehop[state_nr, k, :])
-                            if not np.isclose(np.sum(cond_prob_onehop[state_nr, k,:]), 1.0, atol=1e-8):
+                            if not math.isclose(np.sum(cond_prob_onehop[state_nr, k,:]), 1.0, abs_tol=1e-8):
                                 fh = open("NormalizationViolation.dat", "a")
                                 fh.write("np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f =? 1.0 =? %16.10f" \
                                  % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :]), cumsum_condprob_onehop[state_nr, k])+"\n")
@@ -1032,7 +1033,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                 print("ERROR: NORMALIZATION VIOLATION - set cond. probs. equal to reference state")
                                 print("CAREFUL ! THIS IS NOT JUSTIFIED")
                                 cond_prob_onehop[state_nr, k, :] = cond_prob_ref[k, :]
-                            assert np.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, atol=1e-8), \
+                            assert math.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, abs_tol=1e-8), \
                                  "np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f =? 1.0 =? %16.10f" \
                                  % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :]), cumsum_condprob_onehop[state_nr, k])
                             
