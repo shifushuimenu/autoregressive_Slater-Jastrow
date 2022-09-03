@@ -64,6 +64,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.t_get_cond_prob = 0.0
         self.t_update_state = 0.0
         self.t_lowrank_linalg = 0.0
+        self.t_linstorage = 0.0
 
         if single_particle_eigfunc is not None: 
            self.eigfunc = np.array(single_particle_eigfunc)
@@ -202,7 +203,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         return ratio 
 
 
-    #@profile
+    @profile
     def get_cond_prob(self, k):
         r""" Conditional probability for the position x of the k-th particle.
 
@@ -222,6 +223,21 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         else:
             self.BB_reuse = []   # list of matrices to be reused later 
             self.Schur_complement_reuse = []  # list of matrices to be reused later 
+
+
+        ## alternative way of constructing BB and DD matrices 
+        ## This imposes an ordering, i.e. the Ksites-array does no longer abstract from 
+        ## the ordering of sites in the Green's function !
+        t1 = time()
+        full_range = range(self.xmin, self.xmax)
+        if self.Ksites == []:
+            self.BB_linstorage = np.array([])
+        else:
+            self.BB_linstorage = self.G[self.Ksites[0]:self.Ksites[-1]+1, self.xmin:self.xmax].T.flatten() # careful: This is a view into G.
+        self.DD_full = self.G[self.xmin:self.xmax, self.xmin:self.xmax] # careful: This is a view into G.
+        t2 = time()
+        self.t_linstorage += (t2-t1)
+
 
         mm=-1
         for i_k in range(self.xmin, self.xmax):
@@ -255,6 +271,28 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 self.BB = self.G[np.ix_(self.Ksites, Ksites_add)]
                 t2 = time()
                 self.t_npix_ += (t2-t1)
+
+
+                ###alternative approach of constructing BB and DD matrices
+                assert mm == i_k - self.xmin
+                ll = mm + 1 # mm = i_k - self.xmin
+                ##assert len(self.Ksites) == self.xmin
+                ##self.BB_v2 = self.BB_linstorage[0:ll*self.xmin].reshape(ll, self.xmin).T
+                ##assert np.isclose(self.BB, self.BB_v2).all()
+                t1 = time()
+                self.BB_v2 = self.BB_linstorage[0:ll*self.xmin].reshape(ll, self.xmin).T
+                ##DD = self.DD_full[np.ix_(range(mm+1), range(mm+1))]
+                occ_vec_add = torch.tensor([0] * mm + [1])
+                NN = torch.diag(occ_vec_add[:])
+                DD_v2 = self.DD_full[0:mm+1, 0:mm+1] - NN
+                #DD_v2[-1,-1] = DD_v2[-1,-1] - 1 # in-place operation 
+                t2 = time()
+                self.t_linstorage += (t2-t1)
+                assert np.isclose(self.BB, self.BB_v2).all()
+                assert np.isclose(DD, DD_v2).all()
+                ## end alternative approach 
+
+
                 if len(self.BB) == 0:
                    CC = self.BB
                 else:
@@ -445,7 +483,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         """
         return 2 * torch.log(torch.abs(self.psi_amplitude(samples)))
         
-    @profile
+    #@profile
     def lowrank_kinetic(self, ref_I, xs_I, rs_pos, print_stats=True):
         """
         Probability density estimation on states connected to I_ref by the kinetic operator `kinetic_operator`,
