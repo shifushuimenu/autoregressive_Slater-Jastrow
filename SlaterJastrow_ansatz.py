@@ -26,7 +26,7 @@ from physics import kinetic_term2
 
 import sys
 from time import time 
-#from profilehooks import profile 
+from profilehooks import profile 
 
 __all__ = ['SlaterJastrow_ansatz']
 
@@ -188,7 +188,7 @@ class SlaterJastrow_ansatz(selfMADE):
 
         return x_out, log_prob_sample
 
-    #@profile 
+    @profile 
     def log_prob(self, samples):
         """
             Logarithm of the amplitude squared of the wave function on an 

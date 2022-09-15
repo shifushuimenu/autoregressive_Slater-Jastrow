@@ -372,12 +372,14 @@ def code_verification():
         Slater2spOBDM
     )
 
-    (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=200, potential='none', PBC=False)
+ 
+    fd = open("test.dat", "w")
 
-    for Np in (30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190,):
+    for Np in (30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160): #  170, 180, 190, 200, 300, 400):
+        (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=Np*2, potential='none', PBC=False)
         Nparticles = Np
         num_samples = 5
-        print("Nsites=", Nsites, "Nparticles=", Nparticles, "num_samples=", num_samples)
+        #print("Nsites=", Nsites, "Nparticles=", Nparticles, "num_samples=", num_samples)
         SDsampler = SlaterDetSampler(eigvecs, Nparticles=Nparticles)
 
         # Check that sampling the Slater determinant gives the correct average density. 
@@ -387,8 +389,12 @@ def code_verification():
             occ_vec_, prob_sample = SDsampler.sample()
             #occ_vec += occ_vec_
         t1 = time()
-        print("elapsed, unordered sampling=", (t1-t0))
+        #print("elapsed, unordered sampling=", (t1-t0))
+        print(Np, t1-t0)
+        print(Np, t1-t0, file=fd)
         
+    fd.close()
+
     ##print("occ_vec=", occ_vec)    
     #density = occ_vec / float(num_samples)
     ##print("density=", density)

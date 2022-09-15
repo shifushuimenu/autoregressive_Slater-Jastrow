@@ -220,9 +220,11 @@ with open("timings"+paramstr+".dat", "w") as fh:
     print("## t_stochastic_reconfiguration=", VMCmodel_.t_SR, file=fh)
     print("## total time det Schur complement=", VMCmodel_.ansatz.slater_sampler.t_det_Schur_complement, file=fh)
     print("## t_npix_=", VMCmodel_.ansatz.slater_sampler.t_npix_, file=fh)
+    print("## t_linstorage=", VMCmodel_.ansatz.slater_sampler.t_linstorage, file=fh)
     print("## t_get_cond_prob=", VMCmodel_.ansatz.slater_sampler.t_get_cond_prob, file=fh)
     print("## t_update_state=", VMCmodel_.ansatz.slater_sampler.t_update_state, file=fh)
     print("## t_lowrank_linalg=",VMCmodel_.ansatz.slater_sampler.t_lowrank_linalg, file=fh)
+    print("## t_gemm=",VMCmodel_.ansatz.slater_sampler.t_gemm, file=fh)
 
 
 szsz_corr = np.zeros(Nsites)

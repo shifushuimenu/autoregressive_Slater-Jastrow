@@ -5,6 +5,8 @@ in the algorithm for ordered componentwise direct sampling from a Slater determi
 from termios import CFLUSH
 import numpy as np
 
+#from profilehooks import profile 
+
 from block_update_numpy import ( block_update_inverse,
                            block_update_det_correction,
                            block_update_inverse2,
@@ -82,7 +84,7 @@ def adapt_Gdenom(Gnum, r, s):
     G[s,s] = G[s,s] - 1
     return G
 
-# NOT NEEDED ANYMORE 
+#@profile
 def adapt_Ainv(Ainv, Gglobal, r, s, i_start, i_end):
     """
     Extend inverse of numerator or denominator matrix from position `i_start` (inclusive)
@@ -112,7 +114,6 @@ def adapt_Ainv(Ainv, Gglobal, r, s, i_start, i_end):
     Ainv_extended = block_update_inverse2(Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
         C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD)
     return Ainv_extended, corr
-# NOT NEEDED ANYMORE     
     
 
 def corr_factor_Gdenom_from_Ainv(Ainv, Gglobal, r, s, i_start, i_end):

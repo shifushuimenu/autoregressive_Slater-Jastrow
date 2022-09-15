@@ -499,10 +499,12 @@ if __name__ == "__main__":
 
     from time import time 
 
-    for L in (400, 500, 600, 700, 800, 900, 1000, ): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
+    fd = open("test_block_update.dat", "a")
+
+    for L in (60, 80, 100, 150, 200, 240, 320, 400, 500, 600, 1000): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
         (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=L, potential='none', PBC=True, HF=True)
         Nparticles = L//2
-        num_samples = 50 # 1000
+        num_samples = 5 # 1000
 
         #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
         #SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
@@ -520,12 +522,15 @@ if __name__ == "__main__":
         for _ in range(num_samples):
             occ_vec, _ = SDsampler2.sample()
         t4 = time()
-        print("block update, elapsed=", (t4-t3)*2 )
+        print("block update, elapsed=", (t4-t3) )
+        print(Nparticles, t4-t3, file=fd)
 
         #print("t_fetch_memory=", SDsampler2.t_fetch_memory)
         #print("t_matmul(Schur complement)=", SDsampler2.t_matmul)
         #print("t_det=", SDsampler2.t_det)
         #print("t_update_Schur=", SDsampler2.t_update_Schur)
+
+    fd.close()
 
     # # Check that sampling the Slater determinant gives the correct average density. 
     # occ_vec = torch.zeros(Nsites)

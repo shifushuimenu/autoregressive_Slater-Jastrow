@@ -3,6 +3,7 @@ import numpy as np
 from utils import default_dtype_torch
 
 #from profilehooks import profile
+from my_linalg import my_det 
 
 #@profile
 def block_update_inverse(Ainv, B, C, D):
@@ -112,4 +113,8 @@ def block_update_det_correction2(Ainv, B, C, D):
 
     AinvB = np.matmul(Ainv, B)
     S = D - np.matmul(C, AinvB)
-    return np.linalg.det(S)  # determinant of the Schur complement
+    #print("block_update_det_correction2, S.shape=", S.shape)
+    # For small matrices the determinant operation should be hand-coded 
+    # for speed-up. 
+    #return np.linalg.det(S)  # determinant of the Schur complement
+    return my_det(S, m)  # determinant of the Schur complement

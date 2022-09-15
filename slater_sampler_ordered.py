@@ -65,6 +65,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.t_update_state = 0.0
         self.t_lowrank_linalg = 0.0
         self.t_linstorage = 0.0
+        self.t_gemm = 0.0
 
         if single_particle_eigfunc is not None: 
            self.eigfunc = np.array(single_particle_eigfunc)
@@ -166,6 +167,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         return ratio 
 
 
+    #@profile 
     def _detratio_from_scratch(self, G, occ_vec, base_pos, i):
         """
         Calculate ratio of determinants of numerator and denominator matrices from scratch.  
@@ -229,7 +231,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         ## This imposes an ordering, i.e. the Ksites-array does no longer abstract from 
         ## the ordering of sites in the Green's function !
         t1 = time()
-        full_range = range(self.xmin, self.xmax)
+        # Pre-fetch from G the full possible range of sites for DD and BB block. 
         if self.Ksites == []:
             self.BB_linstorage = np.array([])
         else:
@@ -263,33 +265,29 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 occ_vec_tmp[i_k] = 0  # reset for next loop iteration
 
             else: # use block determinant formula
-                Ksites_add = list(range(self.xmin, i_k+1))
-                occ_vec_add = torch.tensor([0] * (i_k - self.xmin) + [1])
-                t1 = time()
-                NN = torch.diag(occ_vec_add[:])
-                DD = self.G[np.ix_(Ksites_add, Ksites_add)] - NN
-                self.BB = self.G[np.ix_(self.Ksites, Ksites_add)]
-                t2 = time()
-                self.t_npix_ += (t2-t1)
+                #Ksites_add = list(range(self.xmin, i_k+1))
+                #occ_vec_add = torch.tensor([0] * (i_k - self.xmin) + [1])
+                #t1 = time()
+                #NN = torch.diag(occ_vec_add[:])
+                #DD = self.G[np.ix_(Ksites_add, Ksites_add)] - NN
+                #self.BB = self.G[np.ix_(self.Ksites, Ksites_add)]
+                #t2 = time()
+                #self.t_npix_ += (t2-t1)
 
 
                 ###alternative approach of constructing BB and DD matrices
+                # Use large pre-fetched DD and BB blocks to construct the current ones 
                 assert mm == i_k - self.xmin
                 ll = mm + 1 # mm = i_k - self.xmin
-                ##assert len(self.Ksites) == self.xmin
-                ##self.BB_v2 = self.BB_linstorage[0:ll*self.xmin].reshape(ll, self.xmin).T
-                ##assert np.isclose(self.BB, self.BB_v2).all()
                 t1 = time()
-                self.BB_v2 = self.BB_linstorage[0:ll*self.xmin].reshape(ll, self.xmin).T
-                ##DD = self.DD_full[np.ix_(range(mm+1), range(mm+1))]
+                self.BB = self.BB_linstorage[0:ll*self.xmin].reshape(ll, self.xmin).T
                 occ_vec_add = torch.tensor([0] * mm + [1])
                 NN = torch.diag(occ_vec_add[:])
-                DD_v2 = self.DD_full[0:mm+1, 0:mm+1] - NN
-                #DD_v2[-1,-1] = DD_v2[-1,-1] - 1 # in-place operation 
+                DD = self.DD_full[0:mm+1, 0:mm+1] - NN
                 t2 = time()
                 self.t_linstorage += (t2-t1)
-                assert np.isclose(self.BB, self.BB_v2).all()
-                assert np.isclose(DD, DD_v2).all()
+                #assert np.isclose(self.BB, self.BB_v2).all()
+                #assert np.isclose(DD, DD_v2).all()
                 ## end alternative approach 
 
 
@@ -300,13 +298,19 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 self.BB_reuse.append(self.BB)
                 if self.state_index==-1: # no sampling step so far 
                     # here self.Xinv = [] always. IMPROVE: This line is useless.
-                    self.Xinv = torch.linalg.inv(self.G[np.ix_(self.Ksites, self.Ksites)] - torch.diag(torch.tensor(self.occ_vec[0:self.xmin])))
+                    #self.Xinv = torch.linalg.inv(self.G[np.ix_(self.Ksites, self.Ksites)] - torch.diag(torch.tensor(self.occ_vec[0:self.xmin])))
+                    self.Xinv = torch.tensor([])
+                    #print("CALLED?, self.Xinv=", self.Xinv)
                 else:
                     pass # self.Xinv should have been updated by calling update_state(pos_i)
                 if len(self.BB) == 0:
                    self.Schur_complement = DD - torch.tensor([0.0])
                 else:
+                   t1 = time()
                    self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)
+                   t2 = time()
+                   self.t_gemm += (t2-t1)
+
                    #print("dimensions: CC.size()=", CC.size()[0], "Xinv.size()=", self.Xinv.size()[0], "self.BB.size()=", self.BB.size()[0], "Schur=", self.Schur_complement.size()[0])
                 self.Schur_complement_reuse.append(self.Schur_complement)
                 # for small matrix sizes (1,2,3), the determinant should be "hand-coded" for speed-up
@@ -483,7 +487,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         """
         return 2 * torch.log(torch.abs(self.psi_amplitude(samples)))
         
-    #@profile
+    @profile
     def lowrank_kinetic(self, ref_I, xs_I, rs_pos, print_stats=True):
         """
         Probability density estimation on states connected to I_ref by the kinetic operator `kinetic_operator`,
@@ -588,7 +592,10 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 # don't waste memory
                 Gnum_inv_reuse[k-2].clear()
 
+            t1 = time()
             Gdenom = GG[np.ix_(Ksites, Ksites)] - np.diag(occ_vec[0:len(Ksites)])
+            t2 = time()
+            self.t_npix_ += (t2 - t1)
 
             # In production runs use flag -O to suppress asserts and 
             # __debug__ sections. 
@@ -621,7 +628,10 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 # reference state        
                 Ksites_add += [i]
                 occ_vec_add = occ_vec[0:xmin] + [0]*ii + [1]
+                t1 = time()
                 Gnum = GG[np.ix_(Ksites_add, Ksites_add)] - np.diag(occ_vec_add)
+                t2 = time()
+                self.t_npix_ += (t2-t1)
                 
                 t6 = time()
                 det_Gnum = np.linalg.det(Gnum)

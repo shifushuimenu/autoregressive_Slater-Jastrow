@@ -6,6 +6,8 @@ from one_hot import occ_numbers_collapse
 from utils import default_dtype_torch
 # from torchviz import make_dot
 
+from bitcoding import bin2int 
+
 
 def binning_statistics(obs_list, num_bin):
     '''
@@ -170,6 +172,7 @@ class Trainer(object):
 
         energy_list = np.zeros(self.num_samples)     # list of numbers
         log_psi_list = torch.zeros(self.num_samples, dtype=default_dtype_torch) # list of torch tensors 
+
 
         for ii, config in enumerate(config_list):
 
