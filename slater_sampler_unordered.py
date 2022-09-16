@@ -1,10 +1,8 @@
-import torch
 import numpy as np
-
+import torch
 from torch.distributions.categorical import Categorical
 
 from utils import default_dtype_torch
-
 from bitcoding import bin2pos, int2bin
 
 from profilehooks import profile 
@@ -37,7 +35,7 @@ class SlaterDetSampler(torch.nn.Module):
         super(SlaterDetSampler, self).__init__()
         self.epsilon = 1e-8
         self.N = Nparticles         
-        self.eigfunc = np.array(single_particle_eigfunc)
+        self.eigfunc = torch.tensor(single_particle_eigfunc)
         self.D = self.eigfunc.shape[0]
         self.ALGO = ALGO # algorithm for direct sampling 
         assert(self.N<=self.D)  
@@ -46,18 +44,18 @@ class SlaterDetSampler(torch.nn.Module):
 
         # U is the key matrix representing the Slater determinant for sampling purposes.
         # Its principal minors are the probabilities of certain particle configurations. 
-        self.U = np.matmul(self.P, np.transpose(self.P))
+        self.U = torch.matmul(self.P, self.P.t())
         self.reset_sampler()
 
         # pre-allocate
-        self.cond_prob = np.zeros(self.D, dtype=np.float64)
-        self.cond_prob_iter = np.zeros(self.D, dtype=np.float64)
+        self.cond_prob = torch.zeros(self.D, dtype=default_dtype_torch)
+        self.cond_prob_iter = torch.zeros(self.D, dtype=default_dtype_torch)
 
     def reset_sampler(self):
         # Occupation numbers of the M sites up to the k-th sampling step
         # occ_vec[i]==1 for occupied and occ_vec[i]==0 for unoccupied i-th site.
-        self.occ_vec = np.zeros(self.D, dtype=np.float64)
-        self.occ_positions = np.zeros(self.N, dtype=np.int64)
+        self.occ_vec = torch.zeros(self.D, dtype=torch.int)
+        self.occ_positions = torch.zeros(self.N, dtype=torch.int)
         # list of particle positions 
         self.Ksites = []
 
@@ -65,13 +63,13 @@ class SlaterDetSampler(torch.nn.Module):
             # helper variables for low-rank update 
             # (These need to be updated after each sampling step.)
             # The matrix Xinv grows during the sampling.
-            self.Xinv = np.zeros((1, 1), dtype=np.float64)
-            self.cond_prob_unnormalized = np.zeros(self.D, dtype=np.float64)
+            self.Xinv = torch.zeros((1, 1), dtype=default_dtype_torch)
+            self.cond_prob_unnormalized = torch.zeros(self.D, dtype=default_dtype_torch)
 
         elif self.ALGO == 1:
             # Algorithm 3 from Tremblay et al. arXiv:1802.08471v1
-            self.Fmat = np.zeros((self.N, self.D), dtype=np.float64)
-            self.fvec = np.zeros((self.D,), dtype=np.float64)
+            self.Fmat = torch.zeros((self.N, self.D), dtype=default_dtype_torch)
+            self.fvec = torch.zeros((self.D,), dtype=default_dtype_torch)
                 
         # State index of the sampler: no sampling step so far 
         self.state_index = -1
@@ -96,27 +94,27 @@ class SlaterDetSampler(torch.nn.Module):
         
         if (k==0):
             # no correction term for the probability of the position of the first particle 
-            self.cond_prob = np.diag(self.U) / self.N
-            self.cond_prob_iter[:] = np.diag(self.U)
+            self.cond_prob = torch.diag(self.U) / self.N
+            self.cond_prob_iter[:] = torch.diag(self.U)
         else:
             if self.ALGO == 0:
                 # correction term due to correlations between different particles 
                 # (for each position on the lattice)
-                self.corr = np.zeros(self.D, dtype=np.float64)
-                for pos in np.arange(0, self.D):
-                    self.corr[pos] = np.matmul(
+                self.corr = torch.zeros(self.D, dtype=default_dtype_torch)
+                for pos in range(0, self.D):
+                    self.corr[pos] = torch.matmul(
                           self.U[pos, self.Ksites[0:k]], 
-                          np.matmul(self.Xinv[0:k, 0:k], self.U[self.Ksites[0:k], pos])
+                          torch.matmul(self.Xinv[0:k, 0:k], self.U[self.Ksites[0:k], pos])
                         )        
-                self.cond_prob_unnormalized[:] = np.diag(self.U) - self.corr[:]
+                self.cond_prob_unnormalized[:] = torch.diag(self.U) - self.corr[:]
                 # hack => IMPROVE AND UNDERSTAND
                 self.cond_prob = self.cond_prob_unnormalized[:].real / (self.N - k)                 
             elif self.ALGO == 1:
                 self.cond_prob_iter[:] = self.cond_prob_iter[:] - (self.fvec @ self.P.T)**2
                 self.cond_prob = self.cond_prob_iter[:] / (self.N - k)
 
-        assert( np.all(self.cond_prob[:] >= -self.epsilon) )
-        assert( (abs(np.sum(self.cond_prob[:])-1.0) < self.epsilon) )        
+        assert( torch.all(self.cond_prob[:] >= -self.epsilon) )
+        assert( (abs(torch.sum(self.cond_prob[:])-1.0) < self.epsilon) )        
                 
         return abs(self.cond_prob)
 
@@ -147,7 +145,7 @@ class SlaterDetSampler(torch.nn.Module):
 
         if self.ALGO == 0:
             if k==0:
-                self.Xinv = np.zeros((1,1), dtype=np.float64)
+                self.Xinv = torch.zeros((1,1), dtype=default_dtype_torch)
                 self.Xinv[0,0] = 1.0 / self.U[self.Ksites[0], self.Ksites[0]]
             else:
                 # low-rank update: 
@@ -155,11 +153,11 @@ class SlaterDetSampler(torch.nn.Module):
                 # the formulae for determinants and iverse of block matrices. 
                 # Compute Xinv based on the previous Xinv. 
                 gg = 1.0 / self.cond_prob_unnormalized[pos_i]
-                uu = np.matmul(self.Xinv, self.U[self.Ksites[0:k], self.Ksites[k]])
-                vv = np.matmul(self.U[self.Ksites[k], self.Ksites[0:k]], self.Xinv)
+                uu = torch.matmul(self.Xinv, self.U[self.Ksites[0:k], self.Ksites[k]])
+                vv = torch.matmul(self.U[self.Ksites[k], self.Ksites[0:k]], self.Xinv)
 
-                Xinv_new = np.zeros((k+1, k+1), dtype=np.float64)
-                Xinv_new[0:k, 0:k] = self.Xinv[0:k, 0:k] + gg*np.outer(uu, vv)
+                Xinv_new = torch.zeros((k+1, k+1), dtype=default_dtype_torch)
+                Xinv_new[0:k, 0:k] = self.Xinv[0:k, 0:k] + gg*torch.outer(uu, vv)
                 Xinv_new[k, 0:k] = -gg*vv[:]
                 Xinv_new[0:k, k] = -gg*uu[:]
                 Xinv_new[k,k] = gg 
@@ -170,10 +168,10 @@ class SlaterDetSampler(torch.nn.Module):
             ysn = self.P[self.occ_positions[k]]
             self.fvec =  ysn - self.Fmat[:,0:k] @ ( self.Fmat[:,0:k].T @ ysn ) 
             # normalize 
-            norm = np.sqrt(np.dot(self.fvec, ysn))
+            norm = torch.sqrt(torch.dot(self.fvec, ysn))
             self.fvec /= norm 
             # add another column to the matrix F
-            self.Fmat[:,k] = self.fvec.copy()
+            self.Fmat[:,k] = self.fvec.detach().clone()
 
         # Now the internal state of the sampler is fully updated.
         self.state_index += 1 
@@ -196,7 +194,7 @@ class SlaterDetSampler(torch.nn.Module):
         
         # sample 
         probs = self.get_cond_prob(k)         
-        pos = Categorical(torch.tensor(probs)).sample().item()
+        pos = Categorical(probs).sample()
         
         # conditional prob in this sampling step
         cond_prob_k = probs[pos]
@@ -217,7 +215,7 @@ class SlaterDetSampler(torch.nn.Module):
         self.reset_sampler()
         
         prob_sample = 1.0
-        for k in np.arange(self.N):
+        for k in range(self.N):
             _, cond_prob_k = self._sample_k(k)
             prob_sample *= cond_prob_k
             
@@ -314,7 +312,7 @@ def code_verification():
     #for Np in (180, 200, 220, 240, 260, 280, 300): #  170, 180, 190, 200, 300, 400):
         (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=Np*2, potential='none', PBC=False)
         Nparticles = Np
-        num_samples = 500
+        num_samples = 5
         #print("Nsites=", Nsites, "Nparticles=", Nparticles, "num_samples=", num_samples)
         SDsampler = SlaterDetSampler(eigvecs, Nparticles=Nparticles, ALGO=ALGO)
 
