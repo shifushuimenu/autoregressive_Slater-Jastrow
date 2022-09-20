@@ -96,19 +96,43 @@ class SlaterDetSampler(torch.nn.Module):
             # no correction term for the probability of the position of the first particle 
             self.cond_prob = torch.diag(self.U) / self.N
             self.cond_prob_iter[:] = torch.diag(self.U)
+
+            # Test faster algorithm
+            self.cond_prob_unnormalized = torch.diag(self.U)
+            self.test_cond_prob_unnormalized = torch.diag(self.U)
+
         else:
             if self.ALGO == 0:
+
+                # =====================================
+                # Test faster algorithm 
+                chi = torch.matmul(self.xi[0:k-1], self.U[self.Ksites[0:k-1], 0:self.D]) - self.U[self.Ksites[k-1], 0:self.D]
+                self.test_cond_prob_unnormalized[:] = self.test_cond_prob_unnormalized[0:self.D] - (1.0 / self.test_cond_prob_unnormalized[self.Ksites[k-1]]) * chi[0:self.D]**2
+                # =====================================
+
                 # correction term due to correlations between different particles 
                 # (for each position on the lattice)
+                # This matrix-multiplication can be avoided by reusing information. 
                 self.corr = torch.zeros(self.D, dtype=default_dtype_torch)
-                for pos in range(0, self.D):
-                    self.corr[pos] = torch.matmul(
-                          self.U[pos, self.Ksites[0:k]], 
-                          torch.matmul(self.Xinv[0:k, 0:k], self.U[self.Ksites[0:k], pos])
-                        )        
+                self.corr[0:self.D] = torch.diag(
+                          torch.matmul(self.U[0:self.D, self.Ksites[0:k]], 
+                          torch.matmul(self.Xinv[0:k, 0:k], self.U[self.Ksites[0:k], 0:self.D]))
+                          )
+
                 self.cond_prob_unnormalized[:] = torch.diag(self.U) - self.corr[:]
                 # hack => IMPROVE AND UNDERSTAND
-                self.cond_prob = self.cond_prob_unnormalized[:].real / (self.N - k)                 
+                self.cond_prob = self.cond_prob_unnormalized[:] / (self.N - k)
+
+                # =====================================
+                # Test faster algorithm 
+                assert torch.all(torch.isclose(self.test_cond_prob_unnormalized, self.cond_prob_unnormalized))
+                print("k=", k)
+                print("test=", self.test_cond_prob_unnormalized[:])
+                print("true=", self.cond_prob_unnormalized[:])
+                print("diff=", self.U[self.Ksites[k-1], :])
+                # =====================================
+
+
             elif self.ALGO == 1:
                 self.cond_prob_iter[:] = self.cond_prob_iter[:] - (self.fvec @ self.P.T)**2
                 self.cond_prob = self.cond_prob_iter[:] / (self.N - k)
@@ -147,13 +171,26 @@ class SlaterDetSampler(torch.nn.Module):
             if k==0:
                 self.Xinv = torch.zeros((1,1), dtype=default_dtype_torch)
                 self.Xinv[0,0] = 1.0 / self.U[self.Ksites[0], self.Ksites[0]]
+
+                # =====================================
+                # Test faster algorithm
+                self.xi = (self.Xinv[0,0] * self.U[self.Ksites[0], self.Ksites[0]])[None]
+                # =====================================      
+
             else:
+                # =====================================
+                # Test faster algorithm
+                # before updating self.Xinv
+                self.xi = torch.matmul(self.Xinv, self.U[self.Ksites[0:k], self.Ksites[k]])
+                # =====================================
+
                 # low-rank update: 
                 # Avoid computation of determinants and inverses by utilizing 
                 # the formulae for determinants and iverse of block matrices. 
                 # Compute Xinv based on the previous Xinv. 
                 gg = 1.0 / self.cond_prob_unnormalized[pos_i]
                 uu = torch.matmul(self.Xinv, self.U[self.Ksites[0:k], self.Ksites[k]])
+                assert torch.all(torch.isclose(self.xi, uu))
                 vv = torch.matmul(self.U[self.Ksites[k], self.Ksites[0:k]], self.Xinv)
 
                 Xinv_new = torch.zeros((k+1, k+1), dtype=default_dtype_torch)
@@ -305,14 +342,14 @@ def code_verification():
     np.random.seed(45)
     torch.manual_seed(46)
 
-    ALGO = 1
-    fd = open("test_algo"+str(ALGO)+".dat", "a")
+    ALGO = 0
+    fd = open("test_algo"+str(ALGO)+".dat", "w")
 
-    for Np in (30, ): #, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160): #  170, 180, 190, 200, 300, 400):
+    for Np in (10,): #(30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160): #  170, 180, 190, 200, 300, 400):
     #for Np in (180, 200, 220, 240, 260, 280, 300): #  170, 180, 190, 200, 300, 400):
         (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=Np*2, potential='none', PBC=False)
         Nparticles = Np
-        num_samples = 5
+        num_samples = 500
         #print("Nsites=", Nsites, "Nparticles=", Nparticles, "num_samples=", num_samples)
         SDsampler = SlaterDetSampler(eigvecs, Nparticles=Nparticles, ALGO=ALGO)
 
@@ -327,7 +364,7 @@ def code_verification():
         t1 = time()
         #print("elapsed, unordered sampling=", (t1-t0))
         print(Np, t1-t0)
-        print(Np, t1-t0, file=fd)
+        print(Np, (t1-t0)*100.0/num_samples, file=fd)
         
     fd.close()
 
