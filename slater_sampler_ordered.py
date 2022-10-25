@@ -314,6 +314,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                    #print("dimensions: CC.size()=", CC.size()[0], "Xinv.size()=", self.Xinv.size()[0], "self.BB.size()=", self.BB.size()[0], "Schur=", self.Schur_complement.size()[0])
                 self.Schur_complement_reuse.append(self.Schur_complement)
                 # for small matrix sizes (1,2,3), the determinant should be "hand-coded" for speed-up
+                #print("Schur complement size=", self.Schur_complement.size()[0])
                 t1 = time()
                 probs[i_k] = (-1) * torch.det(self.Schur_complement)
                 t2 = time()

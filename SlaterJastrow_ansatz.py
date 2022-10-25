@@ -11,7 +11,6 @@ from torch.distributions.one_hot_categorical import OneHotCategorical
 from itertools import permutations 
 
 from selfMADE import selfMADE
-from slater_sampler import SlaterDetSampler
 from slater_sampler_ordered import SlaterDetSampler_ordered
 #from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 
