@@ -6,18 +6,6 @@
 import numpy as np
 from bitcoding import *
 
-# def exclude_invalid_connecting_states(hop_from_to, states_I, matrix_elem):
-#     STATE_EXISTS = np.where(matrix_elem != 0)
-#     for _ in range(matrix_elem.shape[1] - len(STATE_EXISTS[0])):
-#         hop_from_to.remove((-1,-1))
-#     matrix_elem = matrix_elem[STATE_EXISTS]
-#     states_I = states_I[STATE_EXISTS]
-
-#     return sort_onehop_states(hop_from_to, states_I, matrix_elem)
-
-# alias 
-# valid_states = exclude_invalid_connecting_states 
-
 
 def sort_onehop_states(hop_from_to, states_I, matrix_elem):
     """sorts connecting states in increasing order of min(r,s) and eliminates duplicate hopping bonds"""
@@ -25,10 +13,7 @@ def sort_onehop_states(hop_from_to, states_I, matrix_elem):
     hop_from_to = np.array(hop_from_to)[idx_sorted]
     states_I = states_I[idx_sorted]
     matrix_elem = matrix_elem[idx_sorted]
-
     return (hop_from_to, states_I, matrix_elem)
-
-
 
 
 def calc_k_copy(hop_from_to, ref_state):
@@ -45,9 +30,10 @@ def calc_k_copy(hop_from_to, ref_state):
                     2, # copy conditional probs up to (inclusive) the third component
                     2, 
                     3 )        
-    >>> 
-    >>> Ns=9; rctl = Lattice_rectangular(3,3); I = [2**8 + 2**4 + 2**1]
-    >>> hop_from_to, states_I, matrix_elem = valid_states(*kinetic_term(I, rctl))
+    >>> from physics import Lattice_rectangular, kinetic_term2 
+    >>> Ns=9; rctl = Lattice_rectangular(3,3); I = 2**8 + 2**4 + 2**1
+    >>> hop_from_to, states_I, matrix_elem = kinetic_term2(I, rctl)
+    >>> hop_from_to, _, _ = sort_onehop_states(hop_from_to, states_I, matrix_elem)
     >>> k_copy = (0, 0, 0, 1, 1, 1, 1, 2, 2, 2)
     >>> k_copy == calc_k_copy(hop_from_to, int2bin(I, ns=Ns))
     True
