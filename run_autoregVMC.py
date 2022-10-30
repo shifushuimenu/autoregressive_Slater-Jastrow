@@ -66,9 +66,9 @@ use_cuda = False
 # set random number seed
 if not args.seed or args.seed == 0:
     args.seed = np.random.randint(1, 10**8) + MPI_rank
-    torch.manual_seed(args.seed) 
-    np.random.seed(args.seed)
-    if use_cuda: torch.cuda.manual_seed_all(args.seed)
+torch.manual_seed(args.seed) 
+np.random.seed(args.seed)
+if use_cuda: torch.cuda.manual_seed_all(args.seed)
 
 Lx = args.Lx # 5  # 15
 Ly = args.Ly # 5
