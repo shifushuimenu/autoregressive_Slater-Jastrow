@@ -16,6 +16,8 @@ class Lattice1d(object):
         self.nx = ns
         self.ny = 1
         self.coord = 2 
+        self.dims = np.array([self.nx, self.ny])
+        self.CHECK_DUPLICATE_BONDS = True if np.any(self.dims == 2) else False 
         self.neigh = np.zeros((self.ns, self.coord), dtype='object')
         # left neighbours 
         self.neigh[0, 0] = self.ns-1
@@ -31,6 +33,8 @@ class Lattice_rectangular(object):
         self.ny = ny 
         self.ns = self.nx * self.ny
         self.coord = 4
+        self.dims = np.array([self.nx, self.ny])
+        self.CHECK_DUPLICATE_BONDS = True if np.any(self.dims == 2) else False 
 
         rectl = np.arange(self.ns).reshape(self.nx, self.ny) 
         up    = np.roll(rectl, 1, axis=0).flatten()
@@ -134,11 +138,7 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
         >>> matrix_elem[0:8]
         array([-1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, -1.0], dtype=object)
     """
-    #I = np.asarray(I, dtype='object')
     assert type(I) == int 
-    neigh = lattice.neigh
-    ns = lattice.ns
-    coord = lattice.coord
 
     # preallocate
     I_prime = np.empty((lattice.num_bonds, ), dtype='object')
@@ -157,7 +157,7 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
             I_prime[count] = I - K + L
             ii = min(i,j)
             jj = max(i,j)
-            matrix_elem[count] = -t_hop * fermion_parity(ns, I, ii, jj)
+            matrix_elem[count] = -t_hop * fermion_parity(lattice.ns, I, ii, jj)
 
             if I & pow2i == pow2i and I ^ I+pow2j == pow2j:
                 r = i; s = j
@@ -172,15 +172,16 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
     matrix_elem = matrix_elem[0:count]
 
     # make sure there are no duplicates in the hopping bonds (this happens for 2x2 lattice )
-    rs_pos_unique = []
-    idx_unique = []
-    for ii, item in enumerate(rs_pos):
-        if item not in rs_pos_unique:
-            rs_pos_unique.append(item)
-            idx_unique.append(ii)
-    rs_pos = rs_pos_unique 
-    I_prime = I_prime[idx_unique]
-    matrix_elem = matrix_elem[idx_unique]
+    if lattice.CHECK_DUPLICATE_BONDS:
+        rs_pos_unique = []
+        idx_unique = []
+        for ii, item in enumerate(rs_pos):
+            if item not in rs_pos_unique:
+                rs_pos_unique.append(item)
+                idx_unique.append(ii)
+        rs_pos = rs_pos_unique 
+        I_prime = I_prime[idx_unique]
+        matrix_elem = matrix_elem[idx_unique]
 
     return ( rs_pos, I_prime, matrix_elem )
 
