@@ -40,6 +40,16 @@ class Lattice_rectangular(object):
 
         self.neigh = np.vstack((up, right, down, left)).transpose().astype('object') # idxs: sitenr, direction (up=0, right=1, down=2, left=3)        
 
+        # hopping bonds 
+        self.bonds = []            
+        for i in range(self.ns):
+            for d in range((self.coord//2)):
+                j = self.neigh[i, d]
+                self.bonds.append((i,j))
+        self.num_bonds = len(self.bonds)
+        assert self.num_bonds == 2*self.ns
+
+
 
 def fermion_parity(n, state_idx, i, j):
     """
@@ -104,9 +114,9 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
             hop_from_to: list of pairs [(i1_initial, i1_final), (i2_initial, i2_final), ...]
                 where state I1_prime is obtained from I by a particle hopping from i1_initial to i1_final, 
                 state I2_prime is obtained from I by hopping from i2_initial to i2_final etc. 
-            I_prime: list of ints of length `max_num_connect`
+            I_prime: list of ints of length `num_bonds`
                 List of states connected to I by the application of the kinetic operator K_kin.
-                `max_num_connect` is the number of distinct hopping terms in the kinetic
+                `num_bonds` is the number of distinct hopping terms in the kinetic
                 operator. If a given hopping term annihilates state |I>, the "connecting state" is still recorded, 
                 however with matrix element zero. This is to ensure that, given a batch of samples, 
                             
@@ -115,6 +125,14 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
 
         Example:
         --------
+        >>> rctl = Lattice_rectangular(4,4)
+        >>> hop_from_to, I_prime, matrix_elem = kinetic_term(0+2**3+2**5+2**7+2**10+2**12, rctl)
+        >>> hop_from_to
+        [(12, 0), (3, 2), (3, 15), (3, 0), (5, 4), (5, 1), (5, 6), (7, 6), (7, 4), (5, 9), (10, 9), (10, 6), (10, 11), (7, 11), (12, 8), (12, 13), (10, 14), (12, 15)]
+        >>> I_prime[0:8]
+        array([1193, 5284, 38048, 5281, 5272, 5258, 5320, 5224], dtype=object)
+        >>> matrix_elem[0:8]
+        array([-1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, -1.0], dtype=object)
     """
     #I = np.asarray(I, dtype='object')
     assert type(I) == int 
@@ -123,34 +141,32 @@ def kinetic_term( I, lattice, t_hop=1.0 ):
     coord = lattice.coord
 
     # preallocate
-    max_num_connect = ns*(coord//2)  # for cubic lattice   
-    I_prime = np.empty((max_num_connect,), dtype='object')
+    I_prime = np.empty((lattice.num_bonds, ), dtype='object')
     matrix_elem = np.empty_like(I_prime)
     rs_pos = [] # particle hopping from position r to position s
 
     count = 0
-    for d in range((coord//2)): ####### Replace this error-prone hack by a sum over hopping-bonds. 
-        for i in range(ns):     #######
-            j = neigh[i, d]
-            pow2i = 1 << i; pow2j = 1 << j # 2**i and 2**j
-            M = pow2i + pow2j
-            K = M & I # bitwise AND
-            L = K ^ M # bitwise XOR
-            STATE_EXISTS = ((K != 0) & (L != 0) & (L != K))
-            if STATE_EXISTS:
-                I_prime[count] = I - K + L
-                ii = min(i,j)
-                jj = max(i,j)
-                matrix_elem[count] = -t_hop * fermion_parity(ns, I, ii, jj)
+    for bond in lattice.bonds:
+        (i,j) = bond
+        pow2i = 1 << i; pow2j = 1 << j # 2**i and 2**j
+        M = pow2i + pow2j
+        K = M & I # bitwise AND
+        L = K ^ M # bitwise XOR
+        STATE_EXISTS = ((K != 0) & (L != 0) & (L != K))
+        if STATE_EXISTS:
+            I_prime[count] = I - K + L
+            ii = min(i,j)
+            jj = max(i,j)
+            matrix_elem[count] = -t_hop * fermion_parity(ns, I, ii, jj)
 
-                if I & pow2i == pow2i and I ^ I+pow2j == pow2j:
-                    r = i; s = j
-                elif I & pow2j == pow2j and I ^ I+pow2i == pow2i:
-                    r = j; s = i 
-                else:
-                    r = -1; s = -1
-                rs_pos.append((r,s))
-                count += 1
+            if I & pow2i == pow2i and I ^ I+pow2j == pow2j:
+                r = i; s = j
+            elif I & pow2j == pow2j and I ^ I+pow2i == pow2i:
+                r = j; s = i 
+            else:
+                r = -1; s = -1
+            rs_pos.append((r,s))
+            count += 1
 
     I_prime = I_prime[0:count]
     matrix_elem = matrix_elem[0:count]
