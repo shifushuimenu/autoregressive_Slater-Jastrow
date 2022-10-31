@@ -7,23 +7,25 @@
 
 import numpy as np 
 import torch 
+from utils import default_dtype_torch
 from torch.distributions.one_hot_categorical import OneHotCategorical
-from itertools import permutations 
 
 from selfMADE import selfMADE
-from slater_sampler_ordered import SlaterDetSampler_ordered
-#from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
+
+if True:
+    from slater_sampler_ordered import SlaterDetSampler_ordered
+else:
+    # CAREFUL: this crashes in long runs because of zero probabilities
+    from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 
 from one_hot import occ_numbers_unfold, occ_numbers_collapse
 from bitcoding import int2bin, bin2pos
-from utils import default_dtype_torch
         
 # imports needed in lowrank_kinetic()
 from k_copy import sort_onehop_states 
 from test_suite import ratio_Slater, local_OBDM
-from physics import kinetic_term2
+from physics import kinetic_term
 
-import sys
 from time import time 
 from profilehooks import profile 
 
@@ -85,10 +87,12 @@ class SlaterJastrow_ansatz(selfMADE):
 
         self.t_logprob_B = 0
         self.t_logprob_F = 0
-        
+       
+
     def sample(self):
         sample_unfolded, log_prob_sample = self.sample_unfolded()
         return occ_numbers_collapse(sample_unfolded, self.D)
+
 
     def sample_unfolded(self, seed=None):
         """
@@ -195,7 +199,6 @@ class SlaterJastrow_ansatz(selfMADE):
 
             Input:
             ------
-
                 samples: binary array, i.e. 
                     torch.Tensor([[1,0,1,0], [0,0,1,1], [1,1,0,0]])
                     First dimension is batch dimension. 
@@ -211,10 +214,6 @@ class SlaterJastrow_ansatz(selfMADE):
         # During density estimation the Pauli blocker layer is not needed. 
         with torch.no_grad():
            self.net[-1].Pauli_blocker[:,:] = 0.0
-        ###    for i in range(self.num_components-1):
-        ###       self.net[-1].Pauli_blocker[i+1,:] = 0.0
-        ###       self.net[-1].Pauli_blocker[i+1,:pos[i]+1] = torch.tensor([float('-inf')]) 
-        ###       self.net[-1].Pauli_blocker[i+1,self.D-self.num_components+(i+1)+1:] = torch.tensor([float('-inf')])
 
         samples_unfold = occ_numbers_unfold(samples, duplicate_entries=False)
         # Flatten leading dimensions (This is necessary since there may a batch of samples 
@@ -290,43 +289,6 @@ class SlaterJastrow_ansatz(selfMADE):
         samples = torch.as_tensor(samples)
         assert samples.shape[0] == 1 # only one sample per batch
         return torch.exp(self.log_prob(samples))
-
-
-    def log_prob_unbatch(self, samples):
-        """
-            Needed because the Pauli blocking layer cannot accept batched input (so far).   
-        """
-
-        if  samples.shape[0] > 1:
-            batchsize = samples.shape[0]
-            log_prob = torch.zeros(batchsize)
-            for i in range(batchsize):
-                ss = samples[i]
-                log_prob[i] = self.log_prob(ss.unsqueeze(dim=0))
-            return log_prob
-        else:
-            return self.log_prob(samples)
-
-
-    def psi_amplitude_unbatch(self, samples):
-        """
-            Needed because the Pauli blocking layer cannot accept batched input (so far).   
-        """
-        samples = torch.as_tensor(samples)
-        if len(samples.shape) > 2:
-            samples_flat = samples.view(-1, samples.shape[-1])
-        else:
-            samples_flat = samples 
-        if  samples_flat.shape[0] > 1:
-            batchsize = samples_flat.shape[0]
-            amp = torch.zeros(batchsize)
-            for i in range(batchsize):
-                ss =  samples_flat[i] 
-                amp[i] = self.psi_amplitude(ss.unsqueeze(dim=0))
-            # reshape leading dimensions back to original shape (last dim is missing now)                
-            return(amp.view(*samples.shape[:-1]))
-        else:
-            return self.psi_amplitude(samples)        
 
 
     def psi_amplitude_I(self, samples_I):
@@ -408,7 +370,7 @@ class SlaterJastrow_ansatz(selfMADE):
 
 
         config_ref = int2bin(I_ref, ns=self.D)
-        rs_pos, xs_I, matrix_elem = sort_onehop_states(*kinetic_term2(I_ref, lattice))
+        rs_pos, xs_I, matrix_elem = sort_onehop_states(*kinetic_term(I_ref, lattice))
 
         # conditional probabilities of all onehop states
         xs_hat_F, cond_prob_ref_F = self.slater_sampler.lowrank_kinetic(I_ref, xs_I, rs_pos, print_stats=True)        
@@ -454,151 +416,3 @@ class SlaterJastrow_ansatz(selfMADE):
         E_kin_loc = np.dot(matrix_elem[:], b_absamp[:] * b_relsign[:]) / abs(psi_loc)
 
         return E_kin_loc, b_absamp
-
-        
-
-def init_test(N_particles=3, N_sites=5):
-    """Initialize a minimal test system."""
-    from test_suite import prepare_test_system_zeroT
-
-    (N_sites, eigvecs) = prepare_test_system_zeroT(Nsites=N_sites)
-    # Aggregation of MADE neural network as Jastrow factor 
-    # and Slater determinant sampler. 
-    Sdet_sampler = SlaterDetSampler(eigvecs, Nparticles=N_particles)
-    SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=N_particles, D=N_sites, net_depth=2)
-
-
-def quick_tests():
-    """Tests created ad hoc while debugging."""
-    from test_suite import ( 
-            prepare_test_system_zeroT
-            )
-
-    from bitcoding import bin2int
-    from one_hot import occ_numbers_unfold 
-
-    N_particles = 2
-    N_sites = 5
-    (N_sites, eigvecs) = prepare_test_system_zeroT(Nsites=N_sites)
-
-    num_samples = 200
-
-    # Aggregation of MADE neural network as Jastrow factor 
-    # and Slater determinant sampler. 
-    Sdet_sampler = SlaterDetSampler_ordered(Nsites=N_sites, Nparticles=N_particles, single_particle_eigfunc=eigvecs)
-    SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=N_particles, D=N_sites, net_depth=2)
-
-    batch = torch.zeros(4, N_particles*N_sites)
-    for i in range(4):
-        sample = SJA.sample_unfolded()
-        batch[i, ...] = sample[0]
-
-    print("batch=", batch)
-    print("SJA.psi_amplitude=", SJA.psi_amplitude(occ_numbers_collapse(batch, N_sites)))
-
-    # SJA.log_prob() throws an error message. 
-    print("SJA.log_prob=", SJA.log_prob(occ_numbers_collapse(batch, N_sites)))
-    print("SDet.psi_amplitude=", Sdet_sampler.psi_amplitude(occ_numbers_collapse(batch, N_sites)))
-
-    print("")
-    print("test input of integer-coded states (batched):")
-    print("=============================================")
-    II = bin2int(occ_numbers_collapse(batch, N_sites))
-    print("SDet.psi_amplitude_I=", Sdet_sampler.psi_amplitude_I(II))
-    print("SJA.psi_amplitude_I=", SJA.psi_amplitude_I(II))
-
-    print("")
-    print("test behaviour w.r.t. introducing an additional batch dimension: ")
-    print("================================================================ ")
-    print("batch.shape=", batch.shape)
-    print("batch.unsqueeze(dim=0).shape=", batch.unsqueeze(dim=0).shape)
-    batch_unsq = batch.unsqueeze(dim=0)
-    print("SJA.psi_amplitude(batch.unsqueeze(dim=0))=", SJA.psi_amplitude_unbatch(occ_numbers_collapse(batch_unsq, N_sites)))
-
-
-def _test():
-    import doctest
-    doctest.testmod(verbose=False)
-    print(quick_tests.__doc__)
-    quick_tests()
-
-if __name__ == '__main__':
-
-    torch.set_default_dtype(default_dtype_torch)
-
-    #_test()
-    import matplotlib.pyplot as plt 
-    from synthetic_data import * 
-    from test_suite import ( 
-            prepare_test_system_zeroT
-            )
-
-    from bitcoding import bin2int
-    from one_hot import occ_numbers_unfold 
-
-    N_particles = 3
-    N_sites = 6
-    (N_sites, eigvecs) = prepare_test_system_zeroT(Nsites=N_sites)
-
-    num_samples = 1000
-
-    # Aggregation of MADE neural network as Jastrow factor 
-    # and Slater determinant sampler. 
-    Sdet_sampler = SlaterDetSampler_ordered(Nsites=N_sites, Nparticles=N_particles, single_particle_eigfunc=eigvecs)
-    SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=N_particles, D=N_sites, net_depth=2)
-
-    data_dim = 2**N_sites
-    hist = torch.zeros(data_dim)
-    model_probs = np.zeros(data_dim)
-    model_probs2 = np.zeros(data_dim)
-    DATA = Data_dist(Nsites=N_sites, Nparticles=N_particles, seed=678)
-
-    batch = torch.zeros(num_samples, N_particles*N_sites)
-    for i in range(num_samples):
-        sample_unfolded, log_prob_sample = SJA.sample_unfolded() # returns one sample, but with batch dimension
-        batch[i, ...] = sample_unfolded[0]
-        s = occ_numbers_collapse(sample_unfolded, N_sites)
-        print("s=", s)
-        print("amplitude=", SJA.psi_amplitude(s))
-        print("amp^2=", SJA.psi_amplitude(s)**2)
-        print("prob=", SJA.prob(s))
-        model_probs[DATA.bits2int(s.squeeze(dim=0))] = torch.exp(SJA.log_prob(s)).detach().numpy()
-        model_probs2[DATA.bits2int(s.squeeze(dim=0))] = np.exp(log_prob_sample)
-        s = s.squeeze(dim=0)
-        hist[DATA.bits2int(s)] += 1
-    hist /= num_samples
-
-    f = plt.figure()
-    ax0 = f.subplots(1,1)
-
-    ax0.plot(range(len(hist)), np.array(hist), 'r--o', label="MADE samples hist")
-    ax0.plot(range(len(model_probs)), np.array(model_probs), 'g--o', label="MADE: exp(log_prob)")
-    ax0.plot(range(len(model_probs2)), np.array(model_probs2), 'b--o', label="MADE: prob_sampled")
-    ax0.legend()
-
-    plt.show()
-
-    ##print("batch=", batch)
-    ##print("SJA.psi_amplitude=", SJA.psi_amplitude(occ_numbers_collapse(batch, N_sites)))
-
-    ##SJA.log_prob() throws an error message. 
-    ##print("SJA.log_prob=", SJA.log_prob(occ_numbers_collapse(batch, N_sites)))
-    ##print("SDet.psi_amplitude=", Sdet_sampler.psi_amplitude(occ_numbers_collapse(batch, N_sites)))
-
-    ##print("")
-    ##print("test input of integer-coded states (batched):")
-    ##print("=============================================")
-    ##II = bin2int(occ_numbers_collapse(batch, N_sites))
-    ##print("SDet.psi_amplitude_I=", Sdet_sampler.psi_amplitude_I(II))
-    ##print("SJA.psi_amplitude_I=", SJA.psi_amplitude_I(II))
-
-    ##print("")
-    ##print("test behaviour w.r.t. introducing an additional batch dimension: ")
-    ##print("================================================================ ")
-    ##print("batch.shape=", batch.shape)
-    ##print("batch.unsqueeze(dim=0).shape=", batch.unsqueeze(dim=0).shape)
-    ##batch_unsq = batch.unsqueeze(dim=0)
-    ##print("SJA.psi_amplitude(batch.unsqueeze(dim=0))=", SJA.psi_amplitude_unbatch(occ_numbers_collapse(batch_unsq, N_sites)))
-
-
-

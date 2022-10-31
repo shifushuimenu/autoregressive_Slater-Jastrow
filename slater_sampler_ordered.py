@@ -24,7 +24,6 @@ from time import time
 from k_copy import calc_k_copy
 from monitoring_old import logger as mylogger
 import lowrank_update as LR
-from lowrank_update import ErrorFinitePrecision
 
 from profilehooks import profile
 import matplotlib.pyplot as plt 
@@ -711,7 +710,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                             # NOTE: The cond. probs. for (k-1)-th particle are computed retroactively while the 
                                             # cond. probs. for k-th particle of the reference state are being computed. 
                                             cond_prob_onehop[state_nr, k-1, i] = corr_factor * cond_prob_ref[k, i] # update: (k-1) -> k                                                
-                                        except ErrorFinitePrecision as e:
+                                        except LR.ErrorFinitePrecision as e:
                                             print("Excepting finite precision error 1, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
                                             cond_prob_onehop[state_nr, k-1, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-2], i=i)                                             
                                     else:
@@ -738,8 +737,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                             except np.linalg.LinAlgError as e: # from inverting singular matrix in LR.adapt_Ainv()
                                                 print("Excepting LinAlgError 1, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
                                                 cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
-                                            except ErrorFinitePrecision as e:
-                                                print("Excepting ErrorFinitePrecision 1, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
+                                            except LR.ErrorFinitePrecision as e:
+                                                print("Excepting LR.ErrorFinitePrecision 1, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
                                                 cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
                                         else:
                                             print("Gnum_inv_reuse is None (i.e. zero cond. prob. of reference state)")
@@ -761,14 +760,14 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                         corr2 = LR.corr_factor_remove_r(Gdenom_inv_, r=r)
                                         corr_factor_Gdenom = corr1 * corr2 
                                         if corr_factor_Gdenom < LR.thresh:
-                                            raise ErrorFinitePrecision
+                                            raise LR.ErrorFinitePrecision
                                         corr_factor = corr_factor_Gnum / corr_factor_Gdenom                                        
                                         cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k,i]                                                                           
                                     except np.linalg.LinAlgError as e:
                                         print("Excepting LinAlgError 2, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
                                         cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
-                                    except ErrorFinitePrecision as e: #np.linalg.LinAlgError as e: # from inverting singular matrix in LR.adapt_Ainv() 
-                                        print("Excepting ErrorFinitePrecision 2, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
+                                    except LR.ErrorFinitePrecision as e: #np.linalg.LinAlgError as e: # from inverting singular matrix in LR.adapt_Ainv() 
+                                        print("Excepting LR.ErrorFinitePrecision 2, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
                                         cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
                                     assert -assert_margin <= cond_prob_onehop[state_nr, k, i] <= 1.0 + assert_margin, "cond_prob[state_nr=%d, k=%d, i=%d]=%16.10f" % (state_nr, k, i, cond_prob_onehop[state_nr, k, i])
 
@@ -777,7 +776,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                     try:
                                         corr_factor = LR.removeadd_rs(Gnum_inv, Gdenom_inv, r, s)
                                         cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]                                                                                                                     
-                                    except ErrorFinitePrecision as e: 
+                                    except LR.ErrorFinitePrecision as e: 
                                         print("Excepting finite precision error 2, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
                                         cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
                                     assert -assert_margin <= cond_prob_onehop[state_nr, k, i] <= 1.0 + assert_margin, "cond. prob = %16.10f" % (cond_prob_onehop[state_nr, k, i])
@@ -824,7 +823,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                                     else:
                                                         print("Gnum_inv_reuse is None (i.e. zero cond. prob. of reference state)")
                                                         cond_prob_onehop[state_nr, k, j_add] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=j_add)
-                                                except ErrorFinitePrecision as e:
+                                                except LR.ErrorFinitePrecision as e:
                                                         cond_prob_onehop[state_nr, k, j_add] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=j_add)                                                                
                                                 assert -assert_margin <= cond_prob_onehop[state_nr, k, j_add] <= 1.0 + assert_margin, "cond. prob = %16.10f" % (cond_prob_onehop[state_nr, k, j_add])  
                                                 # update cumul. probs. explicitly because this is inside the body of an extra loop                                              
@@ -849,7 +848,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                                 cond_prob_onehop[state_nr, k, i] = corr_factor * (det_Gdenom / det_Gdenom_reuse[k-1]) * cond_prob_ref[k, i]    
                                             else:
                                                 cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
-                                        except ErrorFinitePrecision as e:
+                                        except LR.ErrorFinitePrecision as e:
                                             cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
                                         assert -assert_margin <= cond_prob_onehop[state_nr, k, i] <= 1.0 + assert_margin, "cond prob = %16.10f" %(cond_prob_onehop[state_nr, k, i])
 
@@ -857,7 +856,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                         try:                                           
                                             corr_factor = LR.removeadd_rs(Gnum_inv, Gdenom_inv, r, s)
                                             cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
-                                        except ErrorFinitePrecision as e:
+                                        except LR.ErrorFinitePrecision as e:
                                             print("k>k_r: Excepting finite precision error 3, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
                                             print("ref_conf    =", ref_conf)
                                             print("xs[state_nr]=", xs[state_nr])                                            
@@ -886,7 +885,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                             #try:
                                                 #corr_factor = LR.removeadd_rs(Gnum_inv, Gdenom_inv, r=r, s=s)
                                                 #cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]
-                                            #except ErrorFinitePrecision:
+                                            #except LR.ErrorFinitePrecision:
                                                 #cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
 
                                         #assert cond_prob_onehop[state_nr, k, i] >= 0 - assert_margin, "state_nr=%d, k=%d, i=%i, corr_factor=%16.15f, corr_num=%16.15f, corr_denom=%16.15f, cond_prob=%16.15f" % (state_nr, k, i, corr_factor, corr_factor_Gnum, corr_factor_Gdenom, cond_prob_onehop[state_nr, k, i])    

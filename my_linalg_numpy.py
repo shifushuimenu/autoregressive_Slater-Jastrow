@@ -3,9 +3,9 @@ import numpy as np
 
 def my_det(A, m):
     """
-        Hand-coded determinant formulae for m=1,2,3
+    Hand-coded determinant formulae for m=1,2,3
         
-        Input:
+    Input:
         A: square (m-times-m) torch tensor 
         m: int 
     """

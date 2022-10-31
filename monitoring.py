@@ -35,7 +35,8 @@ class _info_refstate(object):
             "elapsed_adapt", 
             "counter_nonsingular",
             "counter_singular",
-            "counter_skip"
+            "counter_skip", 
+            "size_support"  # size of the support of the conditional probs. (for all connecting states)
         )
 
         # Maximum condition number of the denominator matrix encountered 

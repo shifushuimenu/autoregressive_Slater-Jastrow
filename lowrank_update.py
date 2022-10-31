@@ -1,19 +1,18 @@
 """low-rank update of the determinant of numerator and denominator matrices (used 
 in the algorithm for ordered componentwise direct sampling from a Slater determinant"""
-#IMPROVE: The functions removeadd_rs(), remove_r(), etc. can have division 
-# by zero. This gives only a runtime warning, but it should be dealt with.
-from termios import CFLUSH
+#TODO: The functions removeadd_rs(), remove_r(), etc. can have division 
+#      by zero. This gives only a runtime warning, but it should be dealt with.
 import numpy as np
-
-#from profilehooks import profile 
-
 from block_update_numpy import ( block_update_inverse,
                            block_update_det_correction,
                            block_update_inverse2,
                            block_update_det_correction2 )
 
+#from profilehooks import profile 
+
 eps = np.finfo(float).eps
 thresh = 1.5 * eps
+
 
 class ErrorFinitePrecision(Exception):
     def __init__(self, *args):
@@ -32,7 +31,6 @@ def corr_factor_removeadd_rs(Ainv, r, s):
     with N_K = (n_0, n_1, ..., n_{K-1}) where n_r = 1 and n_s = 0
     and a particle is moved such that after the update n_r = 0 and n_s = 1.         
     """
-    #print("removeadd_rs=", Ainv[r,r], Ainv[s,s], Ainv[r,s], Ainv[s,r])
     cf = (1 + Ainv[r,r]) * (1 - Ainv[s,s]) + Ainv[r,s] * Ainv[s,r]
     return cf
 
@@ -57,7 +55,6 @@ def removeadd_rs(Gnum_inv, Gdenom_inv, r, s):
     """
     corr_factor_Gnum = corr_factor_removeadd_rs(Gnum_inv, r=r, s=s)
     corr_factor_Gdenom = corr_factor_removeadd_rs(Gdenom_inv, r=r, s=s)   
-    #return corr_factor_Gnum / corr_factor_Gdenom
     if abs(corr_factor_Gdenom) < thresh:
         raise ErrorFinitePrecision("corr_factor_Gdenom=%f"%(abs(corr_factor_Gdenom)))
     else: 
@@ -140,11 +137,11 @@ def corr_factor_Gdenom_from_Ainv(Ainv, Gglobal, r, s, i_start, i_end):
 
 def adapt_Ainv_sing(Gdenom_inv, Gglobal, r, s, i_start, i_end, pos1, pos2):
     """
-        This routine is used if `adapt_Ainv` throws a "Singular matrix" exception. 
+    This routine is used if `adapt_Ainv` throws a "Singular matrix" exception. 
 
-        Extends inverse of denominator matrix from `i_start` (inclusive) up to position `i_end` (inclusive)
-        and puts particles both at position `pos1` and `pos2`. `pos1` < `pos2` are 
-        required to lie in the closed interval [i_start, i_end].
+    Extends inverse of denominator matrix from `i_start` (inclusive) up to position `i_end` (inclusive)
+    and puts particles both at position `pos1` and `pos2`. `pos1` < `pos2` are 
+    required to lie in the closed interval [i_start, i_end].
     """
     assert r == 0
     assert Gdenom_inv.shape == (i_start, i_start)
@@ -164,7 +161,6 @@ def adapt_Ainv_sing(Gdenom_inv, Gglobal, r, s, i_start, i_end, pos1, pos2):
         C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD
         )
     return Gnum_inv_, corr
-
 
 
 def adapt_Gdenom_inv(Gdenom_inv, Gglobal, r, s):
@@ -196,15 +192,15 @@ def adapt_Gnum_inv(Gnum_inv, Gglobal, r, s, i_last_nonsing, i):
 
 def lowrank_update_inv_addremove_rs(Gdenom_inv, r, s):
     """
-        Remove a particle at `r` and add one at `s`. 
-        Calculate the inverse of A^{'} given the resulting low-rank update:
-            A^{'} = A  + U(r,s) * V(r,s)^{T}
-        and the correction to the determinant:
-            det(A^{'}) = det_corr * det(A).
+    Remove a particle at `r` and add one at `s`. 
+    Calculate the inverse of A^{'} given the resulting low-rank update:
+        A^{'} = A  + U(r,s) * V(r,s)^{T}
+    and the correction to the determinant:
+        det(A^{'}) = det_corr * det(A).
 
-        Return:
-            inv(A^{'})
-            det_corr
+    Return:
+        inv(A^{'})
+        det_corr
     """
     m = Gdenom_inv.shape[0]
     # capacitance matrix CC = id_2 + V_T*Ainv*U
@@ -299,34 +295,3 @@ def det_Gnum_from_Gdenom(Gdenom_inv, det_Gdenom, Gglobal, r, s, xmin, i):
     det_Schur = np.linalg.det(S)
 
     return det_Gdenom_ * det_Schur
-
-
-# def lowrank_update_Schur_det_removeadd_rs(D, C, Gdenom_inv, B, r, s):
-#     """
-#         Low-rank update of the determinant of the Schur complement.
-#         Remove a particle at position `r`, add one at position `s`. 
-#     """ 
-#     CGdenom_inv = np.matmul(C, Gdenom_inv) # should be precomputed
-#     Gdenom_invB = CGdenom_inv.transpose()  # should be precomputed
-#     CGB = np.matmul(CGdenom_inv, B)        # should be precomputed
-
-#     # capacitance matrix
-#     CC = np.array([ [1 + Gdenom_inv[r,r], Gdenom_inv[r,s]], 
-#                     [- Gdenom_inv[s,r], 1 - Gdenom_inv[s,s]] ])
-#     CC_inv = np.linalg.inv(CC)
-
-#     CGB_updated = CGB - np.matmul( np.matmul(np.hstack((CGdenom_inv[:,r], CGdenom_inv[:,s])), CC_inv),
-#                                np.vstack((Gdenom_invB[r,:], - Gdenom_invB[s,:])) )
-
-#     # determinant of the Schur complement after low-rank update
-
-#     return np.linalg.det(D - CGB_updated)
-
-
-# def lowrank_update_Schur_det_remove_r(D, C, Gdenom_inv, B, r):
-#     """
-#         Low-rank update of the determinant of the Schur complement.
-#         Remove a particle at position `r`, don't add any particle. 
-#     """ 
-#     CGdenom_inv = np.matmul(C, Gdenom_inv) # should be precomputed
-#     Gdenom_invB = CGdenom_inv.transpose()  # should be precomputed

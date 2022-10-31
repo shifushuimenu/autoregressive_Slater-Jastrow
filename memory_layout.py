@@ -19,7 +19,7 @@ def store_G_linearly(G):
 
 def idx_linearly_stored_G(G_linear_mem, rows, cols, chunk, lr, lc):
     """
-       `G_linear_mem` will be a torch tensor. 
+       The output `G_linear_mem` will be a torch tensor. 
       
        ________
        |      |  |
@@ -120,29 +120,29 @@ if __name__ == "__main__":
     G = np.random.randn(L,L)
     G_lin = store_G_linearly(G)
 
-    B1_lin = idx_linearly_stored_G(G_lin, [0,1,2], [3], "B")
+    B1_lin = idx_linearly_stored_G(G_lin, [0,1,2], [3], chunk="B", lr=3, lc=1)
     B1 = G[np.ix_([0,1,2], [3])]
     assert np.isclose(B1_lin, B1).all()
 
-    C1_lin = idx_linearly_stored_G(G_lin, [3], [0,1,2], "C")
+    C1_lin = idx_linearly_stored_G(G_lin, [3], [0,1,2], chunk="C", lr=1, lc=3)
     C1 = G[np.ix_([3], [0,1,2])]
     assert np.isclose(C1_lin, C1).all()
 
-    D1_lin = idx_linearly_stored_G(G_lin, [3], [3], "D")
+    D1_lin = idx_linearly_stored_G(G_lin, [3], [3], chunk="D", lr=1, lc=1)
     D1 = G[np.ix_([3], [3])]
     assert np.isclose(D1_lin, D1).all()
 
 
     # special cases: just one element array, but elements are different 
-    B1_lin = idx_linearly_stored_G(G_lin, [1,2], [3], "B")
+    B1_lin = idx_linearly_stored_G(G_lin, [1,2], [3], chunk="B", lr=2, lc=1)
     B1 = G[np.ix_([1,2], [3])]
     assert np.isclose(B1_lin, B1).all()
 
-    B_lin = idx_linearly_stored_G_blockB(G_lin, [0,1,2], [3,4,5], "B")
+    B_lin = idx_linearly_stored_G_blockB(G_lin, [0,1,2], [3,4,5], chunk="B", lr=3, lc=3)
     B = G[np.ix_([0,1,2], [3,4,5])]
     assert np.isclose(B_lin, B).all()
 
-    B_lin = idx_linearly_stored_G_blockB1(G_lin, [0,1,2], [5], "B1")
+    B_lin = idx_linearly_stored_G_blockB1(G_lin, [0,1,2], [5], chunk="B1", lr=3, lc=1)
     B = G[np.ix_([0,1,2], [5])]
     assert np.isclose(B_lin, B).all()
 
@@ -152,10 +152,10 @@ if __name__ == "__main__":
     Ksites = []
     for i in range(L):
         if i==0:
-            submat = idx_linearly_stored_G(G_lin, [i], [i], "D")
+            submat = idx_linearly_stored_G(G_lin, [i], [i], chunk="D", lr=1, lc=1)
         else:
-            submat = idx_linearly_stored_G(G_lin, Ksites, [i], "B")
-            submat = idx_linearly_stored_G(G_lin, [i], Ksites, "C")
+            submat = idx_linearly_stored_G(G_lin, Ksites, [i], chunk="B", lr=len(Ksites), lc=1)
+            submat = idx_linearly_stored_G(G_lin, [i], Ksites, chunk="C", lr=1, lc=len(Ksites))
         Ksites.append(i)
     t1 = time()
     print("linear storage with indexing: elapsed =", t1-t0)

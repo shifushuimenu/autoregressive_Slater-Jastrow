@@ -1,11 +1,13 @@
-"""Routines for fermionic lattice Hamiltonians"""
+"""Routines for fermionic lattice Hamiltonians: lattice and kinetic term"""
 import torch
 import numpy as np
 
 from bitcoding import *
 from utils import default_torch_device
+# from profilehooks import profile
 
-#__all__ = ["local_estimator", "ham"]
+__all__ = ["fermion_parity", "kinetic_term", "Lattice_rectangular"]
+
 
 class Lattice1d(object):
     """1d lattice with pbc"""
@@ -39,62 +41,51 @@ class Lattice_rectangular(object):
         self.neigh = np.vstack((up, right, down, left)).transpose().astype('object') # idxs: sitenr, direction (up=0, right=1, down=2, left=3)        
 
 
-
-def fermion_parity( n, state_idx, i, j ):
+def fermion_parity(n, state_idx, i, j):
     """
-        Starting from the occupation number state encoded by the integer 
-        `state_idx`, let a particle hop from position `i` to position `j`
-        (or the backward process, i<j), which may result in a new state. If the new 
-        state does not vanish, fermion_parity() returns its sign. 
-    
-        So this functions counts the number of ones in the bit representation of 
-        integer `state_idx` between sites i and j, i.e. in the closed interval [i+1, j-1]. 
-        
-        Parameters:
-        -----------
-            n: number of sites   
-            state_idx: int or 1d array_like of ints 
-                bitcoded occupation number state 
-            i, j: ints
-                0 <= i < j < n. The particle is assumed to hop from i to j or form j to i,
-                irrespective of whether such a hopping process is possible for the given 
-                occupation number states. 
-            
-        Returns:
-        --------
-            parity: \in [+1, -1]
-            
-        Example:
-        --------
-        >>> l = [7, 10, 0] # accepts list 
-        >>> fermion_parity( 4, l, 0, 3 )
-        array([ 1, -1,  1])
-        >>> a = np.array([6, 10, 0]) # accepts numpy array 
-        >>> fermion_parity( 4, a, 0, 3 )
-        array([ 1, -1,  1])
-        >>> t = torch.Tensor([6, 10, 0]) # accepts torch tensor
-        >>> fermion_parity( 4, t, 0, 3 )
-        array([ 1, -1,  1])
-        
-    """
-    state_idx = np.array(state_idx, dtype=np.int64)
-    assert(np.all(state_idx < np.power(2,n)))
-    assert(0 <= i < j < n)
-    # count number of particles between site i and j 
-    mask = np.zeros((state_idx.shape + (n,)), dtype=np.int64)
-    mask[..., slice(i+1, j)] = 1
-    mask = bin2int(mask)
-    num_exchanges = np.array(
-        [bin(np.bitwise_and(mask[batch_idx], state_idx[batch_idx])).count('1') for batch_idx in range(mask.shape[0])]
-        )      
-    parity = np.where(num_exchanges%2==0, +1, -1)
-    
-    return parity         
+    NO BATCH INPUT ALLOWED.
 
+    Starting from the occupation number state encoded by the integer 
+    `state_idx`, let a particle hop from position `i` to position `j`
+    (or the backward process, i<j), which may result in a new state. If the new 
+    state does not vanish, fermion_parity() returns its sign. 
+
+    So this functions counts the number of ones in the bit representation of 
+    integer `state_idx` between sites i and j, i.e. in the closed interval [i+1, j-1]. 
+
+    s = '0b11001' -> s[2:] = '11001'  (remove the leading characters 0b)
+    s[2:].rjust(6, '0') = '011001'    (add leading zeros by right-justifying)
+    s[2:].rjust(6, '0')[::-1] = '100110'  (invert order because in our convention we count sites from the right)
+
+    
+    Parameters:
+    -----------
+        n: number of sites   
+        state_idx: int or 1d array_like of ints 
+            bitcoded occupation number state 
+        i, j: ints
+            0 <= i < j < n. The particle is assumed to hop from i to j or from j to i,
+            irrespective of whether such a hopping process is possible for the given 
+            occupation number states. 
         
+    Returns:
+    --------
+        parity: \in [+1, -1]
+
+    Example:
+    --------
+    >>> fermion_parity(4, 6, 0, 3)
+    1
+    >>> fermion_parity(4, 10, 0, 3)
+    -1
+    """
+    #assert 0 <= i < j < n
+    num_exchanges = bin(state_idx)[2:].rjust(n, '0')[::-1].count('1', i+1, j)
+    return (-2) * (num_exchanges%2) + 1
+
 
 #@profile
-def kinetic_term2( I, lattice, t_hop=1.0 ):
+def kinetic_term( I, lattice, t_hop=1.0 ):
     """
         NO BATCH DIMENSION. 
 
@@ -150,7 +141,7 @@ def kinetic_term2( I, lattice, t_hop=1.0 ):
                 I_prime[count] = I - K + L
                 ii = min(i,j)
                 jj = max(i,j)
-                matrix_elem[count] = -t_hop * fermion_parity2(ns, I, ii, jj)
+                matrix_elem[count] = -t_hop * fermion_parity(ns, I, ii, jj)
 
                 if I & pow2i == pow2i and I ^ I+pow2j == pow2j:
                     r = i; s = j
@@ -178,117 +169,11 @@ def kinetic_term2( I, lattice, t_hop=1.0 ):
     return ( rs_pos, I_prime, matrix_elem )
 
 
-def interaction_energy( sample, V=+1.0 ):
-    ####### Works only for 1D.
-    sample = torch.as_tensor(sample)
-    # diagonal matrix elements 
-    # nearest-neighbour interactions
-    interaction = sample[...,1:] * sample[...,:-1]
-    interaction = interaction.sum(axis=-1)
-    interaction += sample[...,0] * sample[...,-1]
-    
-    return V*interaction
-    
-    
-def ham( sample ):
-    """
-        Hamiltonian for one-dimensional t-V model.
-
-        Accepts batched input.
-
-        Input:
-        ------
-        sample: binary array representing an occupation number state 
-                First dimension is batch dimension. 
-
-        Returns: 
-        --------
-        tuple: (connecting_states, matrix_elements)
-        `connecting_states` is an array of integer-coded states that 
-            are connected to the input state `sample` by the action of the 
-            Hamiltonian. `connecting_states[..., 0]` is identical to `bin2int(sample[..., 0])`,
-            i.e. `connecting_states` includes the input state. 
-            First dimension is the batch dimension. 
-        `matrix_elements` are ordered like the `connecting_states`.
-
-    """
-    sample = np.array(sample)
-
-    num_particles = np.count_nonzero(sample[0,...])    
-    # ========================
-    # just for testing     
-    V = 0.33
-    t = 1.0
-    ns = sample.shape[-1]
-    lattice = Lattice1d(ns)
-    # ========================    
-
-    I = bin2int(sample)
-    I_prime, matrix_elem = kinetic_matrix_elem( I, lattice )
-    # Set states in `I_prime` which were annihilated by the hopping operator to a valid value (i.e.
-    # in the correct particle number sector) so that downstream subroutines don't crash. 
-    # This does not introduce errors, since the corresponding matrix elements are zero anyways
-    # so that their multiplicative contribution is zero. 
-    I_prime[I_prime == 0] = 2**num_particles - 1
-
-    E_int = interaction_energy( sample )
-
-    return ( 
-        torch.cat((I[:,None], I_prime), dim=-1), # combine diagonal and off-diagonal matrix elements
-        torch.cat((V*E_int[:,None], -t*matrix_elem), dim=-1)
-    )
+def _test():
+    import doctest 
+    doctest.testmod(verbose=True)
 
 
-def local_estimator(samples, obs, wf_ansatz, batchsum=False):
-    """
-        Parameters:
-        -----------
-        ACCEPTS BATCHED SAMPLES
-
-        samples: binary array 
-            A batch of occupation number states, e.g. [[1,0,0,1]].
-        obs: Function representing the action of the Hamiltonian (or any other observable `obs`
-            that is to be measured in VMC) onto the basis state `sample`. 
-            It should return an array of matrix elements and an array of basis states which 
-            are connected to the basis state `sample` via the action of the Hamiltonian or observable. 
-        wf_ansatz: Wavefunction ansatz object which is defined as providing 
-            the methods 
-                wf_ansatz.psi_amplitude_I(sample_I)
-                wf_ansatz.psi_amplitude(sample)
-            where `sample_I` is a batch of bitcoded integers and `sample` is a batch 
-            of occupation number states. 
-        batchsum: boolean
-            Whether to sum the local estimator over batches, which results in a scalar output,
-            or not, which results in a batched output. 
-
-        Returns:
-        --------
-        local_estimator: float 
-            Value of the local estimator (*summed over all batches* for batchsum=True), e.g. for 
-            the local energy with Hamiltonian operator `H`
-
-            E_loc = \sum_b \sum_i \frac{ < b | H | i > < i | \psi > }{ < b | psi > }
-
-    """    
-    samples = torch.as_tensor(samples)
-    ns = samples.shape[-1]
-    nsamples = samples.shape[0] # first dimension is batch dimension
-    num_particles = np.count_nonzero(samples[0,...])
-    assert ns == wf_ansatz.D, "wf_ansatz.D=%d, ns=%d"%(wf_ansatz.D, ns)
-    assert(np.all( np.count_nonzero(samples, axis=1) == num_particles))
-
-    connecting_states, matrix_elements = obs( samples )
-
-    amps_cs = wf_ansatz.psi_amplitude_I(connecting_states[...])
-    amp = wf_ansatz.psi_amplitude_unbatch(samples)
-
-    if batchsum:
-        sss = 'bi,bi,b ->'
-    else:
-        sss = 'bi,bi,b -> b'
-    local_estimator = torch.einsum(sss, matrix_elements, amps_cs, 1.0/amp)
-
-    if batchsum:
-        local_estimator /= float(nsamples) # average over batch
-
-    return local_estimator
+if __name__ == "__main__":
+    import doctest 
+    _test()

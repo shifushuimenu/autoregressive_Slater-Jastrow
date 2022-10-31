@@ -1,5 +1,14 @@
-# TODO:
-#  - Put MADE and NADE references 
+"""Masked autoregressive network for indistinguishable particles"""
+#
+# References:
+# -----------
+# [1] M. Germain, K. Gregor, I. Murray and H. Larochelle, Made: Masked autoencoder for 
+#     distribution estimation, PMLR vol. 37, pp. 881-889
+#         http://proceedings.mlr.press/v37/germain15.html
+# [2] D. Wu, L. Wang and P. Zhang, Solving statistical mechanics using variational 
+#     autoregressive networks, Phys. Rev. Lett. 122, 080602 (2019)
+#
+
 import torch
 import numpy as np
 
@@ -11,6 +20,7 @@ from one_hot import occ_numbers_collapse, occ_numbers_unfold
 from bitcoding import int2bin
 
 #__all__ = ['selfMADE']
+
 
 class MaskedLinear(torch.nn.Linear):
     """Ensures autoregressive property of the connectivity matrix"""
@@ -25,6 +35,7 @@ class MaskedLinear(torch.nn.Linear):
         
     def forward(self, x):
         return F.linear(x, self.mask * self.weight, self.bias)
+
 
 class MaskedLinear_unfolded(torch.nn.Linear):
     """rewrite MaskedLinear for one-hot encoding of occupation number states"""
@@ -42,8 +53,6 @@ class MaskedLinear_unfolded(torch.nn.Linear):
         mask_ = np.kron(mask_, np.ones((in_size, out_size))) # torch.kron available in newer version of torch
         self.mask = torch.from_numpy(mask_).to(default_dtype_torch) 
         self.weight.data *= self.mask
-
-        #self.weight.data[torch.where(self.weight.data == 0.0)].requires_grad = False
         
     def forward(self, x):
         return F.linear(x, self.mask * self.weight, self.bias)        
@@ -64,7 +73,7 @@ class Softmax_blocked(torch.nn.Module):
     def forward(self, x):
         """
             Actually, when sampling the positions for the k-th particle, the softmax only needs 
-            to be applied to the k-th blocks, since the other blocks play no role. 
+            to be applied to the k-th block, since the other blocks play no role. 
 
             NOTE: THE PAULI BLOCKER LAYER DEPENDS ON THE SAMPLE, IT CANNOT BE USED WITH A 
             BATCH OF SAMPLES !!!!!
@@ -267,16 +276,12 @@ class selfMADE(torch.nn.Module):
 
         # Cross entropy for all samples returned as a vector (not averaged yet).
         return ce.view(ce.shape[0], -1).sum(dim=-1)
-        
+
+
     def cross_entropy(self, sample):
         x_hat = self.forward(sample)
         assert(x_hat.requires_grad)
         return self._cross_entropy(sample, x_hat)
-
-
-
-
-
 
 
 

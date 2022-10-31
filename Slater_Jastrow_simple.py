@@ -3,10 +3,10 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 
+from utils import default_dtype_torch
 from physics import *
 from slater_sampler_ordered import *
 #from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
-from utils import *
 from one_hot import occ_numbers_collapse
 from bitcoding import *
 
@@ -79,7 +79,7 @@ class PhysicalSystem(object):
         nsites = len(config[0])
         I = bin2int_nobatch(config[0])
 
-        hop_from_to, onehop_states_I, kin_matrix_elements = sort_onehop_states(*kinetic_term2(I, self.lattice))
+        hop_from_to, onehop_states_I, kin_matrix_elements = sort_onehop_states(*kinetic_term(I, self.lattice))
         onehop_states = int2bin(onehop_states_I, ns=nsites)
 
         wl, states, from_to = [], [], []

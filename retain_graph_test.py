@@ -19,7 +19,7 @@ class Sdet(torch.nn.Module):
 
 torch.manual_seed(42)
 
-num_steps=10000
+num_steps=1000
 eta = 0.01
 
 model=Sdet(D=10)
@@ -31,9 +31,9 @@ loss_array = np.zeros(num_steps)
 for ii in range(num_steps):
 
     loss = torch.sum(model.U_rot.flatten())
-    # if ii == 1:
-    #     viz_graph = make_dot(loss)
-    #     viz_graph.view()
+    if ii == 1:
+        viz_graph = make_dot(loss)
+        viz_graph.view()
 
     loss_array[ii] = loss.item()
 

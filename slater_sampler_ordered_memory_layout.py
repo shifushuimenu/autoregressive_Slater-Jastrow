@@ -3,7 +3,6 @@
 #       - Rather than calculating the determinant of the Schur complement use the formula
 #         for the determinant of a block matrix. (DONE)
 #       - Is the Schur complement a symmetric matrix ? Is yes, then use this to reduce memory access. 
-#
 #       - Check whether conditional probabilities are saturated and stop calculating cond. probs. for 
 #         further positions. 
 
@@ -17,9 +16,9 @@ from bitcoding import bin2pos, int2bin
 from memory_layout import store_G_linearly, idx_linearly_stored_G, \
                           idx_linearly_stored_G_blockB1
 
-from block_update import block_update_inverse 
+from block_update_torch import block_update_inverse 
 
-#from profilehooks import profile
+from profilehooks import profile
 from time import time 
 
 
@@ -77,9 +76,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.t_update_Schur = 0.0
         self.t_det = 0.0
 
-        print("requires grad ?:", self.U.requires_grad)
-        print("self.P_ortho.is_leaf =", self.P_ortho.is_leaf)
-        print("self.P.is_leaf =", self.P.is_leaf)
 
         self.reset_sampler()
 
@@ -99,7 +95,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
     def reset_sampler(self):        
         self.occ_vec = np.zeros(self.D, dtype=np.float64)
         self.occ_positions = np.zeros(self.N, dtype=np.int64)
-        self.occ_positions[:] = -10^6 # set to invalid values 
+        self.occ_positions[:] = -666 # set to invalid values 
         self.cond_probs = np.zeros(self.N*self.D) # cond. probs. for all components (for monitoring purposes)
         # list of particle positions 
         self.Ksites = []
@@ -113,7 +109,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # helper variables for low-rank update
 
 
-    #@profile
+    @profile
     def get_cond_prob(self, k):
         r""" Conditional probability for the position x of the k-th particle.
 
@@ -501,7 +497,7 @@ if __name__ == "__main__":
 
     fd = open("test_block_update.dat", "a")
 
-    for L in (60, 80, 100, 150, 200, 240, 320, 400, 500, 600, 1000): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
+    for L in (200,): #(60, 80, 100, 150, 200, 240, 320, 400, 500, 600, 1000): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
         (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=L, potential='none', PBC=True, HF=True)
         Nparticles = L//2
         num_samples = 5 # 1000
@@ -522,39 +518,12 @@ if __name__ == "__main__":
         for _ in range(num_samples):
             occ_vec, _ = SDsampler2.sample()
         t4 = time()
-        print("block update, elapsed=", (t4-t3) )
+        print("block update, total elapsed=", (t4-t3) )
         print(Nparticles, t4-t3, file=fd)
 
-        #print("t_fetch_memory=", SDsampler2.t_fetch_memory)
-        #print("t_matmul(Schur complement)=", SDsampler2.t_matmul)
-        #print("t_det=", SDsampler2.t_det)
-        #print("t_update_Schur=", SDsampler2.t_update_Schur)
+        print("t_fetch_memory=", SDsampler2.t_fetch_memory)
+        print("t_matmul(Schur complement)=", SDsampler2.t_matmul)
+        print("t_det=", SDsampler2.t_det)
+        print("t_update_Schur=", SDsampler2.t_update_Schur)
 
     fd.close()
-
-    # # Check that sampling the Slater determinant gives the correct average density. 
-    # occ_vec = torch.zeros(Nsites)
-    # for s in range(num_samples):
-    #     occ_vec_, prob_sample = SDsampler2.sample()
-    #     print("=================================================================")
-    #     print("amp_sample= %16.8f"%(np.sqrt(prob_sample)))
-    #     print("naive sampler: amplitude= %16.8f"%(SDsampler1.psi_amplitude(occ_vec_)))
-    #     print("block update sampler: amplitude=", SDsampler2.psi_amplitude(occ_vec_))
-    #     print("=================================================================")
-    #     occ_vec += occ_vec_
-       
-
-    # #print("occ_vec=", occ_vec)    
-    # density = occ_vec / float(num_samples)
-    # #print("density=", density)
-
-    # OBDM = Slater2spOBDM(eigvecs[:, 0:Nparticles])
-
-    # f = plt.figure(figsize=(8,6))
-    # ax = f.add_subplot(1,1,1)
-    # ax.set_xlabel(r"site $i$")
-    # ax.set_ylabel(r"av. density")
-    # ax.plot(range(len(density)), density, label=r"av.density $\langle n \rangle$ (sampled)")
-    # ax.plot(range(len(np.diag(OBDM))), np.diag(OBDM), label=r"$\langle n \rangle$ (from OBDM)")
-    # plt.legend()
-    # #plt.show()
