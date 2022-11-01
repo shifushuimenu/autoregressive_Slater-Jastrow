@@ -1,3 +1,5 @@
+[ ] Standardize interfaces using abstract base class for Jastrow factor 
+    slater sampler and physical system so that these can be easily exchanged. 
 [ ] Calculation of determinant of the Schur complement.
     The matrixes are typically very small (1, 2x2, 3x3, 4x4). Calling np.linalg.det
     is around 100-times slower than the Sarrus formula. 
@@ -19,13 +21,13 @@
 
 [ ] speed up bitcoding using bitarray.py  
 
-[ ] Better optimization techniques:
+[x] Better optimization techniques:
     - stochastic reconfiguration or LBFGS instead of stochastic gradient descent optimization
     - Obtain the spectrum of the Fisher information matrix to characterize the learning manifold.  
     - AMSgrad 
     - Linear Method 
 
-[ ] argparse 
+[x] argparse 
 
 [x] When computing the local energy, the ratio of amplitudes for two very similar states is required,
     which differ only by one electron position. Still, both configurations must be passed through 
@@ -47,11 +49,11 @@
 
 [x] test joint optimization of Slater determinant and Jastrow factor => unstable with SGD => try stochastic reconfiguration
 
-[ ] introduce a scheduler for the learning rates of MADE and of the P-matrix 
+[x] introduce a scheduler for the learning rates of MADE and of the P-matrix 
 
 [x] How can a Pfaffian be expanded in terms of Slater determinants ?
 
-[ ] backflow transformation
+[x] backflow transformation (Not possible due to fundamental reasons)
 
 [ ] Add network for correcting the sign structure. Use a residual neural network as in Stokes at el. (2020). Since configurations are sampled 
     according to the square of the wavefunction amplitude, the sign structure does not affect the sampling, but only 
@@ -75,7 +77,7 @@
 
 [ ] Check division by zero in slater_sampler_ordered.py:535 (549, 691)
 
-[ ] Test calculation of kinetic energy (separate file) and benchmark the speedup. Make a figure for the publication.
+[x] Test calculation of kinetic energy (separate file) and benchmark the speedup. Make a figure for the publication.
 
 
 # UNCLEAR THINGS

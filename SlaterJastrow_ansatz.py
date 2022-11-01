@@ -191,7 +191,7 @@ class SlaterJastrow_ansatz(selfMADE):
 
         return x_out, log_prob_sample
 
-    @profile 
+    #@profile 
     def log_prob(self, samples):
         """
             Logarithm of the amplitude squared of the wave function on an 
@@ -203,7 +203,7 @@ class SlaterJastrow_ansatz(selfMADE):
                     torch.Tensor([[1,0,1,0], [0,0,1,1], [1,1,0,0]])
                     First dimension is batch dimension. 
         """
-        samples = torch.as_tensor(samples)
+        samples = torch.tensor(np.asarray(samples))
         assert samples.shape[0] == 1 # just one sample per batch
 
         # The conditional fermionic probabilities depend on the particle positions
@@ -216,7 +216,7 @@ class SlaterJastrow_ansatz(selfMADE):
            self.net[-1].Pauli_blocker[:,:] = 0.0
 
         samples_unfold = occ_numbers_unfold(samples, duplicate_entries=False)
-        # Flatten leading dimensions (This is necessary since there may a batch of samples 
+        # Flatten leading dimensions (This is necessary since there may be a batch of samples 
         # for several "connecting states", but forward() accepts only one batch dimension.)
         samples_unfold_flat = samples_unfold.view(-1, samples_unfold.shape[-1])
 
@@ -276,7 +276,7 @@ class SlaterJastrow_ansatz(selfMADE):
                     torch.Tensor([[1,0,1,0], [0,0,1,1], [1,1,0,0]])
                     First dimension is batch dimension. 
         """
-        samples = torch.as_tensor(samples)
+        samples = torch.tensor(np.asarray(samples))
         assert len(samples.shape) == 2 and samples.shape[0] == 1 # Convention: just one sample per batch allowed
         amp_abs = torch.sqrt(torch.exp(self.log_prob(samples)))
         amp_sign = torch.sign(self.slater_sampler.psi_amplitude(samples))
@@ -285,8 +285,7 @@ class SlaterJastrow_ansatz(selfMADE):
 
 
     def prob(self, samples):
-        """Convenience function"""
-        samples = torch.as_tensor(samples)
+        samples = torch.tensor(np.asarray(samples))
         assert samples.shape[0] == 1 # only one sample per batch
         return torch.exp(self.log_prob(samples))
 
@@ -294,19 +293,12 @@ class SlaterJastrow_ansatz(selfMADE):
     def psi_amplitude_I(self, samples_I):
         """
             Wavefunction amplitude of an occupation number state. 
-
             This is a wrapper function around `self.psi_amplitude(samples)`.
 
             Input:
             ------
                 samples_I: integer representation I of a binary array.
                     First dimension is batch dimension. 
-
-            Returns:
-            --------
-
-            Example:
-            --------
         """
         # IMPROVE: check for correct particle number 
         samples_I = torch.as_tensor(samples_I)

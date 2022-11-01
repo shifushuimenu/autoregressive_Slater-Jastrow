@@ -116,6 +116,7 @@ def idx_linearly_stored_G_blockB1(G_linear_mem, rows, cols, chunk, lr, lc):
 if __name__ == "__main__":
     from time import time 
 
+    # Some tests
     L = 6
     G = np.random.randn(L,L)
     G_lin = store_G_linearly(G)

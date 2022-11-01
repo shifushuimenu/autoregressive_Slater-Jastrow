@@ -1,18 +1,12 @@
+# TODO: standardized interface for PhysicalSystem and Ansatz
 import torch
 import numpy as np
-import torch.nn as nn
-import torch.nn.functional as F
 
-from utils import default_dtype_torch
-from physics import *
-from slater_sampler_ordered import *
-#from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
-from one_hot import occ_numbers_collapse
-from bitcoding import *
+from physics import Lattice1d, Lattice_rectangular, kinetic_term
+from bitcoding import bin2int_nobatch, int2bin
 
 from slater_determinant import local_OBDM, ratio_Slater
 
-from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 from k_copy import sort_onehop_states
 
 # from torchviz import make_dot
@@ -20,13 +14,12 @@ from k_copy import sort_onehop_states
 #from profilehooks import profile
 from time import time 
 
-
-###############################
-# Just for testing purposes
-
 class PhysicalSystem(object):
-    """holds system parameters such as lattice, interaction strength etc.
-       for a hypercubic system"""
+    """
+    Class holds system parameters such as lattice, interaction strength etc.
+    for a hypercubic system
+    and provides method for calculating local energy.
+    """
     def __init__(self, nx, ny, ns, num_particles, D, Vint):
         self.nx = nx; self.ny = ny
         assert ns == nx*ny
@@ -43,18 +36,18 @@ class PhysicalSystem(object):
 
     #@profile
     def local_energy(self, config, psi_loc, ansatz, lowrank_flag=True):
-        '''
+        """
         Local energy of periodic 1D or 2D t-V model
         
         Args:
-        config (1D array): occupation numbers as bitstring.
-        psi_func (func): wave function amplitude
-        psi_loc (number): projection of wave function onto config <config|psi>
-        V (float): nearest-neighbout interaction
+            config (1D array): occupation numbers as bitstring.
+            psi_func (func): wave function amplitude
+            psi_loc (number): projection of wave function onto config <config|psi>
+            V (float): nearest-neighbout interaction
 
         Returns:
-        number: local energy <config|H|psi> / <config|psi>
-        '''
+            number: local energy <config|H|psi> / <config|psi>
+        """
         config = np.array(config).astype(int)
         assert len(config.shape) > 1 and config.shape[0] == 1 # just one sample per batch
 
@@ -69,11 +62,14 @@ class PhysicalSystem(object):
             E_kin_loc, b_absamp = ansatz.lowrank_kinetic(I_ref=I, psi_loc=psi_loc, lattice=self.lattice)
             return E_kin_loc + self.Vint * Enn_int 
         else:
-            E_tot_slow, abspsi = self.local_energy_slow(config, psi_loc, ansatz)
+            E_tot_slow, abspsi = self._local_energy_slow(config, psi_loc, ansatz)
             return E_tot_slow        
 
-    def local_energy_slow(self, config, psi_loc, ansatz):
-        """Recalculate |<psi|beta>|^2 for each beta."""
+
+    def _local_energy_slow(self, config, psi_loc, ansatz):
+        """
+        Recalculate |<psi|beta>|^2 for each beta
+        """
         config = np.array(config).astype(int)
         assert len(config.shape) > 1 and config.shape[0] == 1 # just one sample per batch
         nsites = len(config[0])
@@ -95,7 +91,7 @@ class PhysicalSystem(object):
 
         for ss, mm, rs_pair in zip(onehop_states, kin_matrix_elements, hop_from_to):
             wl.append(mm)
-            states.append([ss]) # Note: ansatz.psi requires batch dim
+            states.append([ss]) # ansatz.psi requires batch dim
             from_to.append(rs_pair)
 
         assert len(from_to) == len(states) == len(wl)
@@ -105,10 +101,8 @@ class PhysicalSystem(object):
         for wi, config_i, (r,s) in zip(wl, states, from_to):
             if not (r==0 and s==0):                
                 # The repeated density estimation of very similar configurations is the bottleneck. 
-                abspsi_conf_i = torch.sqrt(ansatz.prob(config_i)).item() 
+                abspsi_conf_i = np.sqrt(ansatz.prob(config_i).item()) 
                 abspsi.append(abspsi_conf_i)
-                # IMPROVE: Calculate sign() of ratio of Slater determinant directly from the number of exchanges 
-                # that brings one state to the other. (Is this really correct ?)
                 ratio = (abspsi_conf_i / abs(psi_loc)) * np.sign(ratio_Slater(OBDM_loc, alpha=config[0], beta=config_i[0], r=r, s=s))
             else:
                 ratio = 1.0 # <alpha/psi> / <alpha/psi> = 1
@@ -128,14 +122,14 @@ class PhysicalSystem(object):
 
         
 class VMCKernel(object):
-    '''
+    """
     variational Monte Carlo kernel.
 
     Args:
        phys_system: class containing lattice parameters, interaction strengths etc. 
        energy_loc (func): local energy <x|H|\psi>/<x|\psi>.
        ansatz (Module): torch neural network
-    '''
+    """
     def __init__(self, energy_loc, ansatz):
         self.ansatz = ansatz
         self.energy_loc = energy_loc # function(config, psi_loc.data, ansatz)
@@ -150,7 +144,7 @@ class VMCKernel(object):
 
     #@profile
     def prob(self,config):
-        '''
+        """
         probability of configuration.
 
         Args:
@@ -158,24 +152,24 @@ class VMCKernel(object):
 
         Returns:
            number: probability |<config|psi>|^2
-        '''
-        config = np.array(config)
+        """
+        config = np.asarray(config)
         return self.ansatz.prob(config)
 
     #@profile
     def local_measure(self, config, log_prob):
-        '''
-        get local quantities energy_loc, grad_loc.
+        """
+        get local energy and gradients 
 
         Args:
            config (1darray): the bit string as a configuration.
            log_prob : the log prob of the configuration 
 
         Returns:
-           number, list: local energy and local gradient for variables. 
-        '''
+           number, list: local energy and local gradient for variables (as numpy values)
+        """
         self.tmp_cnt += 1
-        config = np.array(config)
+        config = np.asarray(config)
         assert len(config.shape) == 2 and config.shape[0] == 1 # Convention: batch dimension required, but only one sample per batch allowed
         t0 = time()
         psi_loc = self.ansatz.psi_amplitude(torch.from_numpy(config))
@@ -199,30 +193,25 @@ class VMCKernel(object):
         # from the Hartree-Fock determinant to an optimized set of orbitals, do not depend on 
         # specific configurations and therefore are only performed when initializing the slater_sampler
         # module. Therefore, these parts of the computation graph are missing after the computation graph 
-        # has been free after calling backward() for the first time. This is why `backward(retain_graph=True)`
-        # is necessary.
+        # has been freed after calling backward() for the first time. This is why `backward(retain_graph=True)`
+        # is necessary unless the orbital rotation is repeated after each backpropagation. We do the latter 
+        # so that ew can use `backward(retain_graph=False)`, which is faster. 
         # =================================================================================================
 
         with torch.autograd.set_detect_anomaly(True):
             # get gradient {d/dW}_{loc}
             self.ansatz.zero_grad()
-            # if self.ansatz.slater_sampler.optimize_orbitals:
-            #     retain_graph = False  # `retain_graph = True` causes an enormous slowdown !
-            # else:
-            #     retain_graph = False 
-            psi_loc.backward(retain_graph=False) # `retain_graph = True` appears to be necessary (only for co-optimization of SlaterDet) because saved tensors are accessed after calling backward()
+            psi_loc.backward(retain_graph=False)
         grad_loc = [p.grad.data/psi_loc.item() for p in self.ansatz.parameters()]
-
 
         t2 = time()
         self.t_grads += (t2-t1)
-        # E_{loc}
         t3 = time()
         with torch.no_grad():
             eloc = self.energy_loc(config, psi_loc.data, ansatz=self.ansatz).item()
         t4 = time()
-        print("eloc2=", t4-t3)
         self.t_locE += (t4-t3)
+
         return eloc, grad_loc
 
 
@@ -231,41 +220,4 @@ def _test():
     doctest.testmod(verbose=True)
 
 if __name__ == "__main__":
-
-    torch.set_default_dtype(default_dtype_torch)
-
-    from test_suite import prepare_test_system_zeroT
-    from physics import Lattice1d
-
     _test()
-
-    Nparticles = 8
-    Nsites = 16
-    num_samples = 10
-    (_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none')
-
-    # Aggregation of MADE neural network as Jastrow factor 
-    # and Slater determinant sampler. 
-    Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs)
-    SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)
-
-    sample_list = np.zeros((num_samples, Nsites)) # a numpy array
-    log_probs = np.zeros((num_samples,))
-    for i in range(num_samples):
-        sample_unfolded, log_prob_sample = SJA.sample_unfolded()
-        sample_list[i] = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
-        log_probs[i] = log_prob_sample
-        print("amplitude=", SJA.psi_amplitude([sample_list[i]]))
-    print("SJ.sample()", sample_list)
-
-
-    phys_system = PhysicalSystem(nx=Nsites, ny=1, ns=Nsites, num_particles=Nparticles, D=1, Vint=5.0)
-
-    VMC = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
-    print(VMC.prob([[0,1,0,0,1]]))
-    print("VMC.local_measure")
-    e_loc, grad_loc = VMC.local_measure([[0,1,0,0,1]])
-
-    energy, gradient_mean, energy_gradient, energy_precision = vmc_measure(
-        VMC.local_measure, sample_list, log_probs, num_bin=10)
-

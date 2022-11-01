@@ -1,0 +1,2 @@
+ene= 3.22025248948197
+## 4 samples in 0.342592 seconds
