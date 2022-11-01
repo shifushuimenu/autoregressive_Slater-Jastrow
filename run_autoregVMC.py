@@ -6,7 +6,7 @@ from utils import default_dtype_torch
 
 from one_hot import occ_numbers_collapse
 from monitoring_old import logger 
-from Slater_Jastrow_simple import PhysicalSystem, VMCKernel
+from VMC_common import PhysicalSystem, VMCKernel
 from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 #from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 from slater_sampler_ordered import SlaterDetSampler_ordered

@@ -7,7 +7,7 @@ from utils import default_dtype_torch
 
 from sr_preconditioner import SR_Preconditioner
 
-from Slater_Jastrow_simple import vmc_measure, PhysicalSystem, VMCKernel
+from VMC_common import vmc_measure, PhysicalSystem, VMCKernel
 from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 from slater_sampler_ordered import SlaterDetSampler_ordered
 from test_suite import HartreeFock_tVmodel

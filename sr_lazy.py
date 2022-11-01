@@ -10,7 +10,6 @@ class SR_Preconditioner_base(object):
 
     Parameters:
     -----------
-  
     eps1, eps2 : float 
         Regularization of the S-matrix:
           S_{m,m} -> S_{m,m} * (1+eps1) + eps2

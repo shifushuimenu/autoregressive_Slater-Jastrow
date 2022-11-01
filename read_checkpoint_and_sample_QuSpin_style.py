@@ -9,7 +9,7 @@ torch.set_default_dtype(default_dtype_torch)
 #
 from one_hot import occ_numbers_collapse
 from bitcoding import bin2pos
-from Slater_Jastrow_simple import PhysicalSystem, VMCKernel
+from VMC_common import PhysicalSystem, VMCKernel
 from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 from slater_sampler_ordered import SlaterDetSampler_ordered
 from test_suite import HartreeFock_tVmodel

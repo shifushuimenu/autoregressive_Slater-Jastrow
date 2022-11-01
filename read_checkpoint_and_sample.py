@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from utils import default_dtype_torch 
 torch.set_default_dtype(default_dtype_torch)
 
-from Slater_Jastrow_simple import *
+from VMC_common import VMCKernel, PhysicalSystem
 #from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 from slater_sampler_ordered import SlaterDetSampler_ordered
 from test_suite import prepare_test_system_zeroT, HartreeFock_tVmodel
@@ -40,7 +40,7 @@ np.savetxt("eigvecs.dat", eigvecs)
 Sdet_sampler = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, eigvals=eigvals, naive_update=False, optimize_orbitals=False)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Nparticles, D=Nsites, net_depth=2)
 
-VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
+VMC = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
 del SJA
 
 ckpt_outfile = 'state_Nx{}Ny{}Np{}V{}.pt'.format(Nx, Ny, Nparticles, Vint)
@@ -58,9 +58,9 @@ corr_graph = np.zeros(L+1)
 
 print("Now sample from the converged ansatz")
 state_checkpointed = torch.load(ckpt_outfile)
-VMCmodel_.ansatz.load_state_dict(state_checkpointed['net'], strict=False)
+VMC.ansatz.load_state_dict(state_checkpointed['net'], strict=False)
 for _ in range(num_samples):
-    sample_unfolded, log_prob_sample = VMCmodel_.ansatz.sample_unfolded()
+    sample_unfolded, log_prob_sample = VMC.ansatz.sample_unfolded()
     config = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
     print("config=", config) 
     config_sz = 2*config - 1

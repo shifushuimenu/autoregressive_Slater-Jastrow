@@ -2,7 +2,7 @@
 # the correct probabilities if no order on the positions is imposed. 
 
 from test_suite import *
-from Slater_Jastrow_simple import *
+from VMC_common import *
 
 (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=10, potential='none', PBC=False)
 Nparticles = 5

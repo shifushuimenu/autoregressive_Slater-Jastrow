@@ -8,6 +8,9 @@ import numpy as np
 from scipy import linalg
 from bitcoding import bin2pos
 
+from slater_determinant import Slater2spOBDM
+
+
 def occ2int_spinless(occ_vector):
     """
     Map a spinless fermion occupation vector to an integer by interpreting 
@@ -99,7 +102,15 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=False, max_iter=1
     """
     Returns single-particle eigenstates of the Hartree-Fock solution of a 
     t-V model on a cubic lattice specified by `phys_system`. 
+
+    Example:
+    --------
+    >>> phys_system = PhysicalSystem(4, 4, 16, 8, D=2, Vint=3.0) 
+    >>> eigvals, U = HartreeFock_tVmodel(phys_system)
+    >>> np.isclose(eigvals[0], -3.443120942335799) and np.isclose(U[0,0], -0.18668780102117907)
+    True
     """
+    assert isinstance(phys_system, PhysicalSystem)
     ns = phys_system.ns
     num_particles = phys_system.np
     nx = phys_system.nx
@@ -167,6 +178,12 @@ def prepare_test_system_zeroT(Nsites=21, potential='parabolic', PBC=True, HF=Tru
     One-dimensional system of free fermions with Nsites sites
     in an external trapping potential.
     Return the matrix of single-particle eigenstates. 
+
+    Example:
+    --------
+    >>> (_, U) = prepare_test_system_zeroT(Nsites=4, potential='none', HF=True, Nparticles=2, Vnnint=1.0)
+    >>> np.isclose(U[0,0], 0.5269026969395422)
+    True
     """
     i0=int(Nsites/2)
     V_pot = np.zeros(Nsites)
