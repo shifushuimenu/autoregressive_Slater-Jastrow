@@ -10,7 +10,7 @@ from slater_sampler_ordered import *
 from one_hot import occ_numbers_collapse
 from bitcoding import *
 
-from test_suite import local_OBDM, ratio_Slater
+from slater_determinant import local_OBDM, ratio_Slater
 
 from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 from k_copy import sort_onehop_states
@@ -233,13 +233,15 @@ def _test():
 if __name__ == "__main__":
 
     torch.set_default_dtype(default_dtype_torch)
-    from test_suite import *
+
+    from test_suite import prepare_test_system_zeroT
+    from physics import Lattice1d
 
     _test()
 
     Nparticles = 8
     Nsites = 16
-    num_samples = 1000
+    num_samples = 10
     (_, eigvecs) = prepare_test_system_zeroT(Nsites=Nsites, potential='none')
 
     # Aggregation of MADE neural network as Jastrow factor 
@@ -254,16 +256,10 @@ if __name__ == "__main__":
         sample_list[i] = occ_numbers_collapse(sample_unfolded, Nsites).numpy()
         log_probs[i] = log_prob_sample
         print("amplitude=", SJA.psi_amplitude([sample_list[i]]))
-        exit(1)
     print("SJ.sample()", sample_list)
 
-    print(SJA.psi_amplitude([[0,1,0,0,1]]))
-    print(SJA.psi_amplitude_I([9]))
 
-    #for name, p in SJA.named_parameters():
-    #    print("name", name, "-> param", p)
-
-    phys_system = PhysicalSystem(nx=Nsites, ny=1, ns=Nsites, np=Nparticles, D=1, Vint=5.0)
+    phys_system = PhysicalSystem(nx=Nsites, ny=1, ns=Nsites, num_particles=Nparticles, D=1, Vint=5.0)
 
     VMC = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
     print(VMC.prob([[0,1,0,0,1]]))

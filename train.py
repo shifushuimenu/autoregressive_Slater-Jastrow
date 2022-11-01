@@ -10,10 +10,10 @@ from bitcoding import bin2int
 
 
 def binning_statistics(obs_list, num_bin):
-    '''
-    calculate avriance and autorcorrelation time for a  list of observable values
-    using the binning method
-    '''
+    """
+    Calculate variance and autorcorrelation time for a  list of observable values
+    using the binning method.
+    """
     num_sample = len(obs_list)
     if num_sample % num_bin != 0:
         raise ValueError(f"num_bin = {num_bin}")
@@ -36,14 +36,14 @@ def binning_statistics(obs_list, num_bin):
 # Maybe incorporate stochastic reconfiguration into the Trainer class ? 
 
 def train_SR(VMCmodel, learning_rate, learning_rate_SD, precond, num_samples=100, num_bin=50, use_cuda=False):
-    '''
+    """
     train a model using stochastic gradient descent with stochastic reconfiguration 
     as a preconditioner 
 
     Args:
         model (obj): a model that meets VMC model definition.
         learning_rate (float): the learning rate for SGD.
-    '''
+    """
     if use_cuda:
         VMCmodel.ansatz.cuda()
 
@@ -104,11 +104,10 @@ def vmc_measure(local_measure, sample_list, log_probs, precond, num_bin=50):
     energy_loc_list, grad_loc_list = [], []
     for i, (config, log_prob) in enumerate(zip(sample_list, log_probs)):
         # back-propagation is used to get gradients.
-        energy_loc, grad_loc = local_measure([config], log_prob) # ansatz.psi requires batch dim)
+        energy_loc, grad_loc = local_measure([config], log_prob) # ansatz.psi requires batch dim
         energy_loc_list.append(energy_loc)
         grad_loc_list.append(grad_loc)
 
- 
         precond.accumulate(grad_loc)
 
 

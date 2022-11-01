@@ -1108,10 +1108,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 if __name__ == "__main__":
 
     import matplotlib.pyplot as plt 
-    from test_suite import ( 
-        prepare_test_system_zeroT,
-        Slater2spOBDM
-    )
+    from test_suite import prepare_test_system_zeroT
+    from slater_determinant import Slater2spOBDM
+    
     from time import time 
 
     (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=200, potential='none', PBC=False, HF=False)

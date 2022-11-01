@@ -23,7 +23,7 @@ from bitcoding import int2bin, bin2pos
         
 # imports needed in lowrank_kinetic()
 from k_copy import sort_onehop_states 
-from test_suite import ratio_Slater, local_OBDM
+from slater_determinant import ratio_Slater, local_OBDM
 from physics import kinetic_term
 
 from time import time 

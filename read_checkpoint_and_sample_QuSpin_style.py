@@ -54,7 +54,7 @@ np.savetxt("eigvecs.dat", eigvecs)
 Sdet_sampler = SlaterDetSampler_ordered(Nsites=N_2d, Nparticles=Np, single_particle_eigfunc=eigvecs, eigvals=eigvals, naive_update=False, optimize_orbitals=True)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Np, D=N_2d, net_depth=2)
 #
-VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
+VMC = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
 del SJA
 #
 # ===================
@@ -74,7 +74,7 @@ U_HF = np.loadtxt(eigvecs_file)
 #
 print("Now sample from the converged ansatz")
 state_checkpointed = torch.load(ckpt_outfile)
-VMCmodel_.ansatz.load_state_dict(state_checkpointed['net'], strict=True)
+VMC.ansatz.load_state_dict(state_checkpointed['net'], strict=True)
 #
 # init observables 
 SzSzcorr = np.zeros((Lx, Ly))
@@ -96,14 +96,14 @@ t_sample = 0
 for ii in range(num_samples):
     t1 = time() 
     with torch.no_grad():
-        sample_unfolded, log_prob_sample = VMCmodel_.ansatz.sample_unfolded()
+        sample_unfolded, log_prob_sample = VMC.ansatz.sample_unfolded()
     t2 = time()
     t_sample += (t2 - t1)
     config = occ_numbers_collapse(sample_unfolded, N_2d).squeeze().numpy()
     config_sz = 2*config - 1
 #
     # local energy 
-    ene, _ = VMCmodel_.local_measure([config], log_prob_sample)
+    ene, _ = VMC.local_measure([config], log_prob_sample)
     print("sample nr.= ", ii, "ene=", ene)
     energy_list[ii] = ene
     energy_av += ene
@@ -120,7 +120,7 @@ for ii in range(num_samples):
         nncorr2[tx, ty] += ss2**2
 #
     # average sign change relative to Hartree-Fock Slater determinant 
-    psi_coopt = VMCmodel_.ansatz.slater_sampler.psi_amplitude([config]).item()
+    psi_coopt = VMC.ansatz.slater_sampler.psi_amplitude([config]).item()
     pos = bin2pos([config])
     submat = U_HF[pos, 0:Np]
     psi_HF = np.linalg.det(submat)

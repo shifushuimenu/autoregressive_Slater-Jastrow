@@ -151,18 +151,18 @@ SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler,
         deactivate_Jastrow=deactivate_Jastrow
         )
 
-VMCmodel_ = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
+VMC = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
 del SJA
 
 if optimizer_name in ['SR']:
     t1 = time()
-    SR = SR_Preconditioner(num_params=sum([np.prod(p.size()) for p in VMCmodel_.ansatz.parameters()]), num_samples=num_samples, eps1=0.001, eps2=1e-6)
+    SR = SR_Preconditioner(num_params=sum([np.prod(p.size()) for p in VMC.ansatz.parameters()]), num_samples=num_samples, eps1=0.001, eps2=1e-6)
     t2 = time()
-    VMCmodel_.t_SR += (t2-t1)
+    VMC.t_SR += (t2-t1)
 elif optimizer_name in ['mySGD']:
     SR = Identity_Preconditioner() # dummy class, just passes unmodified gradients through 
 elif optimizer_name in ['SGD', 'Adam', 'RMSprop']:
-    my_trainer = Trainer(VMCmodel_, lr, lr_schedule, optimizer_name, num_samples, num_bin, clip_local_energy=3.0, use_cuda=False)
+    my_trainer = Trainer(VMC, lr, lr_schedule, optimizer_name, num_samples, num_bin, clip_local_energy=3.0, use_cuda=False)
 
 
 E_exact = -3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832 # -2.9774135797163597 #-3.3478904193465335
@@ -176,28 +176,28 @@ lrs = []
 for i in range(num_epochs):
 
     if optimizer_name in ['mySGD', 'SR']:
-        (energy, precision) = train_SR(VMCmodel_, learning_rate=lr, learning_rate_SD=lr_SD, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda, precond=SR)
+        (energy, precision) = train_SR(VMC, learning_rate=lr, learning_rate_SD=lr_SD, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda, precond=SR)
     else:
         (energy, precision) = my_trainer.train_standard_optimizer(lrs)
 
     t1_tmp = time()
     print('Step %d, dE/|E| = %.4f, elapsed = %.4f' % (i, -(energy - E_exact)/E_exact, t1_tmp-t0_tmp))
     _update_curve(energy, precision)
-    _checkpoint(VMCmodel_)
+    _checkpoint(VMC)
     t0_tmp = time()
 
     print("monitor_convergence=", monitor_convergence)
     if monitor_convergence:
         # save model parameters in order to monitor convergence 
         with open("convergence_params_SD_"+paramstr+".dat", "a") as fh:
-            for name, param in VMCmodel_.ansatz.named_parameters():
+            for name, param in VMC.ansatz.named_parameters():
                 if name in ['slater_sampler.T']:
                     arr = param.data.numpy().flatten()
                     fh.write( ("%16.10f " * arr.size + "\n") % (tuple(arr)) )
 
         ## save model parameters in order to monitor convergence 
         #with open("convergence_params_Jastrow_net0"+paramstr+".dat", "a") as fh:
-        #    for name, param in VMCmodel_.ansatz.named_parameters():
+        #    for name, param in VMC.ansatz.named_parameters():
         #        if name in ['net.0.weight']:
         #            arr = param.data.numpy().flatten()
         #            fh.write( ("%16.10f " * arr.size + "\n") % (tuple(arr)) )
@@ -211,20 +211,20 @@ t1 = time()
 with open("timings"+paramstr+".dat", "w") as fh:
     print("## Timings:", file=fh)
     print("## elapsed =%10.6f for %d samples per epochs and %d epochs" % (t1-t0, num_samples, num_epochs), file=fh)
-    print("## t_psiloc=", VMCmodel_.t_psiloc, file=fh)
-    print("## t_logprob_B=", VMCmodel_.ansatz.t_logprob_B, file=fh)
-    print("## t_logprob_F=", VMCmodel_.ansatz.t_logprob_F, file=fh)
-    print("## t_sampling=", VMCmodel_.t_sampling, file=fh)
-    print("## t_locE=", VMCmodel_.t_locE, file=fh)
-    print("## t_backward=", VMCmodel_.t_grads, file=fh)
-    print("## t_stochastic_reconfiguration=", VMCmodel_.t_SR, file=fh)
-    print("## total time det Schur complement=", VMCmodel_.ansatz.slater_sampler.t_det_Schur_complement, file=fh)
-    print("## t_npix_=", VMCmodel_.ansatz.slater_sampler.t_npix_, file=fh)
-    print("## t_linstorage=", VMCmodel_.ansatz.slater_sampler.t_linstorage, file=fh)
-    print("## t_get_cond_prob=", VMCmodel_.ansatz.slater_sampler.t_get_cond_prob, file=fh)
-    print("## t_update_state=", VMCmodel_.ansatz.slater_sampler.t_update_state, file=fh)
-    print("## t_lowrank_linalg=",VMCmodel_.ansatz.slater_sampler.t_lowrank_linalg, file=fh)
-    print("## t_gemm=",VMCmodel_.ansatz.slater_sampler.t_gemm, file=fh)
+    print("## t_psiloc=", VMC.t_psiloc, file=fh)
+    print("## t_logprob_B=", VMC.ansatz.t_logprob_B, file=fh)
+    print("## t_logprob_F=", VMC.ansatz.t_logprob_F, file=fh)
+    print("## t_sampling=", VMC.t_sampling, file=fh)
+    print("## t_locE=", VMC.t_locE, file=fh)
+    print("## t_backward=", VMC.t_grads, file=fh)
+    print("## t_stochastic_reconfiguration=", VMC.t_SR, file=fh)
+    print("## total time det Schur complement=", VMC.ansatz.slater_sampler.t_det_Schur_complement, file=fh)
+    print("## t_npix_=", VMC.ansatz.slater_sampler.t_npix_, file=fh)
+    print("## t_linstorage=", VMC.ansatz.slater_sampler.t_linstorage, file=fh)
+    print("## t_get_cond_prob=", VMC.ansatz.slater_sampler.t_get_cond_prob, file=fh)
+    print("## t_update_state=", VMC.ansatz.slater_sampler.t_update_state, file=fh)
+    print("## t_lowrank_linalg=",VMC.ansatz.slater_sampler.t_lowrank_linalg, file=fh)
+    print("## t_gemm=",VMC.ansatz.slater_sampler.t_gemm, file=fh)
 
 
 szsz_corr = np.zeros(Nsites)
@@ -252,7 +252,7 @@ def translate(s, n, T_d):
 
 
 state_checkpointed = torch.load(ckpt_outfile)
-VMCmodel_.ansatz.load_state_dict(state_checkpointed['net'], strict=True)
+VMC.ansatz.load_state_dict(state_checkpointed['net'], strict=True)
 #
 # init observables 
 SzSzcorr = np.zeros((Lx, Ly))
@@ -270,14 +270,14 @@ t_sample = 0
 for ii in range(num_meas_samples):
     t1 = time() 
     with torch.no_grad():
-        sample_unfolded, log_prob_sample = VMCmodel_.ansatz.sample_unfolded()
+        sample_unfolded, log_prob_sample = VMC.ansatz.sample_unfolded()
     t2 = time()
     t_sample += (t2 - t1)
     config = occ_numbers_collapse(sample_unfolded, Nsites).squeeze().numpy()
     config_sz = 2*config - 1
 #
     # local energy 
-    ene, _ = VMCmodel_.local_measure([config], log_prob_sample)
+    ene, _ = VMC.local_measure([config], log_prob_sample)
     print("ene=", ene)
     energy_list[ii] = ene
     energy_av += ene
