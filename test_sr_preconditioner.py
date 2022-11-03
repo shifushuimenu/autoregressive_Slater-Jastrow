@@ -7,7 +7,8 @@ from utils import default_dtype_torch
 
 from sr_preconditioner import SR_Preconditioner
 
-from VMC_common import vmc_measure, PhysicalSystem, VMCKernel
+from VMC_common import PhysicalSystem, VMCKernel
+from train import vmc_measure 
 from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 from slater_sampler_ordered import SlaterDetSampler_ordered
 from test_suite import HartreeFock_tVmodel
@@ -43,7 +44,7 @@ class TestInterface(unittest.TestCase):
         grad_flat = SR._flatten(grad)
         grad_new = SR._unflatten(grad_flat, grad)
 
-        nested_booleans = [p1 == p2 for (p1,p2) in zip(grad, grad_new)]
+        nested_booleans = [p1 == p2 for (p1,p2) in zip(grad, grad_new)
         l = True
         for t in nested_booleans:
             l = l and torch.all(t.flatten())
@@ -63,7 +64,7 @@ class MinimalUsageExample(unittest.TestCase):
 
         Nx=4; Ny=4; Np=3
         self.Ns=Nx*Ny
-        self.num_samples = 1000
+        self.num_samples = 100
 
         phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=self.Ns, num_particles=Np, D=2, Vint=3.0)
         (eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none", max_iter=20)
@@ -84,7 +85,7 @@ class MinimalUsageExample(unittest.TestCase):
 
         self.VMCmodel = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
         num_params = sum([np.prod(p.size()) for p in self.VMCmodel.ansatz.parameters()])
-        self.SR = SR_Preconditioner(num_params=num_params, num_samples=self.num_samples, diag_shift=1e-3)
+        self.SR = SR_Preconditioner(num_params=num_params, num_samples=self.num_samples, eps1=1e-3, eps2=0.0)
 
 
     def test_joint_params_Jastrow_Sdet(self):
