@@ -53,7 +53,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         Slater determinant.
     """
-    def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, eigvals=None, naive_update=True, optimize_orbitals=False):
+    def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, eigvals=None, naive_update=True, optimize_orbitals=False, outdir=None):
         super(SlaterDetSampler_ordered, self).__init__()
         self.epsilon = 1e-5
         self.D = Nsites 
@@ -62,6 +62,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.naive_update = naive_update
         # co-optimize also the columns of the Slater determinant
         self.optimize_orbitals = optimize_orbitals
+        self.dir = outdir if outdir is not None else "./"
 
         self.t_det_Schur_complement = 0.0
         self.t_npix_ = 0.0
@@ -195,16 +196,16 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # Pseudo-inverse 
         ratio = np.linalg.det( D - ( (C @  vv.T) @ np.diag(np.where(ss>LR.thresh, 1.0/ss, 0.0)) @ (uu.T @ B) ) )
 
-        if __debug__:
-            occ_vec_extend = occ_vec_base + occ_vec_add
-            extend = list(range(0, i+1))
-            G = np.array(G, dtype=np.float64) # np.float128
-            Gnum = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
-            Gdenom = G[np.ix_(K1, K1)] - np.diag(occ_vec_base)
-
-            ratio2 = linalg.det(Gnum) / linalg.det(Gdenom)
-
-            # print("ratio2=", ratio2, "ratio=", ratio, "condition number num, denom, X=", np.linalg.cond(Gnum), np.linalg.cond(Gdenom), np.linalg.cond(X))
+        #if __debug__:
+        #    occ_vec_extend = occ_vec_base + occ_vec_add
+        #    extend = list(range(0, i+1))
+        #    G = np.array(G, dtype=np.float64) # np.float128
+        #    Gnum = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
+        #    Gdenom = G[np.ix_(K1, K1)] - np.diag(occ_vec_base)
+        # 
+        #    ratio2 = linalg.det(Gnum) / linalg.det(Gdenom)
+        #
+        #    # print("ratio2=", ratio2, "ratio=", ratio, "condition number num, denom, X=", np.linalg.cond(Gnum), np.linalg.cond(Gdenom), np.linalg.cond(X))
 
         return ratio 
 
@@ -712,7 +713,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                             print("Excepting finite precision error 1, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
                                             cond_prob_onehop[state_nr, k-1, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-2], i=i)                                             
                                     else:
-                                        print("Gnum_inv_reuse is None (i.e. zero cond. prob. of reference state)")
+                                        print("Gnum_inv_reuse is None (i.e. accidental zero cond. prob. of reference state)")
                                         cond_prob_onehop[state_nr, k-1, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-2], i=i)                                                                             
                                     assert -assert_margin <= cond_prob_onehop[state_nr, k-1, i] <= 1.0 + assert_margin, "cond prob = %16.10f" %(cond_prob_onehop[state_nr, k-1, i])
 
@@ -739,7 +740,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                                 print("Excepting LR.ErrorFinitePrecision 1, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
                                                 cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
                                         else:
-                                            print("Gnum_inv_reuse is None (i.e. zero cond. prob. of reference state)")
+                                            print("Gnum_inv_reuse is None (i.e. accidental zero cond. prob. of reference state)")
                                             cond_prob_onehop[state_nr, k, i] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
                                         assert -assert_margin <= cond_prob_onehop[state_nr, k, i] <= 1.0 + assert_margin, "cond_prob=%16.10f" % (cond_prob_onehop[state_nr, k, i])
 
@@ -819,7 +820,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                                                         else:
                                                             cond_prob_onehop[state_nr, k, j_add] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=j_add)
                                                     else:
-                                                        print("Gnum_inv_reuse is None (i.e. zero cond. prob. of reference state)")
+                                                        print("Gnum_inv_reuse is None (i.e. accidental zero cond. prob. of reference state)")
                                                         cond_prob_onehop[state_nr, k, j_add] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=j_add)
                                                 except LR.ErrorFinitePrecision as e:
                                                         cond_prob_onehop[state_nr, k, j_add] = (-1) * self._detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=j_add)                                                                
@@ -875,7 +876,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
             mylogger.info_refstate.print_summary()
         mylogger.info_refstate.reset()
 
-        if __debug__:
+        if False: #__debug__:
             fh = open("cond_prob_ref.dat", "w")
             fh.write("# ref_state ["+" ".join(str(item) for item in ref_conf)+"]\n\n")
             for k in range(cond_prob_ref.shape[0]):
@@ -911,12 +912,13 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                             # print("onehop  =", xs[state_nr])
                             #print("cumsum_condprob_onehop[state_nr, k]=", cumsum_condprob_onehop[state_nr, k])
                             #print("state_nr=", state_nr, "k=", k, "cond_prob=", cond_prob_onehop[state_nr, k, :])
-                            if not math.isclose(np.sum(cond_prob_onehop[state_nr, k,:]), 1.0, abs_tol=1e-8):
-                                fh = open("NormalizationViolation.dat", "a")
+                            summe=np.sum(cond_prob_onehop[state_nr, k,:])
+                            if not math.isclose(summe, 1.0, abs_tol=1e-8):
+                                fh = open(self.dir+"NormalizationViolation.dat", "a")
                                 fh.write("np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f =? 1.0 =? %16.10f" \
-                                 % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :]), cumsum_condprob_onehop[state_nr, k])+"\n")
+                                 % (state_nr, k, summe, cumsum_condprob_onehop[state_nr, k])+"\n")
                                 fh.close()                                                            
-                                print("ERROR: NORMALIZATION VIOLATION - set cond. probs. equal to reference state")
+                                print("ERROR: NORMALIZATION VIOLATION, sum(cond_probs)="+str(summe)+"  - set cond. probs. equal to reference state")
                                 print("CAREFUL ! THIS IS NOT JUSTIFIED")
                                 cond_prob_onehop[state_nr, k, :] = cond_prob_ref[k, :]
                             assert math.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, abs_tol=1e-8), \
@@ -928,7 +930,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                             if not np.all(cond_prob_onehop[state_nr, k, :] > -5e-8): # -0.00000
                                 print("Error: Negative probabilities")
                                 print("state_nr=", state_nr, "k=", k)
-                                fh = open("NegativeProbabilities.dat", "a")
+                                fh = open(self.dir+"NegativeProbabilities.dat", "a")
                                 fh.write("state_nr=%d, k=%d\n" %(state_nr, k))
                                 fh.write(" ".join([str(s) for s  in cond_prob_onehop[state_nr, k, :].flatten()]) + "\n")
                                 fh.close()

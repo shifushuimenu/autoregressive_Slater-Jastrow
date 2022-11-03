@@ -1,5 +1,6 @@
 # IMPROVE: Organize imports globally in a better way
 #          when making a package with an  __init__.py file. 
+import os
 import numpy as np
 import torch 
 from utils import default_dtype_torch 
@@ -70,13 +71,18 @@ torch.manual_seed(args.seed)
 np.random.seed(args.seed)
 if use_cuda: torch.cuda.manual_seed_all(args.seed)
 
-Lx = args.Lx # 5  # 15
-Ly = args.Ly # 5
-Nparticles = args.Np # 12
+
+# create output directory if it does not already exist 
+dirout = "out/"
+if not os.path.exists(dirout): os.mkdir(dirout)
+
+Lx = args.Lx
+Ly = args.Ly
+Nparticles = args.Np
 Vint = args.Vint #  Vint_array[MPI_rank]
-num_epochs = args.num_epochs # 10 #1000 
-num_samples = args.num_samples # 10 # 100  # samples per batch
-num_bin = num_samples // 2 # 50 
+num_epochs = args.num_epochs
+num_samples = args.num_samples
+num_bin = num_samples // 2  
 num_meas_samples = args.num_meas_samples
 optimizer_name = args.optimizer
 optimize_orbitals = args.optimize_orbitals  # whether to include columns of P-matrix in optimization
@@ -86,10 +92,10 @@ lr_schedule = args.lr_schedule
 print("args.lr_schedule=", args.lr_schedule)
 monitor_convergence = args.monitor_convergence 
 
-Nsites = Lx*Ly  # 15  # Nsites = 64 => program killed because it is using too much memory
+Nsites = Lx*Ly  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
 paramstr = "Lx{}Ly{}Np{}V{}_{}".format(Lx, Ly, Nparticles, Vint, optimizer_name)
-logger.info_refstate.outfile = "lowrank_stats_"+paramstr+".dat"
+logger.info_refstate.outfile = dirout+"lowrank_stats_"+paramstr+".dat"
 
 # for debugging:
 # If deactivate_Jastrow == True, samples are drawn from the Slater determinant without the Jastrow factor. 
@@ -100,7 +106,7 @@ deactivate_Jastrow = False
 # visualize the loss history
 energy_list, precision_list = [], []
 av_list, sigma_list = [], []
-def _update_curve(energy, precision):
+def _average_output(energy, precision):
     energy_list.append(energy)
     precision_list.append(precision)
     Nb = len(energy_list)
@@ -113,10 +119,10 @@ def _update_curve(energy, precision):
 
     MM = np.hstack((np.array(energy_list)[:,None], np.array(precision_list)[:,None],
                     np.array(av_list)[:,None], np.array(sigma_list)[:,None]))
-    np.savetxt("energies_"+paramstr+".dat", MM)
+    np.savetxt(dirout+"energies_"+paramstr+".dat", MM)
 
 
-ckpt_outfile = "state_"+paramstr+".pt"
+ckpt_outfile = dirout+"state_"+paramstr+".pt"
 def _checkpoint(VMCmodel):
     """Save most recent SJA state to disk."""
     state = {
@@ -131,9 +137,9 @@ phys_system = PhysicalSystem(nx=Lx, ny=Ly, ns=Nsites, num_particles=Nparticles, 
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determi
-with open("HF_energy_"+paramstr+".dat", "w") as fh:
+with open(dirout+"HF_energy_"+paramstr+".dat", "w") as fh:
     (eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none", outfile=fh, max_iter=20)
-np.savetxt("eigvecs"+paramstr+".dat", eigvecs)
+np.savetxt(dirout+"eigvecs"+paramstr+".dat", eigvecs)
 
 Sdet_sampler = SlaterDetSampler_ordered(
         Nsites=Nsites, 
@@ -141,7 +147,8 @@ Sdet_sampler = SlaterDetSampler_ordered(
         single_particle_eigfunc=eigvecs, 
         eigvals=eigvals, 
         naive_update=False, 
-        optimize_orbitals=optimize_orbitals
+        optimize_orbitals=optimize_orbitals,
+        outdir=dirout
         )
 
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, 
@@ -164,9 +171,6 @@ elif optimizer_name in ['mySGD']:
 elif optimizer_name in ['SGD', 'Adam', 'RMSprop']:
     my_trainer = Trainer(VMC, lr, lr_schedule, optimizer_name, num_samples, num_bin, clip_local_energy=3.0, use_cuda=False)
 
-
-E_exact = -3.6785841210741 #-3.86925667 # 0.4365456400025272 #-3.248988339062832 # -2.9774135797163597 #-3.3478904193465335
-
 t0 = time()
 t0_tmp = t0
 
@@ -181,15 +185,15 @@ for i in range(num_epochs):
         (energy, precision) = my_trainer.train_standard_optimizer(lrs)
 
     t1_tmp = time()
-    print('Step %d, dE/|E| = %.4f, elapsed = %.4f' % (i, -(energy - E_exact)/E_exact, t1_tmp-t0_tmp))
-    _update_curve(energy, precision)
+    print('Step %d, energy = %.4f, elapsed = %.4f' % (i, energy, t1_tmp-t0_tmp))
+    _average_output(energy, precision)
     _checkpoint(VMC)
     t0_tmp = time()
 
     print("monitor_convergence=", monitor_convergence)
     if monitor_convergence:
         # save model parameters in order to monitor convergence 
-        with open("convergence_params_SD_"+paramstr+".dat", "a") as fh:
+        with open(dirout+"convergence_params_SD_"+paramstr+".dat", "a") as fh:
             for name, param in VMC.ansatz.named_parameters():
                 if name in ['slater_sampler.T']:
                     arr = param.data.numpy().flatten()
@@ -203,12 +207,12 @@ for i in range(num_epochs):
         #            fh.write( ("%16.10f " * arr.size + "\n") % (tuple(arr)) )
 
     # remove
-    np.savetxt("lrs"+paramstr+".dat", np.array(lrs))
+    np.savetxt(dirout+"lrs"+paramstr+".dat", np.array(lrs))
     # remove
 
 
 t1 = time()
-with open("timings"+paramstr+".dat", "w") as fh:
+with open(dirout+"timings"+paramstr+".dat", "w") as fh:
     print("## Timings:", file=fh)
     print("## elapsed =%10.6f for %d samples per epochs and %d epochs" % (t1-t0, num_samples, num_epochs), file=fh)
     print("## t_psiloc=", VMC.t_psiloc, file=fh)
@@ -301,20 +305,20 @@ nncorr2[:,:] /= num_meas_samples
 err_SzSzcorr = np.sqrt(SzSzcorr2[:,:] - SzSzcorr[:,:]**2) / np.sqrt(num_meas_samples)
 err_nncorr = np.sqrt(nncorr2[:,:] - nncorr[:,:]**2) / np.sqrt(num_meas_samples)
 #
-np.savetxt("SzSzcorr_VMC_"+paramstr+".dat", SzSzcorr)
-np.savetxt("err_SzSzcorr_VMC_"+paramstr+".dat", err_SzSzcorr)
-np.savetxt("nncorr_VMC_"+paramstr+".dat", nncorr)
+np.savetxt(dirout+"SzSzcorr_VMC_"+paramstr+".dat", SzSzcorr)
+np.savetxt(dirout+"err_SzSzcorr_VMC_"+paramstr+".dat", err_SzSzcorr)
+np.savetxt(dirout+"nncorr_VMC_"+paramstr+".dat", nncorr)
 # Store also the connected density-density correlation function (valid only for translationally invariant systems)
 ##np.savetxt("nncorr_conn_VMC_"+paramstr+".dat", nncorr[:,:] - (Np / Nsites)**2 )
-np.savetxt("err_nncorr_VMC_"+paramstr+".dat", err_nncorr)
+np.savetxt(dirout+"err_nncorr_VMC_"+paramstr+".dat", err_nncorr)
 #
 energy_av /= num_meas_samples 
 energy2_av /= num_meas_samples 
 #
 err_energy = np.sqrt(energy2_av - energy_av**2) / np.sqrt(num_meas_samples)
-with open("energy_VMC_"+paramstr+".dat", "w") as fh:
+with open(dirout+"energy_VMC_"+paramstr+".dat", "w") as fh:
     fh.write("energy = %16.10f +/- %16.10f" % (energy_av, err_energy))
 # store timeseries => make histogram of non-Gaussian statistics 
-np.savetxt("energy_TS_"+paramstr+".dat", energy_list)
+np.savetxt(dirout+"energy_TS_"+paramstr+".dat", energy_list)
 #
 print("## %d samples in %f seconds" % ( num_meas_samples, t_sample))

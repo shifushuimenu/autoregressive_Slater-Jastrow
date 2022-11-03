@@ -8,6 +8,9 @@ from utils import default_dtype_torch
 
 from bitcoding import bin2int 
 
+# for checking argument type
+from VMC_common import VMCKernel 
+
 
 def binning_statistics(obs_list, num_bin):
     """
@@ -44,6 +47,7 @@ def train_SR(VMCmodel, learning_rate, learning_rate_SD, precond, num_samples=100
         model (obj): a model that meets VMC model definition.
         learning_rate (float): the learning rate for SGD.
     """
+    assert isinstance(VMCmodel, VMCKernel)
     if use_cuda:
         VMCmodel.ansatz.cuda()
 
@@ -131,7 +135,7 @@ def vmc_measure(local_measure, sample_list, log_probs, precond, num_bin=50):
 # =========================================================================
 
 class Trainer(object):
-    """Employ standard optimizers by taking the gradient of the reinforcement loss function"""
+    """Employ standard torch optimizers by taking the gradient of the reinforcement loss function"""
     def __init__(self, VMCmodel, learning_rate, lr_schedule, optim_name, num_samples=100, num_bin=50, clip_local_energy=0.0, use_cuda=False):
 
         if use_cuda:

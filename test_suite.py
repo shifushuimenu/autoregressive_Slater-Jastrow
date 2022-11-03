@@ -9,6 +9,7 @@ from scipy import linalg
 from bitcoding import bin2pos
 
 from slater_determinant import Slater2spOBDM
+from VMC_common import PhysicalSystem  
 
 
 def occ2int_spinless(occ_vector):
