@@ -21,6 +21,7 @@ from bitcoding import int2bin
 
 __all__ = ['selfMADE']
 
+torch.set_default_dtype(default_dtype_torch)
 
 class MaskedLinear(torch.nn.Linear):
     """Ensures autoregressive property of the connectivity matrix"""
@@ -133,11 +134,6 @@ class selfMADE(torch.nn.Module):
             indep_PReLU: boolean
                Whether all 'PReLU's in a given layer share the same learnable parameter or have 
                independent parameters. Default is the latter, i.e. `indep_PReLU` = True.
-
-        Example:
-        --------
-        >>> 
-        
     """
     def __init__(self, **kwargs):
         super(selfMADE, self).__init__()
@@ -170,7 +166,7 @@ class selfMADE(torch.nn.Module):
         
         assert type(self.net[-1]) == Softmax_blocked, "Expected `Softmax_blocked` as last network layer."
         # Pauli-blocker for the first component -> take log, because this will be passed through Softmax
-        self.net[-1].Pauli_blocker[0, 0:self.D-self.num_components+1] = torch.tensor([0.0], requires_grad=False) # no longer needed, taken care of by slater_sampler:  torch.log(torch.Tensor(self.bias_zeroth_component)[0:self.D-self.num_components+1])
+        self.net[-1].Pauli_blocker[0, 0:self.D-self.num_components+1] = torch.log(torch.Tensor(self.bias_zeroth_component)[0:self.D-self.num_components+1]) # in combination with a slater sampler the bias should be a uniform distribution (which is the default, anyways)
         self.net[-1].Pauli_blocker[0, self.D-self.num_components+1:] = torch.tensor([float('-inf')], requires_grad=False)
         
     def forward(self, x):
@@ -270,10 +266,6 @@ class selfMADE(torch.nn.Module):
             - (1 - sample)*torch.log(1 - x_hat + self.epsilon)
              )
 
-        print("_cross_entropy, sample=", sample[0])
-        print("_cross_entropy, x_hat=", x_hat[0])
-        # exit(1)
-
         # Cross entropy for all samples returned as a vector (not averaged yet).
         return ce.view(ce.shape[0], -1).sum(dim=-1)
 
@@ -284,28 +276,9 @@ class selfMADE(torch.nn.Module):
         return self._cross_entropy(sample, x_hat)
 
 
-
-
-
-
-def quick_tests():
-
-    Nsites = 4
-    Nparticles = 2
-    prob_1st_particle = torch.Tensor([0.3, 0.2, 0.4, 0.1]).to(default_dtype_torch)
-    model = selfMADE(D=Nsites, num_components=Nparticles, net_depth=2, bias_zeroth_component=prob_1st_particle)
-
-    amp = model.forward(torch.Tensor([[1,0,0,0,0,1,0,0]]))
-    print("amplitude=", amp)
-
 def _test():
     import doctest 
     doctest.testmod(verbose=True)
 
 if __name__ == '__main__':
-
-    from utils import default_dtype_torch
-    torch.set_default_dtype(default_dtype_torch)
-    #_test()
-    #quick_tests()
-    fit_data_distribution()
+    _test()
