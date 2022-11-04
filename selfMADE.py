@@ -19,7 +19,7 @@ from utils import default_dtype_torch
 from one_hot import occ_numbers_collapse, occ_numbers_unfold
 from bitcoding import int2bin
 
-#__all__ = ['selfMADE']
+__all__ = ['selfMADE']
 
 
 class MaskedLinear(torch.nn.Linear):
@@ -286,116 +286,6 @@ class selfMADE(torch.nn.Module):
 
 
 
-def fit_data_distribution():
-    """Tests created during debugging."""
-    import matplotlib.pyplot as plt 
-    from synthetic_data import Data_dist
-    from utils import default_dtype_torch
-
-    torch.set_default_dtype(default_dtype_torch)
-
-
-    Nsites = 6
-    Nparticles = 2
-
-    # synthetic data distribution 
-    num_epochs = 160
-    num_minibatches = 10
-    minibatch_size = 100
-    DATA = Data_dist(Nsites=Nsites, Nparticles=Nparticles, seed=678)
-    data_entropy = DATA.entropy()
-    data = DATA.generate_batch(batch_size=num_minibatches * minibatch_size, unfold=True)
-
-    # Check that samples produced obey the distribution
-    Nsamples=1280
-    hist_data = torch.zeros(DATA.dim)
-    hist_1st_pos = torch.zeros(Nsites)
-    for i in range(Nsamples):
-        sample = DATA.sample(rep='integer')
-        bits = DATA._int2bits(sample)
-        hist_1st_pos[bits.nonzero()[0][0]] += 1
-        hist_data[sample] += 1
-    hist_data /= Nsamples
-    hist_1st_pos /= Nsamples
-
-    # fit synthetic data to MADE
-    model = selfMADE(D=Nsites, num_components=Nparticles, net_depth=2, bias_zeroth_component=hist_1st_pos)
-    print(model)
-
-    # number of trainable parameters (not taking masking of matrices into account)
-    NUM_TRAINABLE_PARAMETERS = np.sum([np.prod(list(p.size())) for p in model.parameters()])
-    print("num. trainable params=", NUM_TRAINABLE_PARAMETERS)
-    for name, param in model.named_parameters():
-        print(name, param)
-
-    # set up optimizer: SGD works best and converges fastest 
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
-    #optimizer = torch.optim.Adam(model.parameters(), 1e-3, weight_decay=1e-4)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=45, gamma=0.1)
-
-    torch.autograd.set_detect_anomaly(True)
-
-    L=[]
-
-    for epoch in range(num_epochs+1):
-        for b in np.random.permutation(range(num_minibatches)):
-            minibatch = data[b*minibatch_size:(b+1)*minibatch_size] #DATA.generate_batch(batch_size=minibatch_size, unfold=True)             
-            optimizer.zero_grad()
-            #logp = model.log_prob(minibatch)
-            #loss = -logp.mean()  # minimize negative log likelihood
-            loss = model.cross_entropy(minibatch).mean()                        
-            loss.backward()
-            optimizer.step()
-            L.append(loss.detach().numpy())
-        print("epoch=", epoch)            
-        scheduler.step(epoch)            
-            
-    is_ec_correctly_calculated = model.cross_entropy(data).mean().detach().numpy()
-    is_ec_correctly_calculated2 = DATA.calc_entropy(hist_data)
-
-
-    f = plt.figure()
-    ax0, ax00, ax1, ax2 = f.subplots(1,4)
-    ax0.plot(range(len(DATA.probs)), np.array(DATA.probs), 'b-o', label="data dist")
-    ax0.plot(range(len(hist_data)), np.array(hist_data), 'r--o', label="data histogram")
-    ax0.legend()
-
-    ax00.plot(range(Nsites), np.array(hist_1st_pos), 'g-o', label="hist 1st pos.")
-    ax00.set_xlabel(r"position of 1st particle")
-    ax00.set_ylabel(r"probability")
-    ax00.legend()
-
-
-    ax1.plot(range(len(L)), L, 'b-', label="loss")
-    ax1.plot(range(len(L)), data_entropy * np.ones(len(L)), 'r--', label="entropy of data dist.")
-    ax1.plot(range(len(L)), is_ec_correctly_calculated * np.ones(len(L)), 'g--', label="ce from full data dist")
-    ax1.plot(range(len(L)), is_ec_correctly_calculated2 * np.ones(len(L)), 'y-', label="entropy from hist")
-    ax1.legend()
-
-
-    # Direct componentwise sampling from MADE
-    # Now that we have trained the MADE network, we can start sampling from 
-    # it and verify that it has learned the data distribution correctly.
-
-    Nsamples=40
-    hist = torch.zeros(DATA.dim)
-    model_probs = np.zeros(DATA.dim)
-    for i in range(Nsamples):
-        sample_unfolded = model.sample_unfolded()        
-        s = occ_numbers_collapse(sample_unfolded, Nsites)
-        print("s=", s)
-        print("amplitude=", model.psi_amplitude(s))
-        model_probs[DATA.bits2int(s.squeeze(dim=0))] = torch.exp(model.log_prob(s)).detach().numpy()
-        s = s.squeeze(dim=0)
-        hist[DATA.bits2int(s)] += 1
-    hist /= Nsamples
-
-    ax2.plot(range(len(DATA.probs)), np.array(DATA.probs), 'b-o', label="data dist")
-    ax2.plot(range(len(hist)), np.array(hist), 'r--o', label="MADE samples hist")
-    ax2.plot(range(len(model_probs)), np.array(model_probs), 'g--o', label="MADE-predicted probs")
-    ax2.legend()
-
-    plt.show()
 
 
 def quick_tests():

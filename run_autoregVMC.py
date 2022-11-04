@@ -9,8 +9,10 @@ from one_hot import occ_numbers_collapse
 from monitoring_old import logger 
 from VMC_common import PhysicalSystem, VMCKernel
 from SlaterJastrow_ansatz import SlaterJastrow_ansatz
-#from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
-from slater_sampler_ordered import SlaterDetSampler_ordered
+if True:
+    from slater_sampler_ordered import SlaterDetSampler_ordered
+else:
+    from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 from test_suite import HartreeFock_tVmodel
 
 import itertools

@@ -1,11 +1,11 @@
-# TODO: - replace hstack and vstack by directly writing to preallocated memory 
+# TODO: - Add lowrank_kinetic() routine so that this version of slater sampler can be 
+#         used in the VMC.
 #         For this the sizes of the blocks need to be known explicitly. (DONE)
 #       - Rather than calculating the determinant of the Schur complement use the formula
 #         for the determinant of a block matrix. (DONE)
 #       - Is the Schur complement a symmetric matrix ? Is yes, then use this to reduce memory access. 
 #       - Check whether conditional probabilities are saturated and stop calculating cond. probs. for 
 #         further positions. 
-
 import torch
 import torch.nn as nn
 import numpy as np
@@ -495,10 +495,10 @@ if __name__ == "__main__":
 
     fd = open("test_block_update.dat", "a")
 
-    for L in (200,): #(60, 80, 100, 150, 200, 240, 320, 400, 500, 600, 1000): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
+    for L in (100,): #(60, 80, 100, 150, 200, 240, 320, 400, 500, 600, 1000): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
         (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=L, potential='none', PBC=True, HF=True)
         Nparticles = L//2
-        num_samples = 5 # 1000
+        num_samples = 1000
 
         #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
         #SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
@@ -513,8 +513,9 @@ if __name__ == "__main__":
         #print("naive, elapsed=", (t1-t0) )
 
         t3 = time()
-        for _ in range(num_samples):
+        for i in range(num_samples):
             occ_vec, _ = SDsampler2.sample()
+            print("sample nr=", i, occ_vec)
         t4 = time()
         print("block update, total elapsed=", (t4-t3) )
         print(Nparticles, t4-t3, file=fd)
