@@ -108,7 +108,6 @@ def occ_numbers_collapse(v, D, duplicate_entries=False):
                 [[1, 0, 1, 0],
                  [1, 1, 0, 0],
                  [0, 1, 1, 0]]])
-
     """
     if duplicate_entries:
         last = v[..., -D:] 
@@ -121,7 +120,7 @@ def occ_numbers_collapse(v, D, duplicate_entries=False):
         # improve this later 
         Np =  v.shape[-1] // D     
         v_np = np.empty(v.shape[:], dtype=object)        
-        v_np = v.numpy()
+        v_np = v.numpy() # this assumes that input is a torch tensor 
         out_np = np.add.reduce([v_np[..., k*D:(k+1)*D] for k in range(Np)], axis=0) # "Creating an ndarray from ragged nested sequences is deprecated."
         assert np.all(np.logical_or(out_np == 1, out_np == 0).flatten()) # only one particle per site
         assert np.all(np.sum(out_np, axis=-1) == Np) # all samples have the same number of particles 

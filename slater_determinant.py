@@ -6,6 +6,22 @@ import numpy as np
 from scipy import linalg
 from bitcoding import bin2pos
 
+def Slater_determinant_overlap(alpha, Pmatrix):
+    """
+        Args:
+            alpha (bin array): occupation number state
+            Pmatrix: P-matrix representation of the Slater determinant (square array of cols of orthogonal single-particle states)
+        Returns:
+            Overlap <alpha|SD>
+
+        Note: This routine is slow and should only be used for tests.
+    """
+    Palpha = np.zeros_like(Pmatrix)
+    for col, pos in enumerate(np.nonzero(alpha)[0]):
+        Palpha[pos, col] = 1
+    return np.linalg.det(np.matmul(Palpha.T, Pmatrix))
+
+
 def Slater2spOBDM(sp_states):
     """
         <Sdet| c_i c_j^{\dagger} |Sdet> = det([P_i^{\prime}]^t P_j^{\prime})
@@ -95,8 +111,8 @@ def ratio_Slater(G, alpha, beta, r, s):
                 G_{ji} =  <\alpha| c_j^{\dagger} c_i |\psi> / <\alpha | \psi>
     """
     # IMPROVE: assert that beta is indeed obtained from alpha 
+    # alpha = np.asarray(alpha) # alpha is not used 
     G = np.asarray(G)
-    alpha = np.asarray(alpha) # alpha is not used 
     beta = np.asarray(beta)
     R = (1 - G[r,r] - G[s,s] + G[r,s] + G[s,r])
     # Furthermore, there is an additional sign factor due to the fact that in the P-matrix
