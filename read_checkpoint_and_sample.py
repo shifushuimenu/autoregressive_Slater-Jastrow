@@ -9,7 +9,7 @@ torch.set_default_dtype(default_dtype_torch)
 from VMC_common import VMCKernel, PhysicalSystem
 #from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
 from slater_sampler_ordered import SlaterDetSampler_ordered
-from test_suite import prepare_test_system_zeroT, HartreeFock_tVmodel
+from HF import prepare_test_system_zeroT, HartreeFock_tVmodel
 
 from graph_distance import * 
 
