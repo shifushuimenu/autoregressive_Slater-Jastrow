@@ -407,14 +407,13 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         """
         return 2 * torch.log(torch.abs(self.psi_amplitude(samples)))
         
-    
     def lowrank_kinetic(self, ref_I, xs_I, rs_pos, print_stats=True):
         """
             Calculate local kinetic energy in state alpha via lowrank 
             update of conditional probabilities of the reference state alpha.
         """
         GG = self.G.detach().numpy()
-        return lowrank_update_kinetic(GG, self.D, self.N, ref_I, xs_I, rs_pos, print_stats)
+        return lowrank_update_kinetic(GG, self.D, self.N, ref_I, xs_I, rs_pos, print_stats, outdir=self.dir)
 
 
 

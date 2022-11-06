@@ -66,7 +66,7 @@ class MinimalUsageExample(unittest.TestCase):
         self.Ns=Nx*Ny
         self.num_samples = 100
 
-        phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=self.Ns, num_particles=Np, D=2, Vint=3.0)
+        phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=self.Ns, num_particles=Np, dim=2, Vint=3.0)
         (eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none", max_iter=20)
 
         Sdet_sampler = SlaterDetSampler_ordered(

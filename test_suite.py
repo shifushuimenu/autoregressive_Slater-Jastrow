@@ -106,7 +106,7 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=False, max_iter=1
 
     Example:
     --------
-    >>> phys_system = PhysicalSystem(4, 4, 16, 8, D=2, Vint=3.0) 
+    >>> phys_system = PhysicalSystem(4, 4, 16, 8, dim=2, Vint=3.0) 
     >>> eigvals, U = HartreeFock_tVmodel(phys_system)
     >>> np.isclose(eigvals[0], -3.443120942335799) and np.isclose(U[0,0], -0.18668780102117907)
     True

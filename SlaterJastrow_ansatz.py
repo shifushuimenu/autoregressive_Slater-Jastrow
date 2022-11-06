@@ -23,13 +23,51 @@ from bitcoding import int2bin, bin2pos
         
 # imports needed in lowrank_kinetic()
 from k_copy import sort_onehop_states 
-from slater_determinant import ratio_Slater, local_OBDM
 from physics import kinetic_term
+from slater_determinant import ratio_Slater, local_OBDM
 
 from time import time 
 from profilehooks import profile 
 
 __all__ = ['SlaterJastrow_ansatz']
+
+
+def _log_cutoff(x):
+    """
+    Replace -inf by a very small, but finite value.
+    """
+    return np.where(x > 0, np.log(x), -1000)
+
+def _cond_prob2log_prob(xs_hat, xs_unfolded, xs_pos, num_components, D):
+    """
+    First dimension is batch dimension. 
+
+    Pick conditional probabilities at actually sampled positions so as to 
+    get the probability of the microconfiguration.
+
+    Inputs are conditional probabilities.
+    """
+    assert xs_hat.shape == xs_unfolded.shape 
+    assert len(xs_hat.shape) == 2
+    num_states = xs_hat.shape[0]
+    mm = xs_unfolded[:,:] * xs_hat[:,:]
+    # CAREFUL: this may be wrong if a probability is accidentally zero !
+    # introduce a boolean array which indicates the valid support
+    # and use log-probabilities throughout.  
+    supp = np.empty((num_states, num_components, D), dtype=bool)
+    supp[...] = False 
+    for l in range(num_states):
+        for k in range(num_components):
+            xmin = 0 if k==0 else xs_pos[l, k-1] + 1
+            xmax = D - num_components + k + 1
+            supp[l, k, xmin:xmax] = True
+    supp = supp.reshape(-1, num_components*D)
+    assert mm.shape == supp.shape
+    # CAREFUL
+    log_probs = _log_cutoff(np.where(mm > 0, mm, 1.0)).sum(axis=-1)
+
+    return log_probs 
+
 
 class SlaterJastrow_ansatz(selfMADE):
     """
@@ -323,45 +361,6 @@ class SlaterJastrow_ansatz(selfMADE):
                                                 sqrt(| < a | \psi > |^2)
 
         """
-
-        def _log_cutoff(x):
-            """
-            Replace -inf by a very small, but finite value.
-            """
-            return np.where(x > 0, np.log(x), -1000)
-
-        def _cond_prob2log_prob(xs_hat, xs_unfolded, xs_pos):
-            """
-            First dimension is batch dimension. 
-
-            Pick conditional probabilities at actually sampled positions so as to 
-            get the probability of the microconfiguration.
-
-            Inputs are conditional probabilities.
-            """
-            assert xs_hat.shape == xs_unfolded.shape 
-            assert len(xs_hat.shape) == 2
-            num_states = xs_hat.shape[0]
-            mm = xs_unfolded[:,:] * xs_hat[:,:]
-            # CAREFUL: this may be wrong if a probability is accidentally zero !
-            # introduce a boolean array which indicates the valid support
-            # and use log-probabilities throughout.  
-            supp = np.empty((num_states, self.num_components, self.D), dtype=bool)
-            supp[...] = False 
-            for l in range(num_states):
-                for k in range(self.num_components):
-                    xmin = 0 if k==0 else xs_pos[l, k-1] + 1
-                    xmax = self.D - self.num_components + k + 1
-                    supp[l, k, xmin:xmax] = True
-            supp = supp.reshape(-1, self.num_components*self.D)
-            assert mm.shape == supp.shape
-            # CAREFUL
-            log_probs = _log_cutoff(np.where(mm > 0, mm, 1.0)).sum(axis=-1)
-
-            return log_probs 
-
-
-        config_ref = int2bin(I_ref, ns=self.D)
         rs_pos, xs_I, matrix_elem = sort_onehop_states(*kinetic_term(I_ref, lattice))
 
         # conditional probabilities of all onehop states
@@ -394,12 +393,13 @@ class SlaterJastrow_ansatz(selfMADE):
         # so as to compute the probability of a sample. 
         xs_unfolded = xs_unfolded.numpy()
         xs_pos = bin2pos(xs)
-        log_probs = _cond_prob2log_prob(xs_hat, xs_unfolded, xs_pos)
+        log_probs = _cond_prob2log_prob(xs_hat, xs_unfolded, xs_pos, self.num_components, self.D)
         b_absamp = np.exp(0.5*log_probs)
 
         # sign( <\beta|\psi> / <\alpha|\psi> )
         b_relsign = np.empty_like(b_absamp)
         # local OBDM is needed for computing ratio of two Slater determinants
+        config_ref = int2bin(I_ref, ns=self.D)
         OBDM_loc = local_OBDM(alpha=config_ref, sp_states=self.slater_sampler.P_ortho.detach().numpy())
         for i, x in enumerate(xs):            
             (r,s) = rs_pos[i]

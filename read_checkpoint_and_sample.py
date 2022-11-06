@@ -30,7 +30,7 @@ Vint = 1.0
 
 num_samples = 200
 
-phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, D=space_dim, Vint=Vint)
+phys_system = PhysicalSystem(nx=Nx, ny=Ny, ns=Nsites, num_particles=Nparticles, dim=space_dim, Vint=Vint)
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 

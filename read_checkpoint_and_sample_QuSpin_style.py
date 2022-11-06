@@ -23,7 +23,7 @@ parser.add_argument('Vint', metavar='V/t', type=float, help='nearest neighbout i
 parser.add_argument('num_samples', type=int, help="number of samples")
 #
 args = parser.parse_args()
-Lx = args.Lx; Ly = args.Ly; Np = args.Np; Vint = args.Vint; num_samples = args.num_samples 
+Lx = args.Lx; Ly = args.Ly; Np = args.Np; Vint = args.Vint; num_samples = args.num_samples; space_dim=2
 #
 J=1.0 # hopping matrix element
 N_2d = Lx*Ly # number of sites
@@ -44,7 +44,7 @@ def translate(s, n, T_d):
         s = T_d[s]
     return s
 #
-phys_system = PhysicalSystem(nx=Lx, ny=Ly, ns=N_2d, num_particles=Np, D=2, Vint=Vint)
+phys_system = PhysicalSystem(nx=Lx, ny=Ly, ns=N_2d, num_particles=Np, dim=space_dim, Vint=Vint)
 #
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 

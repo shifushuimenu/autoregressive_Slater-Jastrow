@@ -20,7 +20,7 @@ class PhysicalSystem(object):
     for a hypercubic system
     and provides method for calculating local energy.
     """
-    def __init__(self, nx, ny, ns, num_particles, D, Vint):
+    def __init__(self, nx, ny, ns, num_particles, dim, Vint):
         self.nx = nx; self.ny = ny
         assert ns == nx*ny
         self.ns = nx*ny
@@ -29,9 +29,9 @@ class PhysicalSystem(object):
         if ny == 1: assert D == 1
         assert not nx == 1
         self.Vint = Vint
-        if D == 1:
+        if dim == 1:
             self.lattice = Lattice1d(ns=self.nx)
-        elif D == 2:  
+        elif dim == 2:  
             self.lattice = Lattice_rectangular(self.nx, self.ny)    
 
     #@profile
@@ -41,8 +41,8 @@ class PhysicalSystem(object):
         
         Args:
             config (1D array): occupation numbers as bitstring.
-            psi_func (func): wave function amplitude
             psi_loc (number): projection of wave function onto config <config|psi>
+            ansatz: (object): wavefunction ansatz providing function lowrank_kinetic() 
             V (float): nearest-neighbout interaction
 
         Returns:

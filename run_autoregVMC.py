@@ -135,7 +135,7 @@ def _checkpoint(VMCmodel):
     torch.save(state, ckpt_outfile)
 
 
-phys_system = PhysicalSystem(nx=Lx, ny=Ly, ns=Nsites, num_particles=Nparticles, D=space_dim, Vint=Vint)
+phys_system = PhysicalSystem(nx=Lx, ny=Ly, ns=Nsites, num_particles=Nparticles, dim=space_dim, Vint=Vint)
 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determi

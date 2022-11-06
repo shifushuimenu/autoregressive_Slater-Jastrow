@@ -1,3 +1,8 @@
+"""
+In rare cases the lowrank update may suffer from numerical instabilities due to finite 
+precision floating point arithmetic. This has not been resolved yet.
+However, these cases are detected by assert statements if run in debug mode. 
+"""
 import numpy as np
 from time import time 
 import math 
@@ -8,8 +13,28 @@ from k_copy import calc_k_copy
 from monitoring_old import logger as mylogger
 import lowrank_update as LR
 
+from profilehooks import profile 
 
-def _detratio_from_scratch_v0(G, occ_vec, base_pos, i):
+
+def _detratio_from_scratch(G, occ_vec, base_pos, i):
+    """
+    Calculate ratio of determinants of numerator and denominator matrices from scratch,
+    i.e. without cancelation by means of the block determinant formula. 
+    """
+    G = np.asarray(G)
+
+    base = list(range(0, base_pos+1))
+    occ_vec_base = list(occ_vec[0:base_pos + 1])
+    Gdenom = G[np.ix_(base, base)] - np.diag(occ_vec_base)
+    extend = list(range(0, i+1))
+    occ_vec_add = [1] if (i - base_pos == 1) else [0] * (i - base_pos - 1) + [1]
+    occ_vec_extend = occ_vec_base + occ_vec_add
+    Gnum = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
+
+    ratio = np.linalg.det(Gnum) / np.linalg.det(Gdenom)
+    return ratio 
+
+def _detratio_from_scratch_v1(G, occ_vec, base_pos, i):
     """
     Calculate ratio of determinants of numerator and denominator matrices from scratch.    
     """
@@ -28,28 +53,8 @@ def _detratio_from_scratch_v0(G, occ_vec, base_pos, i):
     # return np.linalg.det(Gnum) / np.linalg.det(Gdenom)
     return ratio 
 
-
-def _detratio_from_scratch_tmp(G, occ_vec, base_pos, i):
-    """
-    Calculate ratio of determinants of numerator and denominator matrices from scratch.    
-    """
-    from scipy import linalg  # scipy.linalg supports float128, np.linalg does not 
-    G = np.array(G, dtype=np.float128)  # use quadruple precision 
-
-    base = list(range(0, base_pos+1))
-    occ_vec_base = list(occ_vec[0:base_pos + 1])
-    Gdenom = G[np.ix_(base, base)] - np.diag(occ_vec_base)
-    extend = list(range(0, i+1))
-    occ_vec_add = [1] if (i - base_pos == 1) else [0] * (i - base_pos - 1) + [1]
-    occ_vec_extend = occ_vec_base + occ_vec_add
-    Gnum = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
-
-    ratio = linalg.det(Gnum) / linalg.det(Gdenom)
-    return ratio 
-
-
 #@profile 
-def _detratio_from_scratch(G, occ_vec, base_pos, i):
+def _detratio_from_scratch_v2(G, occ_vec, base_pos, i):
     """
     Calculate ratio of determinants of numerator and denominator matrices from scratch.  
     Use singular value decomposition to separate scales in matrix-matrix multiplication.   
@@ -72,22 +77,22 @@ def _detratio_from_scratch(G, occ_vec, base_pos, i):
     # Pseudo-inverse 
     ratio = np.linalg.det( D - ( (C @  vv.T) @ np.diag(np.where(ss>LR.thresh, 1.0/ss, 0.0)) @ (uu.T @ B) ) )
 
-    #if __debug__:
-    #    occ_vec_extend = occ_vec_base + occ_vec_add
-    #    extend = list(range(0, i+1))
-    #    G = np.array(G, dtype=np.float64) # np.float128
-    #    Gnum = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
-    #    Gdenom = G[np.ix_(K1, K1)] - np.diag(occ_vec_base)
-    # 
-    #    ratio2 = linalg.det(Gnum) / linalg.det(Gdenom)
-    #
-    #    # print("ratio2=", ratio2, "ratio=", ratio, "condition number num, denom, X=", np.linalg.cond(Gnum), np.linalg.cond(Gdenom), np.linalg.cond(X))
+    if __debug__:
+        occ_vec_extend = occ_vec_base + occ_vec_add
+        extend = list(range(0, i+1))
+        G = np.array(G, dtype=np.float64) # np.float128
+        Gnum = G[np.ix_(extend, extend)] - np.diag(occ_vec_extend)
+        Gdenom = G[np.ix_(K1, K1)] - np.diag(occ_vec_base)
+     
+        ratio2 = linalg.det(Gnum) / linalg.det(Gdenom)
+    
+        print("ratio2=", ratio2, "ratio=", ratio, "condition number num, denom, X=", np.linalg.cond(Gnum), np.linalg.cond(Gdenom), np.linalg.cond(X))
 
     return ratio 
 
 
 #@profile
-def lowrank_update_kinetic(GG, D, N, ref_I, xs_I, rs_pos, print_stats=True):
+def lowrank_update_kinetic(GG, D, N, ref_I, xs_I, rs_pos, print_stats=True, outdir="./"):
     """
     Probability density estimation on states connected to I_ref by the kinetic operator `kinetic_operator`,
     given the Slater-Jastrow ansatz. 
@@ -117,7 +122,7 @@ def lowrank_update_kinetic(GG, D, N, ref_I, xs_I, rs_pos, print_stats=True):
     -> ratios <beta|psi> / <alpha|psi> -> local kinetic energy for state |alpha> (no backpropagation required). )
     """
 
-    assert_margin = 1e-6
+    assert_margin = 1e-10
 
     # normalization needs to be satisfied up to 
     #     \sum_i p(i)  > `eps_norm_probs``
@@ -138,9 +143,6 @@ def lowrank_update_kinetic(GG, D, N, ref_I, xs_I, rs_pos, print_stats=True):
     ref_conf = int2bin(ref_I, ns=D)    
     mylogger.info_refstate.num_onehop_states = num_onehop_states
     #mylogger.info_refstate.accumulator["num_onehop_states"] = num_onehop_states
-
-    # special case of 1d n.n. hopping matrix
-    # assert np.all([abs(r-s) == 1 or abs(r-s) == Ns-1 for r,s in rs_pos])
 
     k_copy = calc_k_copy(rs_pos, ref_conf)
     onehop_info = list(zip(k_copy, rs_pos))
@@ -262,14 +264,6 @@ def lowrank_update_kinetic(GG, D, N, ref_I, xs_I, rs_pos, print_stats=True):
                         mylogger.info_refstate.size_support += xmax_onehop - xmin_onehop
                     # # SOME SPECIAL CASES 
                     if xmin_onehop == xmax_onehop-1 and i == xmin_onehop: #and r < i and s < i: # and (r < s and s < i) or (s < r and r < i): #
-                        #print("certainly 1")
-                        # print("r=", r, "s=", s)
-                        #print("xmin_onehop=", xmin_onehop, "xmax_onehop=", xmax_onehop)
-                        #print("k=", k, "i=", i, "state_nr=", state_nr)
-                        #print(ref_conf)
-                        #print(xs[state_nr])
-                        #print(" xs_pos[state_nr, k-1]=",  xs_pos[state_nr, k-1])
-                        # exit(1)
                     # In this case it is clear that every subsequent empty site needs to be occupied to accomodate 
                     # all particles both in the reference state and in the one-hop state. Don't calculate probabilities. 
                         cond_prob_onehop[state_nr, k, i] = 1.0
@@ -314,16 +308,21 @@ def lowrank_update_kinetic(GG, D, N, ref_I, xs_I, rs_pos, print_stats=True):
                                 if i > xs_pos[state_nr, k-1]: # support is smaller than in the reference state      
                                     if Gnum_inv_reuse[k][xs_pos[state_nr, k-1]] is not None:                               
                                         try:
-                                            Gnum_inv_, corr1 = LR.adapt_Ainv(Gnum_inv_reuse[k][xs_pos[state_nr, k-1]], Gglobal=GG, r=r, s=s, i_start=xs_pos[state_nr, k-1]+1, i_end=i)                                       
-                                            corr2 = LR.corr_factor_remove_r(Gnum_inv_, r=r)                                               
-                                            corr_factor_Gnum = corr1 * corr2                                     
-                                            Gdenom_inv_ = Gnum_inv_reuse[k][xs_pos[state_nr, k-1]]
-                                            corr_factor_Gdenom = LR.corr_factor_remove_r(Gdenom_inv_, r=r) * ( det_Gnum / det_Gdenom )
-                                            corr_factor = corr_factor_Gnum / corr_factor_Gdenom 
-                                            cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]                                                      
+                                            Gnum_inv_, corr1 = LR.adapt_Ainv(Gnum_inv_reuse[k][xs_pos[state_nr, k-1]], Gglobal=GG, r=r, s=s, i_start=xs_pos[state_nr, k-1]+1, i_end=i)
+                                            if corr1 == 0:
+                                                # corr1 == 0 could be due to insufficient precision => calculate from scratch 
+                                                cond_prob_onehop[state_nr, k, i] = (-1) * _detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
+                                            else:
+                                                corr2 = LR.corr_factor_remove_r(Gnum_inv_, r=r)                                               
+                                                corr_factor_Gnum = corr1 * corr2                                     
+                                                Gdenom_inv_ = Gnum_inv_reuse[k][xs_pos[state_nr, k-1]]
+                                                corr_factor_Gdenom = LR.corr_factor_remove_r(Gdenom_inv_, r=r) * ( det_Gnum / det_Gdenom )
+                                                corr_factor = corr_factor_Gnum / corr_factor_Gdenom 
+                                                cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]                                                      
                                         except np.linalg.LinAlgError as e: # from inverting singular matrix in LR.adapt_Ainv()
                                             print("Excepting LinAlgError 1, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
                                             cond_prob_onehop[state_nr, k, i] = (-1) * _detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
+                                            print("CORR1 ZERO, but cond_prob from scratch =", cond_prob_onehop[state_nr, k, i])
                                         except LR.ErrorFinitePrecision as e:
                                             print("Excepting LR.ErrorFinitePrecision 1, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
                                             cond_prob_onehop[state_nr, k, i] = (-1) * _detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
@@ -495,21 +494,16 @@ def lowrank_update_kinetic(GG, D, N, ref_I, xs_I, rs_pos, print_stats=True):
                     assert math.isclose(np.sum(cond_prob_ref[k,:]), 1.0, abs_tol=1e-14), \
                         "np.sum(cond_prob_ref[k=%d,:])=%16.10f" % (k, np.sum(cond_prob_ref[k,:]))
                     if k > k_copy_:
-                        # print("state_nr=", state_nr, "k=", k, "rs_pos[state_nr]=", rs_pos[state_nr])
-                        # print("ref_conf=", ref_conf)
-                        # print("onehop  =", xs[state_nr])
-                        #print("cumsum_condprob_onehop[state_nr, k]=", cumsum_condprob_onehop[state_nr, k])
-                        #print("state_nr=", state_nr, "k=", k, "cond_prob=", cond_prob_onehop[state_nr, k, :])
                         summe=np.sum(cond_prob_onehop[state_nr, k,:])
-                        if not math.isclose(summe, 1.0, abs_tol=1e-8):
-                            fh = open(self.dir+"NormalizationViolation.dat", "a")
+                        if not math.isclose(summe, 1.0, abs_tol=1e-6):
+                            fh = open(outdir+"NormalizationViolation.dat", "a")
                             fh.write("np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f =? 1.0 =? %16.10f" \
                              % (state_nr, k, summe, cumsum_condprob_onehop[state_nr, k])+"\n")
                             fh.close()                                                            
                             print("ERROR: NORMALIZATION VIOLATION, sum(cond_probs)="+str(summe)+"  - set cond. probs. equal to reference state")
-                            print("CAREFUL ! THIS IS NOT JUSTIFIED")
+                            print("CAREFUL ! THIS IS NOT JUSTIFIED ! (This is due to limited floating point precision -> use mpmath to get avoid this error)")
                             cond_prob_onehop[state_nr, k, :] = cond_prob_ref[k, :]
-                        assert math.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, abs_tol=1e-8), \
+                        assert math.isclose(np.sum(cond_prob_onehop[state_nr, k, :]), 1.0, abs_tol=1e-6), \
                              "np.sum(cond_prob_onehop[state_nr=%d, k=%d])=%16.10f =? 1.0 =? %16.10f" \
                              % (state_nr, k, np.sum(cond_prob_onehop[state_nr, k, :]), cumsum_condprob_onehop[state_nr, k])
                         
@@ -518,15 +512,13 @@ def lowrank_update_kinetic(GG, D, N, ref_I, xs_I, rs_pos, print_stats=True):
                         if not np.all(cond_prob_onehop[state_nr, k, :] > -5e-8): # -0.00000
                             print("Error: Negative probabilities")
                             print("state_nr=", state_nr, "k=", k)
-                            fh = open(self.dir+"NegativeProbabilities.dat", "a")
+                            fh = open(outdir+"NegativeProbabilities.dat", "a")
                             fh.write("state_nr=%d, k=%d\n" %(state_nr, k))
                             fh.write(" ".join([str(s) for s  in cond_prob_onehop[state_nr, k, :].flatten()]) + "\n")
                             fh.close()
                             print("ERROR: NEGATIVE PROBABILITIES - set cond. probs. equal to reference state")
                             print("CAREFUL ! THIS IS NOT JUSTIFIED")
                             cond_prob_onehop[state_nr, k, :] = cond_prob_ref[k, :]
-                            #print("Exiting ...")                                
-                            #exit(1)
 
     assert not np.any(np.isnan(cond_prob_onehop))
 

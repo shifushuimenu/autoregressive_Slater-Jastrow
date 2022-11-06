@@ -62,7 +62,14 @@ def block_update_inverse2(Ainv, B, C, D):
 
     AinvB = np.matmul(Ainv, B)
     S = D - np.matmul(C, AinvB)  # Schur complement of A in M
-    Sinv = np.linalg.inv(S)
+    try:
+        Sinv = np.linalg.inv(S)
+    except np.linalg.LinAlgError as e:
+        print("error, e=", e, type(e))
+        print("D=", D)
+        print("np.matmul(C, AinvB)=", np.matmul(C, AinvB))
+        np.savetxt("S_not_invertible.dat", S)
+        Sinv = np.linalg.inv(S)
 
     Ablock = Ainv + np.matmul(np.matmul(AinvB, Sinv), AinvB.transpose())
     Bblock = - np.matmul(AinvB, Sinv)

@@ -96,18 +96,24 @@ def adapt_Ainv(Ainv, Gglobal, r, s, i_start, i_end):
     DD = np.zeros((l, l))
     DD[-1, -1] = -1
 
-    Ainv_extended = block_update_inverse2(Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
-        C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD)
-    corr = block_update_det_correction2(
-        Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
-        C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD
-        )
-    return Ainv_extended, corr
+    #Ainv_extended = block_update_inverse2(Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
+    #    C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD)
+    #corr = block_update_det_correction2(
+    #    Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
+    #    C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD
+    #    )
+    #return Ainv_extended, corr
 
     corr = block_update_det_correction2(
         Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
         C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD
         )
+    # If corr == 0, then there will definitely be an error "Singular Matrix" when inverting the Schur complement. 
+    # Don't call blocu_update_inverse2 as it will throw an error anyway. 
+    # The fact that corr == 0 could be due to insufficient precision. 
+    # We need to calculate the conditional probability from scratch.
+    if corr == 0.0: # This statement applies only to corr being exactly zero. 
+        return None, 0 # Here, 0 is an integer. Comparison corr == 0 is easier for integer variable. 
     Ainv_extended = block_update_inverse2(Ainv=Ainv, B=Gglobal[0:i_start, i_start:i_end+1], 
         C=Gglobal[i_start:i_end+1, 0:i_start], D=Gglobal[i_start:i_end+1, i_start:i_end+1] + DD)
     return Ainv_extended, corr
