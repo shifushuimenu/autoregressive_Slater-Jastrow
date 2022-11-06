@@ -1,102 +1,16 @@
-#!/usr/bin/python3.5
 """
 Routines for benchmarking the scheme of direct sampling of 
 free fermion pseudo density matrices. 
 """
+#TODO: wrong results if np.linalg.eigh() is used instead of scipy.linalg.eigh()
+#      The eigenvalues are the same, but eigenvectors differ, which leads to different 
+#      self-consistent HF Hamiltonians for open shell systems. 
 
 import numpy as np
 from scipy import linalg
-from bitcoding import bin2pos
 
 from slater_determinant import Slater2spOBDM
 from VMC_common import PhysicalSystem  
-
-
-def occ2int_spinless(occ_vector):
-    """
-    Map a spinless fermion occupation vector to an integer by interpreting 
-    the occupation vector as the binary prepresentation of 
-    an integer with the most significant bit to the right. 
-    
-        occ_vector = [1, 0, 1, 0]   ->   integer = 5
-    """
-    occ_vector = np.array(occ_vector, dtype=np.int8)
-    s = 0
-    for k in range(len(occ_vector)):
-        # least significant bit to the right
-        # if (occ_vector[-(k+1)] == 1):
-        #     s = s + 2**k
-        # least significant bit to the left            
-        if (occ_vector[k] == 1):
-            s = s + 2**k
-    return s  
-
-
-def occ2int_spinful(occ_vector_up, occ_vector_dn, debug=False):
-    """
-    Combine the occupation vectors for spin up and spin down 
-    and map the resulting combined occupation vector to 
-    an integer. The most significant bit is to the right.
-
-    Example:
-    ========
-        occ_vector_up = [1, 0, 0, 1]
-        occ_vector_dn = [0, 1, 1, 0]
-        [occ_vector_up, occ_vector_dn] = [1, 0, 0, 1; 0, 1, 1, 0]  -> integer = 105
-    """
-    assert(len(occ_vector_up) == len(occ_vector_dn))
-    occ_vector_up = np.array(occ_vector_up)
-    occ_vector_dn = np.array(occ_vector_dn)
-    occ_vector = np.hstack((occ_vector_up, occ_vector_dn))
-    
-    if (debug):
-        print(occ_vector)
-
-    return occ2int_spinless(occ_vector)
-
-
-def int2occ_spinful(integer, Nsites):
-    """
-    Convert the integer representing an occupation number vector
-    for spin up and spin down into a bitstring. 
-
-    Example:
-    ========
-        occ_vector_up = [1, 0, 0, 1]
-        occ_vector_dn = [0, 1, 1, 0]
-        integer = 105 -> [occ_vector_up, occ_vector_dn] = [1, 0, 0, 1; 0, 1, 1, 0]     
-    """
-    Nspecies = 2
-
-    # least significant bit to the right 
-    i = integer 
-    bitstring = []
-    while(i != 0):
-        bit = i % 2
-        bitstring.insert(0, bit)
-        i = i // 2
-    # write leading zeros
-    for _ in range(Nspecies*Nsites - len(bitstring)):
-        bitstring.insert(0, 0)
-
-    assert(len(bitstring) == 2*Nsites)
-
-    return bitstring 
-
-
-def generate_random_config(Ns, Np):
-    """
-    Generate a random occupation number state (with fixed particle number).
-    """
-    config = np.zeros((Ns,), dtype=int) 
-    #config[0] = 1; config[-1] = 1 # !!!!! REMOVE: Make sure no hopping across periodic boundaries can occur. 
-    counter = 0
-    while counter < Np:
-        pos = np.random.randint(low=0, high=Ns, size=1)
-        if config[pos] != 1:
-            config[pos] = 1
-            counter += 1 
-    return config
 
 
 def HartreeFock_tVmodel(phys_system, potential='none', verbose=False, max_iter=1000, outfile=None):

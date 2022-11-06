@@ -9,7 +9,6 @@ import numpy as np
 from time import time 
 
 from test_suite import ( prepare_test_system_zeroT,
-                         generate_random_config,
                          HartreeFock_tVmodel )
 from bitcoding import *
 from one_hot import *

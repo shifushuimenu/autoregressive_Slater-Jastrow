@@ -7,10 +7,10 @@ import numpy as np
 
 from VMC_common import PhysicalSystem
 from k_copy import sort_onehop_states 
-from bitcoding import bin2int, int2bin, bin2pos
+from bitcoding import bin2int, int2bin, bin2pos, generate_random_config
 from one_hot import occ_numbers_unfold 
 from physics import kinetic_term
-from test_suite import HartreeFock_tVmodel, generate_random_config 
+from test_suite import HartreeFock_tVmodel
 from slater_sampler_ordered import SlaterDetSampler_ordered
 from SlaterJastrow_ansatz import _cond_prob2log_prob
 

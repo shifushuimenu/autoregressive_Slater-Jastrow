@@ -148,7 +148,23 @@ def bin2pos(bin_array):
     pos_array = np.reshape(a=dummy, newshape=bin_array.shape[:-1] + (Np,))
     
     return pos_array   
-    
+
+
+def generate_random_config(Ns, Np):
+    """
+    Generate a random occupation number state (with fixed particle number).
+    """
+    config = np.zeros((Ns,), dtype=int) 
+    #config[0] = 1; config[-1] = 1 # !!!!! REMOVE: Make sure no hopping across periodic boundaries can occur. 
+    counter = 0
+    while counter < Np:
+        pos = np.random.randint(low=0, high=Ns, size=1)
+        if config[pos] != 1:
+            config[pos] = 1
+            counter += 1 
+    return config
+
+
 def _test():
     import doctest 
     doctest.testmod(verbose=True)
