@@ -1,5 +1,3 @@
-# IMPROVE: Organize imports globally in a better way
-#          when making a package with an  __init__.py file. 
 import os
 import numpy as np
 import torch 
@@ -73,11 +71,6 @@ torch.manual_seed(args.seed)
 np.random.seed(args.seed)
 if use_cuda: torch.cuda.manual_seed_all(args.seed)
 
-
-# create output directory if it does not already exist 
-dirout = "out/"
-if not os.path.exists(dirout): os.mkdir(dirout)
-
 Lx = args.Lx
 Ly = args.Ly
 Nparticles = args.Np
@@ -97,6 +90,11 @@ monitor_convergence = args.monitor_convergence
 Nsites = Lx*Ly  # Nsites = 64 => program killed because it is using too much memory
 space_dim = 2
 paramstr = "Lx{}Ly{}Np{}V{}_{}".format(Lx, Ly, Nparticles, Vint, optimizer_name)
+# create output directory if it does not already exist 
+dir1 = "./out/"
+if not os.path.exists(dir1): os.mkdir(dir1)
+dirout=dir1+paramstr+"/"
+if not os.path.exists(dirout): os.mkdir(dirout)
 logger.info_refstate.outfile = dirout+"lowrank_stats_"+paramstr+".dat"
 
 # for debugging:
