@@ -321,7 +321,7 @@ def _test():
 def code_verification():
     import matplotlib.pyplot as plt 
     from time import time 
-    from test_suite import prepare_test_system_zeroT
+    from HF import prepare_test_system_zeroT
     from slater_determinant import Slater2spOBDM
     
     # reproducibility is good

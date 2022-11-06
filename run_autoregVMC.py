@@ -13,7 +13,7 @@ if True:
     from slater_sampler_ordered import SlaterDetSampler_ordered
 else:
     from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
-from test_suite import HartreeFock_tVmodel
+from HF import HartreeFock_tVmodel
 
 import itertools
 

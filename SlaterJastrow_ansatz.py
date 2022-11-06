@@ -97,7 +97,7 @@ class SlaterJastrow_ansatz(selfMADE):
         Example: 
         --------
         >>> N_particles = 3; N_sites = 5;
-        >>> from test_suite import prepare_test_system_zeroT
+        >>> from HF import prepare_test_system_zeroT
         >>> (N_sites, eigvecs) = prepare_test_system_zeroT(Nsites=N_sites);
         >>> SdetSampler = SlaterDetSampler(eigvecs, N_particles);
         >>> SJA = SlaterJastrow_ansatz(SdetSampler, D=N_sites, num_components=N_particles, net_depth=3);

@@ -11,7 +11,7 @@ from VMC_common import PhysicalSystem, VMCKernel
 from train import vmc_measure 
 from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 from slater_sampler_ordered import SlaterDetSampler_ordered
-from test_suite import HartreeFock_tVmodel
+from HF import HartreeFock_tVmodel
 from one_hot import occ_numbers_collapse
 
 class TestInterface(unittest.TestCase):

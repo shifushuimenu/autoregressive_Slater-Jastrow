@@ -187,8 +187,6 @@ def prepare_test_system_finiteT(Nsites=21, beta=1.0, mu=0.0, potential='paraboli
             and the occupations of natural orbitals (momentum-distribution
             function for a translationally-invariant system) as a vector.
     """
-    #assert(Nsites%2==1), "test_suites: Nsites should be an odd number."
-
     i0=int(Nsites/2)
     V = np.zeros(Nsites)
     t_hop = 1.0

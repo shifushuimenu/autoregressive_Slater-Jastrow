@@ -1,7 +1,7 @@
 
 def init_test(N_particles=3, N_sites=5):
     """Initialize a minimal test system."""
-    from test_suite import prepare_test_system_zeroT
+    from HF import prepare_test_system_zeroT
 
     (N_sites, eigvecs) = prepare_test_system_zeroT(Nsites=N_sites)
     # Aggregation of MADE neural network as Jastrow factor 
@@ -12,9 +12,7 @@ def init_test(N_particles=3, N_sites=5):
 
 def quick_tests():
     """Tests created ad hoc while debugging."""
-    from test_suite import ( 
-            prepare_test_system_zeroT
-            )
+    from HF import  prepare_test_system_zeroT
 
     from bitcoding import bin2int
     from one_hot import occ_numbers_unfold 
@@ -71,9 +69,7 @@ if __name__ == '__main__':
     #_test()
     import matplotlib.pyplot as plt 
     from synthetic_data import * 
-    from test_suite import ( 
-            prepare_test_system_zeroT
-            )
+    from HF import  prepare_test_system_zeroT
 
     from bitcoding import bin2int
     from one_hot import occ_numbers_unfold 

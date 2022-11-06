@@ -8,8 +8,7 @@
 import numpy as np
 from time import time 
 
-from test_suite import ( prepare_test_system_zeroT,
-                         HartreeFock_tVmodel )
+from HF import prepare_test_system_zeroT, HartreeFock_tVmodel
 from bitcoding import *
 from one_hot import *
 from Slater_Jastrow_simple import PhysicalSystem

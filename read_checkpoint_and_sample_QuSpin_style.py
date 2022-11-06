@@ -12,7 +12,7 @@ from bitcoding import bin2pos
 from VMC_common import PhysicalSystem, VMCKernel
 from SlaterJastrow_ansatz import SlaterJastrow_ansatz
 from slater_sampler_ordered import SlaterDetSampler_ordered
-from test_suite import HartreeFock_tVmodel
+from HF import HartreeFock_tVmodel
 #
 desc_str = "Read network parameters from checkpoint file and sample from the (hopefully converged) ansatz."
 parser = argparse.ArgumentParser(description=desc_str)

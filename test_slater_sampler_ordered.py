@@ -4,7 +4,7 @@ import numpy as np
 import torch 
 
 from slater_sampler_ordered import SlaterDetSampler_ordered 
-from test_suite import prepare_test_system_zeroT
+from HF import prepare_test_system_zeroT
 from slater_determinant import Slater_determinant_overlap, Slater2spOBDM
 from one_hot import occ_numbers_collapse
 from bitcoding import bin2int 
