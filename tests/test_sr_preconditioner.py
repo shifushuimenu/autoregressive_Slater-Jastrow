@@ -1,3 +1,9 @@
+import sys, os
+
+testdir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, testdir+'/..')
+
+
 import unittest 
 import numpy as np
 import torch 
@@ -27,7 +33,7 @@ class TestInterface(unittest.TestCase):
                 nn.Linear(in_features=h0, out_features=h1, bias=True), 
                 nn.ReLU()                
             ])
-
+            
         net = block * num_blocks + [nn.Sigmoid()]
         net = nn.Sequential(*net)
 
@@ -44,7 +50,7 @@ class TestInterface(unittest.TestCase):
         grad_flat = SR._flatten(grad)
         grad_new = SR._unflatten(grad_flat, grad)
 
-        nested_booleans = [p1 == p2 for (p1,p2) in zip(grad, grad_new)
+        nested_booleans = [p1 == p2 for (p1,p2) in zip(grad, grad_new)]
         l = True
         for t in nested_booleans:
             l = l and torch.all(t.flatten())
@@ -110,12 +116,12 @@ class MinimalUsageExample(unittest.TestCase):
             grad_list = self.SR.apply_Sinv(grad_list)
 
             for (name, par), g in zip(self.VMCmodel.ansatz.named_parameters(), grad_list):
-                if name == 'slater_sampler.P':
-                    print("grad SD.P=", g)
+                #if name == 'slater_sampler.P':
+                #    print("grad SD.P=", g)
                 delta = learning_rate * g
                 par.data -= delta
             
-            print("T=", self.VMCmodel.ansatz.slater_sampler.T.data)
+            #print("T=", self.VMCmodel.ansatz.slater_sampler.T.data)
             self.VMCmodel.ansatz.slater_sampler.rotate_orbitals()
 
 

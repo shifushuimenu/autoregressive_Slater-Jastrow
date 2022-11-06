@@ -1,3 +1,9 @@
+import sys, os
+
+testdir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, testdir+'/..')
+
+
 import unittest 
 
 from selfMADE import selfMADE

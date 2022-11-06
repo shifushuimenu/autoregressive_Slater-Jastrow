@@ -2,6 +2,12 @@
 Check that the conditional probs calculated via lowrank update from the reference state alpha
 agree with the conditional probs output by the slater sampler for each one-hop state
 """
+import sys, os
+
+testdir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, testdir+'/..')
+
+
 import unittest 
 import numpy as np
 
