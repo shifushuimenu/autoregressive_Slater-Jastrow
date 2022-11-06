@@ -31,7 +31,7 @@ def binning_statistics(obs_list, num_bin):
     t_auto = 0.5 * size_bin * \
         np.abs(np.mean(variance_binned) / np.mean(variance))
     stderr = np.sqrt(variance_binned / num_bin)
-    print('Binning Statistics: Energy = %.4f +- %.4f, Auto correlation Time = %.4f' %
+    print('Binning Statistics: Energy = %.4f +- %.4f, auto correlation time = %.4f' %
           (mean, stderr, t_auto))
     return mean, stderr
 

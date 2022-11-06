@@ -1,0 +1,11 @@
+language: python 
+python:
+  - "3.7"
+  - "3.6"
+  - "3.8"
+# install dependencies 
+install:
+  - pip3 install torch=1.10.1+cpu torchvision==0.0.2+cpu -f https://download.pytorch.org/whl/torch_stable.html
+  - pip install -r requirements.txt
+script:
+  - pytest 
