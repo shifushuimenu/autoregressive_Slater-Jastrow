@@ -1,3 +1,9 @@
+import sys, os
+
+testdir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(testdir+'/..')
+
+
 import unittest 
 import numpy as np
 
