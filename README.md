@@ -1,5 +1,5 @@
 # Autoregressive Slater-Jastrow ansatz for variational Monte Carlo [arXiv:2210.05871](https://arxiv.org/abs/2210.05871)
-<img align="middle" src="_misc/arSJ_sketch.png" width="300" alt="sketch"/>
+<img align="middle" src="_misc/arSJ_sketch.png" width="650" alt="sketch"/>
 </div>
 
 ---
@@ -9,7 +9,7 @@ As a demonstration the t-V model of spinless fermions on the square lattice is i
  - Get rid of autocorrelation time completely !
  - Fast **direct sampling** from a Slater determinant
  - Jastrow factor represented by autoregressive neural network
- - Lowrank update for local kinetic energy preseves cubic scaling 
+ - Lowrank update for local kinetic energy preserves cubic scaling 
 
 ## How to run the code
 Run VMC for t-V model on a square 4x4 lattice with 8 spinless fermions and interaction strength V/t=6.0;
@@ -26,6 +26,10 @@ python3 ./run_autoregVMC.py --help
 python3 ../ED/ED_spinless_fermions_tV_2d.py 4 4 8 6.0
 ```
 This requires installation of the [QuSpin](http://weinbe58.github.io/QuSpin/) library.
+
+## Note 
+If run in debug mode (i.e. without -O flag) the lowrank update rarely throws an error due 
+to limited floating point precision. This could be avoided using mpmath infinite precision library.
 
 ## Cite
 ```
