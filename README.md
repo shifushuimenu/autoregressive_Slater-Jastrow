@@ -22,6 +22,9 @@ For a full list of options see
 python3 ./run_autoregVMC.py --help
 ```
 ## Benchmarking 
+```python 
+python3 ../ED/ED_spinless_fermions_tV_2d.py 4 4 8 6.0
+```
 This requires installation of the [QuSpin](http://weinbe58.github.io/QuSpin/) library.
 
 ## Cite
