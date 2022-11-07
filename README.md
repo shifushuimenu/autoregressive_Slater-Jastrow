@@ -1,5 +1,5 @@
 # Autoregressive Slater-Jastrow ansatz for variational Monte Carlo [arXiv:2210.05871](https://arxiv.org/abs/2210.05871)
-<img align="middle" src="_misc/arSJ_sketch.png" width="300" alt="sketch"/>
+<img align="middle" src="_misc/arSJ_sketch.png" width="650" alt="sketch"/>
 </div>
 
 ---
