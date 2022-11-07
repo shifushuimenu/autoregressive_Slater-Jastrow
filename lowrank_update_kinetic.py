@@ -293,6 +293,7 @@ def lowrank_update_kinetic(GG, D, N, ref_I, xs_I, rs_pos, print_stats=True, outd
                                         cond_prob_onehop[state_nr, k-1, i] = corr_factor * cond_prob_ref[k, i] # update: (k-1) -> k                                                
                                     except LR.ErrorFinitePrecision as e:
                                         print("Excepting finite precision error 1, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
+                                        print(" -> calculate determinant ratio from scratch ")
                                         cond_prob_onehop[state_nr, k-1, i] = (-1) * _detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-2], i=i)                                             
                                 else:
                                     print("Gnum_inv_reuse is None (i.e. accidental zero cond. prob. of reference state)")
@@ -325,6 +326,7 @@ def lowrank_update_kinetic(GG, D, N, ref_I, xs_I, rs_pos, print_stats=True, outd
                                             print("CORR1 ZERO, but cond_prob from scratch =", cond_prob_onehop[state_nr, k, i])
                                         except LR.ErrorFinitePrecision as e:
                                             print("Excepting LR.ErrorFinitePrecision 1, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
+                                            print(" -> calculate determinant ratio from scratch ")
                                             cond_prob_onehop[state_nr, k, i] = (-1) * _detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
                                     else:
                                         print("Gnum_inv_reuse is None (i.e. accidental zero cond. prob. of reference state)")
@@ -351,9 +353,11 @@ def lowrank_update_kinetic(GG, D, N, ref_I, xs_I, rs_pos, print_stats=True, outd
                                     cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k,i]                                                                           
                                 except np.linalg.LinAlgError as e:
                                     print("Excepting LinAlgError 2, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
+                                    print(" -> calculate determinant ratio from scratch ")
                                     cond_prob_onehop[state_nr, k, i] = (-1) * _detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
                                 except LR.ErrorFinitePrecision as e: #np.linalg.LinAlgError as e: # from inverting singular matrix in LR.adapt_Ainv() 
                                     print("Excepting LR.ErrorFinitePrecision 2, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
+                                    print(" -> calculate determinant ratio from scratch ")
                                     cond_prob_onehop[state_nr, k, i] = (-1) * _detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
                                 assert -assert_margin <= cond_prob_onehop[state_nr, k, i] <= 1.0 + assert_margin, "cond_prob[state_nr=%d, k=%d, i=%d]=%16.10f" % (state_nr, k, i, cond_prob_onehop[state_nr, k, i])
 
@@ -364,6 +368,7 @@ def lowrank_update_kinetic(GG, D, N, ref_I, xs_I, rs_pos, print_stats=True, outd
                                     cond_prob_onehop[state_nr, k, i] = corr_factor * cond_prob_ref[k, i]                                                                                                                     
                                 except LR.ErrorFinitePrecision as e: 
                                     print("Excepting finite precision error 2, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
+                                    print(" -> calculate determinant ratio from scratch ")
                                     cond_prob_onehop[state_nr, k, i] = (-1) * _detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
                                 assert -assert_margin <= cond_prob_onehop[state_nr, k, i] <= 1.0 + assert_margin, "cond. prob = %16.10f" % (cond_prob_onehop[state_nr, k, i])
                         
@@ -446,6 +451,7 @@ def lowrank_update_kinetic(GG, D, N, ref_I, xs_I, rs_pos, print_stats=True, outd
                                         print("k>k_r: Excepting finite precision error 3, state_nr=", state_nr, "k=", k, "i=", i, "msg=", e)
                                         print("ref_conf    =", ref_conf)
                                         print("xs[state_nr]=", xs[state_nr])                                            
+                                        print(" -> calculate determinant ratio from scratch ")
                                         cond_prob_onehop[state_nr, k, i] = (-1) * _detratio_from_scratch(GG, occ_vec=xs[state_nr], base_pos=xs_pos[state_nr, k-1], i=i)
                                     assert -assert_margin <= cond_prob_onehop[state_nr, k, i] <= 1.0 + assert_margin, "cond_prob[state_nr=%d, k=%d, i=%d]=%16.10f" % (state_nr, k, i, cond_prob_onehop[state_nr, k, i])
                                                         
