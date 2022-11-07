@@ -13,12 +13,15 @@ So far only the t-V model of spinless fermions is implemented.
  - Lowrank update for local kinetic energy preseves cubic scaling 
 
 ## Example
-See 
+For a full list of options see
 ```
 python3 ./run_autoregVMC.py --help
 ```
-for a full list of options.
-
+Run VMC for t-V model on a square 4x4 lattice with 8 spinless fermions and interaction strength V/t=6.0.
+training iteractions = 1000, batch size per iteration = 200, num. of samples in measurement phase = 300.
+```
+python3 ./run_autoregVMC.py 4 4 8 6.0 1000 200 300 --optimizer Adam --seed 42 --optimize_orbitals True
+```
 ## Cite
 ```
 @article{humeniuk2022autoregressive,
