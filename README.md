@@ -27,7 +27,7 @@ python3 ./ED/ED_spinless_fermions_tV_2d.py 4 4 8 4.0
 ```
 This requires installation of the [QuSpin](http://weinbe58.github.io/QuSpin/) library.
 
-## Note 
+## Warning 
 If run in debug mode (i.e. without -O flag) the lowrank update rarely throws an error due 
 to limited floating point precision. This could be avoided using mpmath infinite precision library.
 
