@@ -27,7 +27,6 @@ Lx = args.Lx; Ly = args.Ly; Np = args.Np; Vint = args.Vint; num_samples = args.n
 #
 J=1.0 # hopping matrix element
 N_2d = Lx*Ly # number of sites
-paramstr = "Lx%dLy%dNp%dVint%f"%(Lx, Ly, Np, Vint)
 #
 ###### setting up user-defined symmetry transformations for 2d lattice ######
 s = np.arange(N_2d) # sites [0,1,2,....]
@@ -46,23 +45,25 @@ def translate(s, n, T_d):
 #
 phys_system = PhysicalSystem(nx=Lx, ny=Ly, ns=N_2d, num_particles=Np, dim=space_dim, Vint=Vint)
 #
+# ============================
+# For reading checkpoint file 
+# ============================
+extension='_Adam'
+paramstr = "Lx{}Ly{}Np{}V{}".format(Lx, Ly, Np, Vint)+extension
+outdir = "out/" + paramstr + "/"
+fmt_string='state_Lx{}Ly{}Np{}V{}'+extension+'.pt'
+ckpt_outfile = fmt_string.format(Lx, Ly, Np, Vint)
+
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determinant sampler. 
 (eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none", max_iter=2)
-np.savetxt("eigvecs.dat", eigvecs)
-#(_, eigvecs) = prepare_test_system_zeroT(N_2d=N_2d, potential='none', HF=True, PBC=False, Nparticles=Nparticles, Vnnint=Vint)
+np.savetxt(outdir+"/"+"eigvecs.dat", eigvecs)
 Sdet_sampler = SlaterDetSampler_ordered(Nsites=N_2d, Nparticles=Np, single_particle_eigfunc=eigvecs, eigvals=eigvals, naive_update=False, optimize_orbitals=True)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Np, D=N_2d, net_depth=2)
 #
 VMC = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)
 del SJA
 #
-# ===================
-# Read checkpoint file 
-# ===================
-extension='_Adam'
-fmt_string='state_Lx{}Ly{}Np{}V{}'+extension+'.pt'
-ckpt_outfile = fmt_string.format(Lx, Ly, Np, Vint)
 #
 # ===================================================================
 # Read columns of Hartree-Fock Slater determinant 
@@ -70,10 +71,10 @@ ckpt_outfile = fmt_string.format(Lx, Ly, Np, Vint)
 # ===================================================================
 fmt_string = 'eigvecsLx{}Ly{}Np{}V{}'+extension+'.dat'
 eigvecs_file = fmt_string.format(Lx, Ly, Np, Vint)
-U_HF = np.loadtxt(eigvecs_file)
+U_HF = np.loadtxt(outdir+"/"+eigvecs_file)
 #
 print("Now sample from the converged ansatz")
-state_checkpointed = torch.load(ckpt_outfile)
+state_checkpointed = torch.load(outdir+"/"+ckpt_outfile)
 VMC.ansatz.load_state_dict(state_checkpointed['net'], strict=True)
 #
 # init observables 
@@ -136,22 +137,22 @@ err_SzSzcorr = np.sqrt(SzSzcorr2[:,:] - SzSzcorr[:,:]**2) / np.sqrt(num_samples)
 err_nncorr = np.sqrt(nncorr2[:,:] - nncorr[:,:]**2) / np.sqrt(num_samples)
 #
 av_rel_sign /= num_samples 
-np.savetxt("av_rel_sign_"+paramstr+".dat", np.array([av_rel_sign]))
+np.savetxt(outdir+"/"+"av_rel_sign_"+paramstr+".dat", np.array([av_rel_sign]))
 #
-np.savetxt("SzSzcorr_VMC_"+paramstr+".dat", SzSzcorr)
-np.savetxt("err_SzSzcorr_VMC_"+paramstr+".dat", err_SzSzcorr)
-np.savetxt("nncorr_VMC_"+paramstr+".dat", nncorr)
+np.savetxt(outdir+"/"+"SzSzcorr_VMC_"+paramstr+".dat", SzSzcorr)
+np.savetxt(outdir+"/"+"err_SzSzcorr_VMC_"+paramstr+".dat", err_SzSzcorr)
+np.savetxt(outdir+"/"+"nncorr_VMC_"+paramstr+".dat", nncorr)
 # Store also the connected density-density correlation function (valid only for translationally invariant systems)
 ##np.savetxt("nncorr_conn_VMC_"+paramstr+".dat", nncorr[:,:] - (Np / N_2d)**2 )
-np.savetxt("err_nncorr_VMC_"+paramstr+".dat", err_nncorr)
+np.savetxt(outdir+"/"+"err_nncorr_VMC_"+paramstr+".dat", err_nncorr)
 #
 energy_av /= num_samples 
 energy2_av /= num_samples 
 #
 err_energy = np.sqrt(energy2_av - energy_av**2) / np.sqrt(num_samples)
-with open("energy_VMC_"+paramstr+".dat", "w") as fh:
+with open(outdir+"/"+"energy_VMC_"+paramstr+".dat", "w") as fh:
     fh.write("energy = %16.10f +/- %16.10f" % (energy_av, err_energy))
 # store timeseries => make histogram of non-Gaussian statistics 
-np.savetxt("energy_TS_"+paramstr+".dat", energy_list)
+np.savetxt(outdir+"/"+"energy_TS_"+paramstr+".dat", energy_list)
 #
 print("## %d samples in %f seconds" % ( num_samples, t_sample))
