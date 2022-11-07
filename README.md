@@ -9,7 +9,7 @@ As a demonstration the t-V model of spinless fermions on the square lattice is i
  - Get rid of autocorrelation time completely !
  - Fast **direct sampling** from a Slater determinant
  - Jastrow factor represented by autoregressive neural network
- - Lowrank update for local kinetic energy preseves cubic scaling 
+ - Lowrank update for local kinetic energy preserves cubic scaling 
 
 ## How to run the code
 Run VMC for t-V model on a square 4x4 lattice with 8 spinless fermions and interaction strength V/t=6.0;
