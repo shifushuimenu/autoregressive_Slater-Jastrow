@@ -1,22 +1,3 @@
-# TODO:
-#  - longrange 2D, lowrank update: distinguish cases where detG_num is singular
-#    (like in the n.n. case)
-#  - There are additional cases for longrange 2D:
-#         (1) i > (r,s).
-#         (2) r and s are both occupied by the first particle. 
-#  - _detratio_from_scratch() should only be called when an error ErrorFinitePrecision is thrown.
-#    Other exceptional cases should have a customized solution (using a lowrank update).
-#  - Make sure reference_state_2D.py is synchronized after the above corrections have been made. 
-#  - Raise an error ErrorFinitePrecision wherever this can occur ( also in lowrank update for n.n. hopping)
-#  - Document each and every type of lowrank update (DONE)
-#  - In critical points scipy.linalg is used instead of np.linalg as the former supports float128. 
-#  - Replace np.isclose() by something faster.
-#
-#  - Is it possible to avoid 
-#            Gdenom_inv = np.linalg.inv(Gdenom)
-#    in lowrank_kinetic() by reusing information of state alpha from the sampling step ?
-#  - Standardize interface for slater_sampler 
-
 import torch
 import numpy as np
 import math 
@@ -184,7 +165,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 else: #k == 0
                     GG_num = self.G[np.ix_(Ksites_tmp, Ksites_tmp)] - torch.diag(torch.tensor(occ_vec_tmp[0:i_k+1]))
                     tmp = (-1) * torch.det(GG_num)
-                #print("k=", k, "??? tmp=", tmp, "probs[i_k]=", probs[i_k])
                 #assert torch.isclose(torch.tensor([tmp]), probs[i_k])
                 probs[i_k] = torch.tensor([tmp])
 
@@ -249,11 +229,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         if not self.naive_update:
             assert len(self.BB_reuse) == len(self.Schur_complement_reuse) == (mm+1) # IMPROVE: remove this as well as the variable mm
-        # IMPROVE: For large matrices the ratio of determinants leads to numerical
-        # instabilities which results in not normalized probability distributions   
-        # => use LOW-RANK UPDATE     
-        #print("k=", k, "xmin=", self.xmin, "xmax=", self.xmax, "i_k=", i_k, "probs[:]=", probs, "  np.sum(probs[:])=", probs.sum())         
-        #np.savetxt("Schur_complement.dat", self.Schur_complement)
         assert torch.isclose(probs.sum(), torch.tensor([1.0])), "k=%d, norm=%20.16f" % (k, probs.sum()) # assert normalization 
         # clamp negative values which are in absolute magnitude below machine precision
         probs = torch.where(abs(probs) > 1e-15, probs, torch.tensor([0.0]))
@@ -324,9 +299,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 t1 = time()
                 Sinv = torch.linalg.inv(Schur_complement_)
                 t2 = time()
-                #remove
-                #print("Schur_complement_.shape=", Schur_complement_.shape, "linalg.inv, elapsed=", t2-t1)
-                #remove
                 Ablock = (self.Xinv + 
                     torch.matmul(torch.matmul(XinvB, Sinv), XinvB.transpose(-1,-2)))
                 Bblock = - torch.matmul(XinvB, Sinv)
