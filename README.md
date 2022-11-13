@@ -13,7 +13,7 @@ As a demonstration the t-V model of spinless fermions on the square lattice is i
 
 ## How to run the code
 Run VMC for t-V model on a square 4x4 lattice with 8 spinless fermions and interaction strength V/t=4.0;
-training iteractions = 1000; batch size per iteration = 200; num. of samples in measurement phase = 300.
+training iterations = 1000; batch size per iteration = 200; num. of samples in measurement phase = 300.
 ```python
 python3 -O ./run_autoregVMC.py 4 4 8 4.0 1000 200 300 --optimizer Adam --seed 42 --optimize_orbitals True
 ```
@@ -27,8 +27,8 @@ python3 ./ED/ED_spinless_fermions_tV_2d.py 4 4 8 4.0
 ```
 This requires installation of the [QuSpin](http://weinbe58.github.io/QuSpin/) library.
 
-## Note 
-If run in debug mode (i.e. without -O flag) the lowrank update rarely throws an error due 
+## Warning 
+If run in debug mode (i.e. without -O flag) the lowrank update on rare occasions throws an error due 
 to limited floating point precision. This could be avoided using mpmath infinite precision library.
 
 ## Cite

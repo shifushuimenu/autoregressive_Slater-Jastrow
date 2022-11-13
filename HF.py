@@ -75,6 +75,7 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=False, max_iter=1
                 print("converged:")
                 print("counter=", counter)
                 print("OBDM_new=", OBDM_new)
+                # interactions are missing here
                 print("many-body HF g.s. energy= %f" % (np.sum(eigvals[0:num_particles])), file=outfile)
                 fmt_string = "single-particle spectrum = \n" + "%f \n"*ns
                 print(fmt_string % (tuple(eigvals)), file=outfile) 

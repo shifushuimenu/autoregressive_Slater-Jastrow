@@ -1,11 +1,3 @@
-# TODO: - Add lowrank_kinetic() routine so that this version of slater sampler can be 
-#         used in the VMC.
-#         For this the sizes of the blocks need to be known explicitly. (DONE)
-#       - Rather than calculating the determinant of the Schur complement use the formula
-#         for the determinant of a block matrix. (DONE)
-#       - Is the Schur complement a symmetric matrix ? Is yes, then use this to reduce memory access. 
-#       - Check whether conditional probabilities are saturated and stop calculating cond. probs. for 
-#         further positions. 
 import torch
 import torch.nn as nn
 import numpy as np
@@ -17,6 +9,8 @@ from memory_layout import store_G_linearly, idx_linearly_stored_G, \
                           idx_linearly_stored_G_blockB1
 
 from block_update_torch import block_update_inverse 
+
+from lowrank_update_kinetic import lowrank_update_kinetic 
 
 from profilehooks import profile
 from time import time 
@@ -313,10 +307,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
         if not self.naive_update:
             assert len(self.BB_reuse) == len(self.Schur_complement_reuse) == (mm+1) # IMPROVE: remove this as well as the variable mm
-        # IMPROVE: For large matrices the ratio of determinants leads to numerical
-        # instabilities which results in not normalized probability distributions   
-        # => use LOW-RANK UPDATE     
-        #print("probs[:].sum()=", probs[:].sum()) 
         assert torch.isclose(probs.sum(), torch.tensor([1.0])) # assert normalization 
         # clamp negative values which are in absolute magnitude below machine precision
         probs = torch.where(abs(probs) > 1e-15, probs, torch.tensor([0.0]))
@@ -477,7 +467,6 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         """
         return 2 * torch.log(torch.abs(self.psi_amplitude(samples)))
 
-
     def lowrank_kinetic(self, ref_I, xs_I, rs_pos, print_stats=True):
         """
             Calculate local kinetic energy in state alpha via lowrank 
@@ -488,44 +477,11 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
 
 
+def _test():
+    import doctest 
+    doctest.testmod(verbose=True)
+
+
 if __name__ == "__main__":
-
-    import matplotlib.pyplot as plt 
-    from HF import prepare_test_system_zeroT
-    from slater_determinant import Slater2spOBDM
-
-    from time import time 
-
-    fd = open("test_block_update.dat", "a")
-
-    for L in (100,): #(60, 80, 100, 150, 200, 240, 320, 400, 500, 600, 1000): #(1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000):
-        (Nsites, eigvecs) = prepare_test_system_zeroT(Nsites=L, potential='none', PBC=True, HF=True)
-        Nparticles = L//2
-        num_samples = 1000
-
-        #SDsampler  = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
-        #SDsampler1 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=True)
-        SDsampler2 = SlaterDetSampler_ordered(Nsites=Nsites, Nparticles=Nparticles, single_particle_eigfunc=eigvecs, naive_update=False)
-
-        print("Nsites=", Nsites, "Nparticles=", Nparticles, "num_samples=", num_samples)
-
-        #0 = time()
-        #for _ in range(num_samples):
-        #    occ_vec, _ = SDsampler1.sample()
-        #t1 = time()
-        #print("naive, elapsed=", (t1-t0) )
-
-        t3 = time()
-        for i in range(num_samples):
-            occ_vec, _ = SDsampler2.sample()
-            print("sample nr=", i, occ_vec)
-        t4 = time()
-        print("block update, total elapsed=", (t4-t3) )
-        print(Nparticles, t4-t3, file=fd)
-
-        print("t_fetch_memory=", SDsampler2.t_fetch_memory)
-        print("t_matmul(Schur complement)=", SDsampler2.t_matmul)
-        print("t_det=", SDsampler2.t_det)
-        print("t_update_Schur=", SDsampler2.t_update_Schur)
-
-    fd.close()
+    
+    _test()
