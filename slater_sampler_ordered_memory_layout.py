@@ -109,7 +109,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # helper variables for low-rank update
 
 
-    @profile
+    #@profile
     def get_cond_prob(self, k):
         r""" Conditional probability for the position x of the k-th particle.
 
@@ -350,7 +350,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
             _, cond_prob_k = self._sample_k(k)
             prob_sample *= cond_prob_k
         
-        np.savetxt("cond_probs_allk.dat", self.cond_probs.transpose())
+        #np.savetxt("cond_probs_allk.dat", self.cond_probs.transpose())
 
         return self.occ_vec, prob_sample
 
@@ -458,19 +458,12 @@ class SlaterDetSampler_ordered(torch.nn.Module):
     def psi_amplitude_I(self, samples_I):
         """
             Overlap of an occupation number state with the Slater determinant. 
-
             This is a wrapper function around `self.psi_amplitude(samples)`.
 
             Input:
             ------
                 samples_I: integer representation I of a binary array.
                     First dimension is batch dimension. 
-
-            Returns:
-            --------
-
-            Example:
-            --------
         """
         samples_I = torch.as_tensor(samples_I)
         assert len(samples_I.shape) >= 1, "Input should be bitcoded integer (with at least one batch dim.)."
@@ -483,6 +476,16 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                     2 * log ( | < i1, i2, ..., i_Np | \psi > | )     
         """
         return 2 * torch.log(torch.abs(self.psi_amplitude(samples)))
+
+
+    def lowrank_kinetic(self, ref_I, xs_I, rs_pos, print_stats=True):
+        """
+            Calculate local kinetic energy in state alpha via lowrank 
+            update of conditional probabilities of the reference state alpha.
+        """
+        GG = self.G.detach().numpy()
+        return lowrank_update_kinetic(GG, self.D, self.N, ref_I, xs_I, rs_pos, print_stats, outdir=self.dir)
+
 
 
 if __name__ == "__main__":
