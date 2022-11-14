@@ -5,7 +5,7 @@ from utils import default_dtype_torch
 
 from torch.distributions.categorical import Categorical
 from bitcoding import bin2pos, int2bin
-from memory_layout import store_G_linearly, idx_linearly_stored_G, \
+from memory_layout_torch import store_G_linearly, idx_linearly_stored_G, \
                           idx_linearly_stored_G_blockB1
 
 from block_update_torch import block_update_inverse 
@@ -15,27 +15,37 @@ from lowrank_update_kinetic import lowrank_update_kinetic
 from profilehooks import profile
 from time import time 
 
+from torchviz import make_dot 
+
 
 class SlaterDetSampler_ordered(torch.nn.Module):
     """
         Sample a set of particle positions from a Slater determinant of 
         orthogonal orbitals via direct componentwise sampling, thereby
-        making sure that the particle positions come out ordered.
+        making sure that the particle positions come out *ordered*.
                 
         Parameters:
         -----------
         single_particle_eigfunc: 2D arraylike or None
             Matrix of dimension D x D containing all the single-particle
-            eigenfunctions as columns. Note that D is the dimension
+            eigenfunctions as columns. D is the dimension
             of the single-particle Hilbert space.
         Nparticles: int
             Number of particles where `Nparticles` <= `D`.
+        naive_update: boolean
+            Whether to calculate numerator and denominator determinant directly 
+            (naive_update=True) or whether to cancel the denominator determinant 
+            using formula for block determinant (naive_update=False)
+        optimize_orbitals: boolean
+            Whether to co-optimize the orbitals of the Slater determinant.
+        eps_norm_probs: float (default=1.0 - 1e-6)
+            Threshold for normalization of conditional probabilities. 
 
         From the matrix containing the single-particle eigenfunctions 
         as columns, the first `Nparticles` columns are chosen to form the 
         Slater determinant.
     """
-    def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, naive_update=True, eps_norm_probs=None):
+    def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, naive_update=True, optimize_orbitals=False, eps_norm_probs=None, outdir=None):
         super(SlaterDetSampler_ordered, self).__init__()
         self.epsilon = 1e-5
         self.eps_norm_probs = 1.0 - 1e-6 if eps_norm_probs is None else eps_norm_probs
@@ -43,25 +53,46 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.N = Nparticles         
         assert(self.N<=self.D)  
         self.naive_update = naive_update
+        # co-optimize also the columns of the Slater determinant
+        self.optimize_orbitals = optimize_orbitals
+        self.dir = outdir if outdir is not None else "./"
+
+        # REMOVE: These timings are not needed in this version of Slater sampler
+        self.t_det_Schur_complement = 0.0
+        self.t_npix_ = 0.0
+        self.t_get_cond_prob = 0.0
+        self.t_update_state = 0.0
+        self.t_lowrank_linalg = 0.0
+        self.t_linstorage = 0.0
+        self.t_gemm = 0.0
+        # REMOVE: These timings are not needed in this version of Slater sampler
+
         if single_particle_eigfunc is not None: 
-           self.optimize_orbitals = False 
            self.eigfunc = np.array(single_particle_eigfunc)
            assert Nsites == self.eigfunc.shape[0]
-           # P-matrix representation of Slater determinant, (D x N)-matrix
-           self.P = torch.tensor(self.eigfunc[:,0:self.N])
-           self.P_ortho = self.P 
-           # U is the key matrix representing the Slater determinant for sampling purposes.
-           # Its principal minors are the probabilities of certain particle configurations.            
-           self.U = torch.matmul(self.P, self.P.transpose(-1,-2)) 
-           # Green's function 
-           self.G = torch.eye(self.D) - self.U
-           # efficient memory layout optimized for memory access pattern of algorithm 
-           self.G_lin_mem = torch.tensor(store_G_linearly(self.G.numpy())) # IMPROVE: sort out torch vs np  
-       
-        else: # optimize also the columns of the Slater determinant 
+        else: # random initialization of orbitals  
            self.optimize_orbitals = True 
-           self.P = nn.Parameter(torch.rand(self.D, self.N, requires_grad=True)) # leaf Variable, updated during SGD; columns are not (!) orthonormal 
-           self.reortho_orbitals()  # orthonormalize columns 
+           # generate random unitary 
+           T0 = torch.tril(torch.rand(self.N, self.N, requires_grad=False), diag=0)
+           self.eigfunc = torch.matrix_exp(T0 - T0.t())
+
+        # P-matrix representation of Slater determinant, (D x N)-matrix
+        self.P = torch.tensor(self.eigfunc[:,0:self.N], requires_grad=False)
+
+        if self.optimize_orbitals:
+            # parametrized rotation matrix R for optimizing the orbitals by orbital rotation
+            self.T = torch.nn.Parameter(torch.zeros(self.D, self.D)) # leaf Variable, updated during SGD
+            T_ = torch.tril(self.T, diagonal=-1) # only lower triangular elements are relevant 
+            self.R = torch.matrix_exp(T_ - T_.t())        
+            self.P_ortho = self.R @ self.P
+            print("is leaf ? self.T=", self.T.is_leaf)
+        else:
+            self.P_ortho = self.P
+ 
+        # called also inside self.reset_sampler() if self.optimize_orbitals == True 
+        self.rotate_orbitals()
+
+        self.reset_sampler()
 
         self.cond_max = 0.0
         # timing 
@@ -70,23 +101,27 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.t_update_Schur = 0.0
         self.t_det = 0.0
 
+        print("self.optimize_orbitals=", self.optimize_orbitals)
 
         self.reset_sampler()
 
-    def reortho_orbitals(self):
+    def rotate_orbitals(self):
         if self.optimize_orbitals:
-           with torch.no_grad():
-              self.P_ortho, R = torch.linalg.qr(self.P, mode='reduced') # P-matrix with orthonormal columns; on the other hand, it is self.P which is updated during SGD.
-
-           self.P = nn.Parameter(self.P_ortho.detach())
-           self.U = torch.matmul(self.P, self.P.transpose(-1,-2))
-           # Green's function 
-           self.G = torch.eye(self.D) - self.U  
-           self.G_lin_mem = torch.tensor(store_G_linearly(self.G.numpy())) # IMPROVE: sort out torch vs np
+            T_ = torch.tril(self.T, diagonal=-1) # only lower triangular elements are relevant 
+            self.R = torch.matrix_exp(T_ - T_.t())
+            self.P_ortho = self.R @ self.P
+            # U is the key matrix representing the Slater determinant for *unordered* sampling purposes.
+            # Its principal minors are the probabilities of certain particle configurations.
+            self.U = self.P_ortho @ self.P_ortho.t()
+            # The Green's function is the key matrix for *ordered* sampling. 
+            self.G = torch.eye(self.D) - self.U    
+            self.G_lin_mem = store_G_linearly(self.G) # IMPROVE: sort out torch vs np
         else:
-           pass 
+            self.U = self.P_ortho @ self.P_ortho.t()
+            self.G = torch.eye(self.D) - self.U   
+            self.G_lin_mem = store_G_linearly(self.G) # IMPROVE: sort out torch vs np
 
-    def reset_sampler(self):        
+    def reset_sampler(self, rebuild_comp_graph=True):        
         self.occ_vec = np.zeros(self.D, dtype=np.float64)
         self.occ_positions = np.zeros(self.N, dtype=np.int64)
         self.occ_positions[:] = -666 # set to invalid values 
@@ -100,7 +135,12 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # State index of the sampler: no sampling step so far 
         self.state_index = -1
 
-        # helper variables for low-rank update
+        # To avoid backward(retain_graph=True) when backpropagating on psi_loc for each config
+        # the computational subgraph involving the Slater determinant needs to be (unnecessarily)
+        # recomputed because of the dynamical computation graph of pytorch. 
+        # This is only necessary during density estimation. 
+        if self.optimize_orbitals and rebuild_comp_graph:
+            self.rotate_orbitals()
 
 
     #@profile
@@ -218,7 +258,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                    #       Thus, the Schur complement is also a symmetric matrix.            
 
                    # ------------------------------------------------------------------------------
-                   # Iterative calculation of the Schur complement 
+                   # BEGIN: Iterative calculation of the Schur complement 
+                   # ------------------------------------------------------------------------------
                    ##### original expression 
                    # self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)  
                    #####
@@ -239,7 +280,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                       self.t_update_Schur += (t1 - t0)
                    else:                      
                       t0 = time() 
-                      AA1 = self.CCXinvBB_reuse[mm-1]         
+                      AA1 = self.CCXinvBB_reuse[mm-1]     
                       BB1 = torch.matmul(BtXinv, BB[:,-1][:, None])
                       ###CC1 = BB1.transpose(-1,-2)
                       # update BtXinv = B.T * Xinv:
@@ -248,6 +289,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                       BtXinv_new[mm, :] = torch.matmul(self.Xinv, BB[:,-1])
                       assert torch.isclose(BtXinv_new[0:mm+1, :], torch.vstack((BtXinv, torch.matmul(self.Xinv, BB[:,-1][:,None]).transpose(-1,-2)))).all()
                       BtXinv = BtXinv_new[0:mm+1, :]
+                      print("mm=", mm)
+                      viz_graph = make_dot(BtXinv[0, 0])    
+                      viz_graph.view()                      
                       ####BtXinv = torch.vstack((BtXinv, torch.matmul(CC[-1,:][None,:], self.Xinv)))
                       DD1 = torch.matmul(BtXinv[-1,:][None,:], BB[:,-1][:,None])
                       ###CCXinvBB = torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1))))
@@ -284,7 +328,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                       t1 = time()                 
                       self.t_det += (t1 - t0)  
                                            
-                   # ------------------------------------------------------------------------------                                   
+                   # ------------------------------------------------------------------------------     
+                   # END: Iterative calculation of the Schur complement                
+                   # ------------------------------------------------------------------------------                   
                    #print("self.Xinv.shape=", self.Xinv.shape, "self.BB.shape=", self.BB.shape)                                     
                 self.Schur_complement_reuse.append(Schur_complement)  
                 self.CCXinvBB_reuse.append(CCXinvBB[0:mm+1, 0:mm+1])       
@@ -393,7 +439,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
 
                 # suppress asserts and debug sections by using the flag -O
                 if __debug__:
-                    cond = np.linalg.cond(Xinv_new)
+                    cond = torch.linalg.cond(Xinv_new, p=2)
                     if cond > self.cond_max:
                         self.cond_max = cond
                         print("cond_max=", self.cond_max)

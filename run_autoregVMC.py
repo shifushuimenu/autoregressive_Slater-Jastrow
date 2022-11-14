@@ -7,7 +7,7 @@ from one_hot import occ_numbers_collapse
 from monitoring_old import logger 
 from VMC_common import PhysicalSystem, VMCKernel
 from SlaterJastrow_ansatz import SlaterJastrow_ansatz
-if True:
+if False:
     from slater_sampler_ordered import SlaterDetSampler_ordered
 else:
     from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
@@ -145,11 +145,12 @@ Sdet_sampler = SlaterDetSampler_ordered(
         Nsites=Nsites, 
         Nparticles=Nparticles, 
         single_particle_eigfunc=eigvecs, 
-        eigvals=eigvals, 
         naive_update=False, 
         optimize_orbitals=optimize_orbitals,
         outdir=dirout
         )
+
+print("isinstance=", isinstance(Sdet_sampler, SlaterDetSampler_ordered))
 
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, 
         num_components=Nparticles, 

@@ -12,7 +12,9 @@ from torch.distributions.one_hot_categorical import OneHotCategorical
 
 from selfMADE import selfMADE
 
-if True:
+import os
+
+if False:
     from slater_sampler_ordered import SlaterDetSampler_ordered
 else:
     # CAREFUL: this crashes in long runs because of zero probabilities
