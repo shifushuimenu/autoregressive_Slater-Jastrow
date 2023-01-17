@@ -7,18 +7,18 @@
 
 import numpy as np 
 import torch 
-from utils import default_dtype_torch
+from utils import default_dtype_torch, TEST_FAST_SAMPLING
 from torch.distributions.one_hot_categorical import OneHotCategorical
 
 from selfMADE import selfMADE
 
 import os
 
-if False:
-    from slater_sampler_ordered import SlaterDetSampler_ordered
-else:
+if TEST_FAST_SAMPLING:
     # CAREFUL: this crashes in long runs because of zero probabilities
     from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
+else:
+    from slater_sampler_ordered import SlaterDetSampler_ordered
 
 from one_hot import occ_numbers_unfold, occ_numbers_collapse
 from bitcoding import int2bin, bin2pos

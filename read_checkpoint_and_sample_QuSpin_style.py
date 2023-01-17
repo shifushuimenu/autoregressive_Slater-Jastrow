@@ -58,7 +58,7 @@ ckpt_outfile = fmt_string.format(Lx, Ly, Np, Vint)
 # and Slater determinant sampler. 
 (eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none", max_iter=2)
 np.savetxt(outdir+"/"+"eigvecs.dat", eigvecs)
-Sdet_sampler = SlaterDetSampler_ordered(Nsites=N_2d, Nparticles=Np, single_particle_eigfunc=eigvecs, eigvals=eigvals, naive_update=False, optimize_orbitals=True)
+Sdet_sampler = SlaterDetSampler_ordered(Nsites=N_2d, Nparticles=Np, single_particle_eigfunc=eigvecs, naive_update=False, optimize_orbitals=True)
 SJA = SlaterJastrow_ansatz(slater_sampler=Sdet_sampler, num_components=Np, D=N_2d, net_depth=2)
 #
 VMC = VMCKernel(energy_loc=phys_system.local_energy, ansatz=SJA)

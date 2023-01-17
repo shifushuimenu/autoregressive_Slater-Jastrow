@@ -35,7 +35,6 @@ class TestLRUpdate(unittest.TestCase):
                 Nsites=self.Nsites, 
                 Nparticles=self.Nparticles, 
                 single_particle_eigfunc=eigvecs, 
-                eigvals=eigvals, 
                 naive_update=False, 
                 optimize_orbitals=False,
                 outdir="./"

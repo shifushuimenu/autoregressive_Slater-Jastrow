@@ -9,14 +9,20 @@ import numpy as np
 import torch 
 import torch.nn as nn
 
-from utils import default_dtype_torch
+from utils import default_dtype_torch, TEST_FAST_SAMPLING
 
 from sr_preconditioner import SR_Preconditioner
 
 from VMC_common import PhysicalSystem, VMCKernel
 from train import vmc_measure 
 from SlaterJastrow_ansatz import SlaterJastrow_ansatz
-from slater_sampler_ordered import SlaterDetSampler_ordered
+
+if TEST_FAST_SAMPLING:
+    # CAREFUL: This crashes for long runs due to zero probabilities 
+    from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
+else:
+    from slater_sampler_ordered import SlaterDetSampler_ordered
+
 from HF import HartreeFock_tVmodel
 from one_hot import occ_numbers_collapse
 
@@ -79,7 +85,6 @@ class MinimalUsageExample(unittest.TestCase):
                 Nsites=self.Ns, 
                 Nparticles=Np, 
                 single_particle_eigfunc=eigvecs, 
-                eigvals=eigvals, 
                 naive_update=False, 
                 optimize_orbitals=True
                 )

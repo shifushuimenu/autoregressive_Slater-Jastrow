@@ -117,7 +117,7 @@ if __name__ == "__main__":
     from time import time 
 
     # Some tests
-    L = 6
+    L = 40
     G = np.random.randn(L,L)
     G_lin = store_G_linearly(G)
 
@@ -147,6 +147,8 @@ if __name__ == "__main__":
     B = G[np.ix_([0,1,2], [5])]
     assert np.isclose(B_lin, B).all()
 
+    # The speedup attained by the linear memory storage is roughly a factor of 5 to 10.
+
     G = np.random.randn(L,L)
     G_lin = store_G_linearly(G)
     t0 = time()
@@ -168,10 +170,10 @@ if __name__ == "__main__":
         if i==0:
             submat = G[Ksites[0], Ksites[0]]
         else: 
-            A = submat 
+            #A = submat 
             B = G[np.ix_(Ksites[:-1], [Ksites[-1]])] 
             C = G[np.ix_([Ksites[-1]], Ksites[:-1])]
-            D = G[Ksites[-1], Ksites[-1]]
+            #D = G[Ksites[-1], Ksites[-1]]
             #submat = np.block([[A, B],[C, D]])
     t1 = time()
     print("reuse submat: elapsed=", t1-t0)

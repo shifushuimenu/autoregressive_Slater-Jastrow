@@ -15,25 +15,33 @@ class SlaterDetSampler_ordered(torch.nn.Module):
     """
         Sample a set of particle positions from a Slater determinant of 
         orthogonal orbitals via direct componentwise sampling, thereby
-        making sure that the particle positions come out ordered.
+        making sure that the particle positions come out *ordered*.
                 
         Parameters:
         -----------
         single_particle_eigfunc: 2D arraylike or None
             Matrix of dimension D x D containing all the single-particle
-            eigenfunctions as columns. Note that D is the dimension
+            eigenfunctions as columns. D is the dimension
             of the single-particle Hilbert space.
         Nparticles: int
             Number of particles where `Nparticles` <= `D`.
+        naive_update: boolean
+            Whether to calculate numerator and denominator determinant directly 
+            (naive_update=True) or whether to cancel the denominator determinant 
+            using formula for block determinant (naive_update=False)
+        optimize_orbitals: boolean
+            Whether to co-optimize the orbitals of the Slater determinant.
+        eps_norm_probs: float (default=1.0 - 1e-6)
+            Threshold for normalization of conditional probabilities. 
 
         From the matrix containing the single-particle eigenfunctions 
         as columns, the first `Nparticles` columns are chosen to form the 
-
         Slater determinant.
     """
-    def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, eigvals=None, naive_update=True, optimize_orbitals=False, outdir=None):
+    def __init__(self, Nsites, Nparticles, single_particle_eigfunc=None, naive_update=True, optimize_orbitals=False, eps_norm_probs=None, outdir=None):
         super(SlaterDetSampler_ordered, self).__init__()
         self.epsilon = 1e-5
+        self.eps_norm_probs = 1.0 - 1e-6 if eps_norm_probs is None else eps_norm_probs
         self.D = Nsites 
         self.N = Nparticles         
         assert(self.N<=self.D)  
@@ -106,10 +114,9 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         # To avoid backward(retain_graph=True) when backpropagating on psi_loc for each config
         # the computational subgraph involving the Slater determinant needs to be (unnecessarily)
         # recomputed because of the dynamical computation graph of pytorch. 
-        # This is only necessary during density estimation. 
+        # This is only necessary during density estimation, not during sampling.
         if self.optimize_orbitals and rebuild_comp_graph:
             self.rotate_orbitals()
-
 
 
     #@profile
@@ -123,6 +130,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         self.xmax = self.D - self.N + k + 1
 
         probs = torch.zeros(self.D) #np.zeros(len(range(self.xmin, self.xmax)))
+        cumul_probs = 0.0
 
         if self.naive_update:
             Ksites_tmp = self.Ksites[:]
@@ -223,9 +231,17 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 #print("Schur complement size=", self.Schur_complement.size()[0])
                 t1 = time()
                 probs[i_k] = (-1) * torch.det(self.Schur_complement)
+                cumul_probs += probs[i_k]
                 t2 = time()
                 self.t_det_Schur_complement += (t2-t1)
                 #print("Schur_complement.shape=", self.Schur_complement.shape, "det, elapsed=", t2-t1)
+
+            # Finally, check whether the conditional probabilities are already saturated.
+            # This gives significant speedup, most notably at low filling. 
+            if cumul_probs > self.eps_norm_probs: #0.99999999:
+                # print("skipping: sum(probs) already saturated (i.e. =1). xmax-1 - i_k = ", self.xmax-1 - i_k)
+                probs[i_k+1:] = 0.0
+                break
 
         if not self.naive_update:
             assert len(self.BB_reuse) == len(self.Schur_complement_reuse) == (mm+1) # IMPROVE: remove this as well as the variable mm
@@ -254,7 +270,7 @@ class SlaterDetSampler_ordered(torch.nn.Module):
         return pos, cond_prob_k
 
     def sample(self):
-        self.reset_sampler()
+        self.reset_sampler(rebuild_comp_graph=False)
 
         prob_sample = 1.0
         for k in np.arange(0, self.N):

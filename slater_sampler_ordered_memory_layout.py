@@ -237,12 +237,12 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 self.t_fetch_memory += (t1 - t0)                    
 
                 DD = DDsubmat[0:mm+1, 0:mm+1] - NN  # self.G[np.ix_(Ksites_add, Ksites_add)] - NN  
-                BB = BBsubmat[0:self.len_Ksites, 0:mm+1]  # self.G[np.ix_(self.Ksites, Ksites_add)]      
+                self.BB = BBsubmat[0:self.len_Ksites, 0:mm+1]  # self.G[np.ix_(self.Ksites, Ksites_add)]      
                 if self.len_Ksites == 0:                   
-                   CC = BB
+                   CC = self.BB
                 else:
-                   CC = BB.transpose(-1, -2)
-                self.BB_reuse.append(BB)
+                   CC = self.BB.transpose(-1, -2)
+                self.BB_reuse.append(self.BB)
                 if self.state_index==-1: # no sampling step so far 
                     # here self.Xinv = [] always. IMPROVE: This line is useless.
                     # self.Xinv = torch.linalg.inv(self.G[np.ix_(self.Ksites, self.Ksites)] - torch.diag(torch.tensor(self.occ_vec[0:self.xmin])))   
@@ -251,8 +251,8 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                     pass # self.Xinv should have been updated by calling update_state(pos_i)
                 if self.len_Ksites == 0:                 
                    CCXinvBB[0:mm+1, 0:mm+1] = 0.0 
-                   Schur_complement = DD - 0.0
-                   detSC = torch.det(Schur_complement) # scalar                 
+                   self.Schur_complement = DD - 0.0
+                   detSC = torch.det(self.Schur_complement) # scalar                 
                 else:
                    # Note: self.Xinv is a symmetric matrix and DD is also symmetric.
                    #       Thus, the Schur complement is also a symmetric matrix.            
@@ -263,77 +263,80 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                    ##### original expression 
                    # self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)  
                    #####
-                   if mm==0:     
+                   if True: #mm==0:     
                       t0 = time()
-                      BtXinv = torch.matmul(CC, self.Xinv)              
-                      CCXinvBB[0:mm+1, 0:mm+1] = torch.matmul(BtXinv, BB)
-                      Schur_complement = DD - CCXinvBB[0:mm+1, 0:mm+1]
-                      detSC = torch.det(Schur_complement) # scalar 
+                      #BtXinv = torch.matmul(CC, self.Xinv)              
+                      #CCXinvBB[0:mm+1, 0:mm+1] = torch.matmul(BtXinv, self.BB)
+                      #self.Schur_complement = DD - CCXinvBB[0:mm+1, 0:mm+1]
+                      self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)
+                      detSC = torch.det(self.Schur_complement) # scalar 
 
                       # The following is needed for iterative calculation of the determinant of  
                       # the Schur complement 
                       # `SCm_inv` is the inverse of the "modified Schur complement" where modified                       
                       # means that the lower right element of the Schur complement matrix is changed. 
                       # `SCm_inv` is updated iteratively using the formula for the inverse of a block matrix. 
-                      SCm_inv = 1.0 / (Schur_complement + 1) #torch.linalg.inv(Schur_complememt + 1)
+                      SCm_inv = 1.0 / (self.Schur_complement + 1) #torch.linalg.inv(Schur_complememt + 1)
                       t1 = time()                      
                       self.t_update_Schur += (t1 - t0)
-                   else:                      
-                      t0 = time() 
-                      AA1 = self.CCXinvBB_reuse[mm-1]     
-                      BB1 = torch.matmul(BtXinv, BB[:,-1][:, None])
-                      ###CC1 = BB1.transpose(-1,-2)
-                      # update BtXinv = B.T * Xinv:
-                      ###BtXinv = torch.vstack((BtXinv, torch.matmul(self.Xinv, BB[:,-1][:,None]).transpose(-1,-2)))                      
-                      BtXinv_new[0:mm, :] = BtXinv
-                      BtXinv_new[mm, :] = torch.matmul(self.Xinv, BB[:,-1])
-                      assert torch.isclose(BtXinv_new[0:mm+1, :], torch.vstack((BtXinv, torch.matmul(self.Xinv, BB[:,-1][:,None]).transpose(-1,-2)))).all()
-                      BtXinv = BtXinv_new[0:mm+1, :]
-                      print("mm=", mm)
-                      viz_graph = make_dot(BtXinv[0, 0])    
-                      viz_graph.view()                      
-                      ####BtXinv = torch.vstack((BtXinv, torch.matmul(CC[-1,:][None,:], self.Xinv)))
-                      DD1 = torch.matmul(BtXinv[-1,:][None,:], BB[:,-1][:,None])
-                      ###CCXinvBB = torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1))))
-                      CCXinvBB[0:mm, 0:mm] = AA1
-                      CCXinvBB[0:mm, mm] = BB1[:,0]
-                      CCXinvBB[mm, 0:mm] = BB1[:,0]
-                      CCXinvBB[mm, mm] = DD1
-                      ###assert torch.isclose(CCXinvBB, torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1))))).all()
-                      Schur_complement = DD - CCXinvBB[0:mm+1, 0:mm+1]           
-                      t1 = time()                      
-                      self.t_update_Schur += (t1 - t0)
-                      assert torch.isclose(Schur_complement, DD - torch.matmul(torch.matmul(CC, self.Xinv), BB)).all()                      
-                      ### original formula: determinant of Schur complement ("SC")
-                      ###detSC = torch.det(Schur_complement)
-                      ###
+                   else: 
+                       pass                     
+                    #   t0 = time() 
+                    #   AA1 = self.CCXinvBB_reuse[mm-1]     
+                    #   BB1 = torch.matmul(BtXinv, BB[:,-1][:, None])
+                    #   ###CC1 = BB1.transpose(-1,-2)
+                    #   # update BtXinv = B.T * Xinv:
+                    #   ###BtXinv = torch.vstack((BtXinv, torch.matmul(self.Xinv, BB[:,-1][:,None]).transpose(-1,-2)))                      
+                    #   BtXinv_new[0:mm, :] = BtXinv
+                    #   BtXinv_new[mm, :] = torch.matmul(self.Xinv, BB[:,-1])
+                    #   assert torch.isclose(BtXinv_new[0:mm+1, :], torch.vstack((BtXinv, torch.matmul(self.Xinv, BB[:,-1][:,None]).transpose(-1,-2)))).all()
+                    #   BtXinv = BtXinv_new[0:mm+1, :]
+                    #   print("mm=", mm)
+                    #   viz_graph = make_dot(BtXinv[0, 0])    
+                    #   viz_graph.view()                      
+                    #   ####BtXinv = torch.vstack((BtXinv, torch.matmul(CC[-1,:][None,:], self.Xinv)))
+                    #   DD1 = torch.matmul(BtXinv[-1,:][None,:], BB[:,-1][:,None])
+                    #   ###CCXinvBB = torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1))))
+                    #   CCXinvBB[0:mm, 0:mm] = AA1
+                    #   CCXinvBB[0:mm, mm] = BB1[:,0]
+                    #   CCXinvBB[mm, 0:mm] = BB1[:,0]
+                    #   CCXinvBB[mm, mm] = DD1
+                    #   ###assert torch.isclose(CCXinvBB, torch.vstack((torch.hstack((AA1, BB1)), torch.hstack((CC1, DD1))))).all()
+                    #   Schur_complement = DD - CCXinvBB[0:mm+1, 0:mm+1] 
+                    #   self.Schur_complement = DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)            
+                    #   t1 = time()                      
+                    #   self.t_update_Schur += (t1 - t0)
+                    #   assert torch.isclose(self.Schur_complement, DD - torch.matmul(torch.matmul(CC, self.Xinv), self.BB)).all()                      
+                    #   ### original formula: determinant of Schur complement ("SC")
+                    #   detSC = torch.det(self.Schur_complement)
+                    #   ###
 
-                      t0 = time()
-                      # calculate last element of SC_inv (inverse of the Schur complement) from SCm_inv (inverse of 
-                      # modified Schur complement, which is being updated)
-                      SC_inv_el =  SCm_inv[-1,-1]/(1.0 - SCm_inv[-1,-1])
-                      detSC = detSC * (1.0 + SC_inv_el) \
-                           * (Schur_complement[-1,-1] - torch.matmul(Schur_complement[-1,0:-1][None,:], \
-                                                             torch.matmul(SCm_inv, Schur_complement[0:-1,-1][:,None])))
-                      t1 = time()
-                      self.t_matmul += (t1 - t0)  
+                    #   t0 = time()
+                    #   # calculate last element of SC_inv (inverse of the Schur complement) from SCm_inv (inverse of 
+                    #   # modified Schur complement, which is being updated)
+                    #   SC_inv_el =  SCm_inv[-1,-1]/(1.0 - SCm_inv[-1,-1])
+                    #   detSC = detSC * (1.0 + SC_inv_el) \
+                    #        * (Schur_complement[-1,-1] - torch.matmul(Schur_complement[-1,0:-1][None,:], \
+                    #                                          torch.matmul(SCm_inv, Schur_complement[0:-1,-1][:,None])))
+                    #   t1 = time()
+                    #   self.t_matmul += (t1 - t0)  
 
-                      assert torch.isclose(detSC, torch.det(Schur_complement))
+                    #   assert torch.isclose(detSC, torch.det(Schur_complement))
 
-                      # for next step of iterative calculation of the determinant of the Schur complement 
-                      assert DD1.shape[0] == DD1.shape[1] == 1
-                      t0 = time()
-                      SCm_inv = block_update_inverse(SCm_inv, Schur_complement[0:-1,-1][:,None], \
-                                Schur_complement[-1,0:-1][None,:], Schur_complement[-1,-1][None,None] + 1.0)    
-                      t1 = time()                 
-                      self.t_det += (t1 - t0)  
+                    #   # for next step of iterative calculation of the determinant of the Schur complement 
+                    #   assert DD1.shape[0] == DD1.shape[1] == 1
+                    #   t0 = time()
+                    #   SCm_inv = block_update_inverse(SCm_inv, Schur_complement[0:-1,-1][:,None], \
+                    #             Schur_complement[-1,0:-1][None,:], Schur_complement[-1,-1][None,None] + 1.0)    
+                    #   t1 = time()                 
+                    #   self.t_det += (t1 - t0)  
                                            
                    # ------------------------------------------------------------------------------     
                    # END: Iterative calculation of the Schur complement                
                    # ------------------------------------------------------------------------------                   
                    #print("self.Xinv.shape=", self.Xinv.shape, "self.BB.shape=", self.BB.shape)                                     
-                self.Schur_complement_reuse.append(Schur_complement)  
-                self.CCXinvBB_reuse.append(CCXinvBB[0:mm+1, 0:mm+1])       
+                self.Schur_complement_reuse.append(self.Schur_complement)  
+                #self.CCXinvBB_reuse.append(CCXinvBB[0:mm+1, 0:mm+1])       
                             
                 probs[i_k] = (-1) * detSC       
                 cumul_probs += probs[i_k]
