@@ -246,12 +246,12 @@ class SlaterDetSampler_ordered(torch.nn.Module):
                 if self.state_index==-1: # no sampling step so far 
                     # here self.Xinv = [] always. IMPROVE: This line is useless.
                     # self.Xinv = torch.linalg.inv(self.G[np.ix_(self.Ksites, self.Ksites)] - torch.diag(torch.tensor(self.occ_vec[0:self.xmin])))   
-                    self.Xinv = [] 
+                    self.Xinv = torch.tensor([])
                 else:
                     pass # self.Xinv should have been updated by calling update_state(pos_i)
                 if self.len_Ksites == 0:                 
                    CCXinvBB[0:mm+1, 0:mm+1] = 0.0 
-                   self.Schur_complement = DD - 0.0
+                   self.Schur_complement = DD - torch.tensor([0.0])
                    detSC = torch.det(self.Schur_complement) # scalar                 
                 else:
                    # Note: self.Xinv is a symmetric matrix and DD is also symmetric.
