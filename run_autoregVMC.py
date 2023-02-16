@@ -101,8 +101,6 @@ logger.info_refstate.outfile = dirout+"lowrank_stats_"+paramstr+".dat"
 # for debugging:
 # If deactivate_Jastrow == True, samples are drawn from the Slater determinant without the Jastrow factor. 
 deactivate_Jastrow = False
-
-
         
 # visualize the loss history
 energy_list, precision_list = [], []
@@ -179,58 +177,63 @@ t0_tmp = t0
 # list of learning rates (for monitoring)
 lrs = []
 
-for i in range(num_epochs):
+if args.mode in ['resume_optim']:
+    VMC.ansatz.load_state_dict(torch.load(ckpt_outfile)['net'], strict=True)
 
-    if optimizer_name in ['mySGD', 'SR']:
-        (energy, precision) = train_SR(VMC, learning_rate=lr, learning_rate_SD=lr_SD, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda, precond=SR)
-    else:
-        (energy, precision) = my_trainer.train_standard_optimizer(lrs)
+if args.mode in ['measure']:
+    print("--mode measure: Skipping optimization phase")
+elif args.mode in ['new_optim', 'resume_optim']:
+    for i in range(num_epochs):
 
-    t1_tmp = time()
-    print('Step %d, energy = %.4f, elapsed = %.4f' % (i, energy, t1_tmp-t0_tmp))
-    _average_output(energy, precision)
-    _checkpoint(VMC)
-    t0_tmp = time()
+        if optimizer_name in ['mySGD', 'SR']:
+            (energy, precision) = train_SR(VMC, learning_rate=lr, learning_rate_SD=lr_SD, num_samples=num_samples, num_bin=num_bin, use_cuda = use_cuda, precond=SR)
+        else:
+            (energy, precision) = my_trainer.train_standard_optimizer(lrs)
 
-    print("monitor_convergence=", monitor_convergence)
-    if monitor_convergence:
-        # save model parameters in order to monitor convergence 
-        with open(dirout+"convergence_params_SD_"+paramstr+".dat", "a") as fh:
-            for name, param in VMC.ansatz.named_parameters():
-                if name in ['slater_sampler.T']:
-                    arr = param.data.numpy().flatten()
-                    fh.write( ("%16.10f " * arr.size + "\n") % (tuple(arr)) )
+        t1_tmp = time()
+        print('Step %d, energy = %.4f, elapsed = %.4f' % (i, energy, t1_tmp-t0_tmp))
+        _average_output(energy, precision)
+        _checkpoint(VMC)
+        t0_tmp = time()
 
-        ## save model parameters in order to monitor convergence 
-        #with open("convergence_params_Jastrow_net0"+paramstr+".dat", "a") as fh:
-        #    for name, param in VMC.ansatz.named_parameters():
-        #        if name in ['net.0.weight']:
-        #            arr = param.data.numpy().flatten()
-        #            fh.write( ("%16.10f " * arr.size + "\n") % (tuple(arr)) )
+        print("monitor_convergence=", monitor_convergence)
+        if monitor_convergence:
+            # save model parameters in order to monitor convergence 
+            with open(dirout+"convergence_params_SD_"+paramstr+".dat", "a") as fh:
+                for name, param in VMC.ansatz.named_parameters():
+                    if name in ['slater_sampler.T']:
+                        arr = param.data.numpy().flatten()
+                        fh.write( ("%16.10f " * arr.size + "\n") % (tuple(arr)) )
 
-    # remove
-    np.savetxt(dirout+"lrs"+paramstr+".dat", np.array(lrs))
-    # remove
+            ## save model parameters in order to monitor convergence 
+            #with open("convergence_params_Jastrow_net0"+paramstr+".dat", "a") as fh:
+            #    for name, param in VMC.ansatz.named_parameters():
+            #        if name in ['net.0.weight']:
+            #            arr = param.data.numpy().flatten()
+            #            fh.write( ("%16.10f " * arr.size + "\n") % (tuple(arr)) )
 
+        # remove
+        np.savetxt(dirout+"lrs"+paramstr+".dat", np.array(lrs))
+        # remove
 
-t1 = time()
-with open(dirout+"timings"+paramstr+".dat", "w") as fh:
-    print("## Timings:", file=fh)
-    print("## elapsed =%10.6f for %d samples per epochs and %d epochs" % (t1-t0, num_samples, num_epochs), file=fh)
-    print("## t_psiloc=", VMC.t_psiloc, file=fh)
-    print("## t_logprob_B=", VMC.ansatz.t_logprob_B, file=fh)
-    print("## t_logprob_F=", VMC.ansatz.t_logprob_F, file=fh)
-    print("## t_sampling=", VMC.t_sampling, file=fh)
-    print("## t_locE=", VMC.t_locE, file=fh)
-    print("## t_backward=", VMC.t_grads, file=fh)
-    print("## t_stochastic_reconfiguration=", VMC.t_SR, file=fh)
-    print("## total time det Schur complement=", VMC.ansatz.slater_sampler.t_det_Schur_complement, file=fh)
-    print("## t_npix_=", VMC.ansatz.slater_sampler.t_npix_, file=fh)
-    print("## t_linstorage=", VMC.ansatz.slater_sampler.t_linstorage, file=fh)
-    print("## t_get_cond_prob=", VMC.ansatz.slater_sampler.t_get_cond_prob, file=fh)
-    print("## t_update_state=", VMC.ansatz.slater_sampler.t_update_state, file=fh)
-    print("## t_lowrank_linalg=",VMC.ansatz.slater_sampler.t_lowrank_linalg, file=fh)
-    print("## t_gemm=",VMC.ansatz.slater_sampler.t_gemm, file=fh)
+    t1 = time()
+    with open(dirout+"timings"+paramstr+".dat", "w") as fh:
+        print("## Timings:", file=fh)
+        print("## elapsed =%10.6f for %d samples per epochs and %d epochs" % (t1-t0, num_samples, num_epochs), file=fh)
+        print("## t_psiloc=", VMC.t_psiloc, file=fh)
+        print("## t_logprob_B=", VMC.ansatz.t_logprob_B, file=fh)
+        print("## t_logprob_F=", VMC.ansatz.t_logprob_F, file=fh)
+        print("## t_sampling=", VMC.t_sampling, file=fh)
+        print("## t_locE=", VMC.t_locE, file=fh)
+        print("## t_backward=", VMC.t_grads, file=fh)
+        print("## t_stochastic_reconfiguration=", VMC.t_SR, file=fh)
+        print("## total time det Schur complement=", VMC.ansatz.slater_sampler.t_det_Schur_complement, file=fh)
+        print("## t_npix_=", VMC.ansatz.slater_sampler.t_npix_, file=fh)
+        print("## t_linstorage=", VMC.ansatz.slater_sampler.t_linstorage, file=fh)
+        print("## t_get_cond_prob=", VMC.ansatz.slater_sampler.t_get_cond_prob, file=fh)
+        print("## t_update_state=", VMC.ansatz.slater_sampler.t_update_state, file=fh)
+        print("## t_lowrank_linalg=",VMC.ansatz.slater_sampler.t_lowrank_linalg, file=fh)
+        print("## t_gemm=",VMC.ansatz.slater_sampler.t_gemm, file=fh)
 
 
 szsz_corr = np.zeros(Nsites)
@@ -256,9 +259,7 @@ def translate(s, n, T_d):
         s = T_d[s]
     return s
 
-
-state_checkpointed = torch.load(ckpt_outfile)
-VMC.ansatz.load_state_dict(state_checkpointed['net'], strict=True)
+VMC.ansatz.load_state_dict(torch.load(ckpt_outfile)['net'], strict=True)
 #
 # init observables 
 SzSzcorr = np.zeros((Lx, Ly))
