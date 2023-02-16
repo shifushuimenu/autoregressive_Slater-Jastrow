@@ -1,16 +1,16 @@
 import os
 import numpy as np
 import torch 
-from utils import default_dtype_torch 
+from utils import default_dtype_torch, TEST_FAST_SAMPLING 
 
 from one_hot import occ_numbers_collapse
 from monitoring_old import logger 
 from VMC_common import PhysicalSystem, VMCKernel
 from SlaterJastrow_ansatz import SlaterJastrow_ansatz
-if False:
-    from slater_sampler_ordered import SlaterDetSampler_ordered
-else:
+if TEST_FAST_SAMPLING:
     from slater_sampler_ordered_memory_layout import SlaterDetSampler_ordered
+else:
+    from slater_sampler_ordered import SlaterDetSampler_ordered
 from HF import HartreeFock_tVmodel
 
 import itertools
@@ -54,6 +54,7 @@ group.add_argument('num_epochs', metavar='max_epochs', type=int, help="number of
 group.add_argument('num_samples', type=int, help="number of samples per iteration")
 group.add_argument('num_meas_samples', type=int, help="number of samples in measurement phase")
 group = parser.add_argument_group('optimizer parameters')
+group.add_argument('--mode', type=str, choices=['new_optim', 'resume_optim', 'measure'], default='new_optim', help='whether to start from scratch or read checkpoint file')
 group.add_argument('--seed', type=int, default=0, help="random seed, 0 for randomization")
 group.add_argument('--optimizer', choices=['mySGD', 'SGD', 'SR', 'Adam', 'RMSprop'], default='SR')
 group.add_argument('--lr', type=float, default=0.2, help="learning rate for SGD and SR (default=0.2); Adam and RMSprop have different learning rates.")
