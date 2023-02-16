@@ -12,7 +12,7 @@ from block_update_torch import block_update_inverse
 
 from lowrank_update_kinetic import lowrank_update_kinetic 
 
-from profilehooks import profile
+#from profilehooks import profile
 from time import time 
 
 from torchviz import make_dot 

@@ -29,7 +29,7 @@ from physics import kinetic_term
 from slater_determinant import ratio_Slater, local_OBDM
 
 from time import time 
-from profilehooks import profile 
+#from profilehooks import profile 
 
 __all__ = ['SlaterJastrow_ansatz']
 

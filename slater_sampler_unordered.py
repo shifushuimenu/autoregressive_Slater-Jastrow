@@ -5,7 +5,7 @@ from torch.distributions.categorical import Categorical
 from utils import default_dtype_torch
 from bitcoding import bin2pos, int2bin
 
-from profilehooks import profile 
+#from profilehooks import profile 
 
 __all__ = ['SlaterDetSampler']
 

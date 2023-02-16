@@ -13,7 +13,7 @@ from k_copy import calc_k_copy
 from monitoring_old import logger as mylogger
 import lowrank_update as LR
 
-from profilehooks import profile 
+#from profilehooks import profile 
 
 
 def _detratio_from_scratch(G, occ_vec, base_pos, i):
