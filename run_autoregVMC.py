@@ -53,6 +53,7 @@ group = parser.add_argument_group('training parameters')
 group.add_argument('num_epochs', metavar='max_epochs', type=int, help="number of training iterations")
 group.add_argument('num_samples', type=int, help="number of samples per iteration")
 group.add_argument('num_meas_samples', type=int, help="number of samples in measurement phase")
+group.add_argument('--step_checkpoint', type=int, default=50, help="checkpoint state every step_checkpoint epochs")
 group = parser.add_argument_group('optimizer parameters')
 group.add_argument('--mode', type=str, choices=['new_optim', 'resume_optim', 'measure'], default='new_optim', help='whether to start from scratch or read checkpoint file')
 group.add_argument('--seed', type=int, default=0, help="random seed, 0 for randomization")
@@ -193,7 +194,8 @@ elif args.mode in ['new_optim', 'resume_optim']:
         t1_tmp = time()
         print('Step %d, energy = %.4f, elapsed = %.4f' % (i, energy, t1_tmp-t0_tmp))
         _average_output(energy, precision)
-        _checkpoint(VMC)
+        if i % args.step_checkpoint == 0 or i == (num_epochs-1):
+            _checkpoint(VMC)
         t0_tmp = time()
 
         print("monitor_convergence=", monitor_convergence)
