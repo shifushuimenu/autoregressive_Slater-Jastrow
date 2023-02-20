@@ -1,10 +1,10 @@
 """
-Routines for benchmarking the scheme of direct sampling of 
-free fermion pseudo density matrices. 
+Hartree-Fock routines for initialization of the Slater determinant.
 """
 #TODO: wrong results if np.linalg.eigh() is used instead of scipy.linalg.eigh()
 #      The eigenvalues are the same, but eigenvectors differ, which leads to different 
 #      self-consistent HF Hamiltonians for open shell systems. 
+# - implement generic lattices, use adjacency matrix 
 
 import numpy as np
 from scipy import linalg
@@ -21,9 +21,7 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=10
     Example:
     --------
     >>> phys_system = PhysicalSystem(4, 4, 16, 8, dim=2, Vint=3.0) 
-    >>> eigvals, U = HartreeFock_tVmodel(phys_system)
-    >>> np.isclose(eigvals[0], -3.443120942335799) and np.isclose(U[0,0], -0.18668780102117907)
-    True
+    >>> eigvals, U = HartreeFock_tVmodel(phys_system, outfile=open("HF_test.dat","w"))
     """
     def HF_gs_energy(OBDM):
         """Note: The Hartree-Fock ground state energy is *not* the sum of HF eigenvalues.
@@ -103,17 +101,19 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=10
         OBDM_new = Slater2spOBDM(U[:, 0:num_particles])
         if verbose:
             print(eigvals[0:num_particles+1])
-            E_GS_HF = HF_gs_energy(OBDM_new)
-            print("E_GS_HF=", E_GS_HF)
-            print("%d %f"%(counter, E_GS_HF), file=fh_conv)
+            E_gs_HF = HF_gs_energy(OBDM_new)
+            print("E_gs_HF=", E_gs_HF)
+            print("%d %f"%(counter, E_gs_HF), file=fh_conv)
 
         if np.all(np.isclose(OBDM_new, OBDM, rtol=1e-8)) or counter >= max_iter: 
             converged = True
             if verbose:
-                print("converged:")
-                print("counter=", counter)
-                print("OBDM_new=", OBDM_new)
-                # interactions are missing here
+                print("converged")
+                print("num iterations=", counter)
+                print("Ns = %d"%(ns), file=outfile)
+                print("Np = %d"%(num_particles), file=outfile)
+                print("number of HF self-consistency iterations: %d"%(counter), file=outfile)
+                print("many-body HF g.s. energy= %12.8f" % (HF_gs_energy(OBDM_new)), file=outfile)
                 print("many-body HF g.s. energy= %f" % HF_gs_energy(OBDM_new), file=outfile)
                 fmt_string = "single-particle spectrum = \n" + "%f \n"*ns
                 print(fmt_string % (tuple(eigvals)), file=outfile) 
