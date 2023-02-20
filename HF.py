@@ -9,7 +9,7 @@ Hartree-Fock routines for initialization of the Slater determinant.
 import numpy as np
 from scipy import linalg
 
-from slater_determinant import Slater2spOBDM
+from slater_determinant import Slater2spOBDM, Slater2rdm1
 from VMC_common import PhysicalSystem  
 
 
@@ -100,7 +100,6 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=10
         eigvals, U = linalg.eigh(H_HF)
         OBDM_new = Slater2spOBDM(U[:, 0:num_particles])
         if verbose:
-            print(eigvals[0:num_particles+1])
             E_gs_HF = HF_gs_energy(OBDM_new)
             print("E_gs_HF=", E_gs_HF)
             print("%d %f"%(counter, E_gs_HF), file=fh_conv)

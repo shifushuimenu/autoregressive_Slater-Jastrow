@@ -5,6 +5,7 @@ Routines for dealing with Slater determinants.
 import numpy as np
 from scipy import linalg
 from bitcoding import bin2pos
+from functools import reduce 
 
 def Slater_determinant_overlap(alpha, Pmatrix):
     """
@@ -49,6 +50,20 @@ def Slater2spOBDM(sp_states):
 
     OBDM = np.eye(Ns) - GF.T
     return OBDM
+
+
+# Same functionality as Slater2spOBDM
+def Slater2rdm1(C, orthogonal=True):
+    # OBDM = C (C^{\dagger} C)^{-1} C^{\dagger}
+    # Columns of C are orbitals.
+    (ns, num_particles) = C.shape
+    if not orthogonal:
+        Minv = np.linalg.inv(np.matmul(C.conj().transpose(), C))
+        OBDM = reduce(np.matmul, (C, Minv, C.conj().transpose()))
+    else:
+        assert np.isclose(np.matmul(C.conj().transpose(), C), np.eye(num_particles)).all()
+        OBDM = np.matmul(C, C.conj().transpose())
+    return OBDM 
 
 
 def local_OBDM(alpha, sp_states):
