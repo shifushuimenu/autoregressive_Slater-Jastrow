@@ -13,7 +13,7 @@ from slater_determinant import Slater2spOBDM
 from VMC_common import PhysicalSystem  
 
 
-def HartreeFock_tVmodel(phys_system, potential='none', verbose=False, max_iter=1000, outfile=None):
+def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=1000, outfile=None):
     """
     Returns single-particle eigenstates of the Hartree-Fock solution of a 
     t-V model on a cubic lattice specified by `phys_system`. 
@@ -25,6 +25,39 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=False, max_iter=1
     >>> np.isclose(eigvals[0], -3.443120942335799) and np.isclose(U[0,0], -0.18668780102117907)
     True
     """
+    def HF_gs_energy(OBDM):
+        """Note: The Hartree-Fock ground state energy is *not* the sum of HF eigenvalues.
+           (see Szabo-Ostlund,  chapter 3).
+           Two alternative ways of calculating the ground state energy are shown here."""
+        # one-body Hamiltonian 
+        H_onebody = H_kin.copy()
+        for i in range(ns):
+            H_onebody += V_pot[i]
+        H_int = np.zeros((ns,ns), dtype=np.float64)
+        for i in range(ns):
+            for nd in range(lattice.coord):
+                j = lattice.neigh[i,nd]
+                H_int[i,i] += Vint*OBDM[j,j]
+                H_int[i,j] = - Vint*OBDM[j,i]
+                H_int[j,i] = - Vint*OBDM[i,j]
+        # Hartree-Fock ground state energy: E_tot = Tr(rho H_onebody) + (1/2) Tr(rho H_int)
+        # H_HF = H_onebody + H_int is the Hamiltonian used in the self-consistency loop. 
+        E_tot = np.trace(np.matmul(OBDM, H_onebody)) + 0.5 * np.trace(np.matmul(OBDM, H_int))
+
+        # adjacency matrix 
+        Adj = np.zeros((ns,ns), dtype=np.float64)
+        for i in range(ns):
+            for nd in range(lattice.coord):
+                j = lattice.neigh[i,nd]
+                Adj[i,j] = 1 
+        # Eq. (17) from Phys. Rev. B 102, 205122
+        E_tot2 = - t_hop * np.einsum('ij,ji->', Adj, OBDM) - 0.5 * Vint * ( 
+                np.einsum('ij,ij,ji->', Adj, OBDM, OBDM) - np.einsum('ij,ii,jj->', Adj, OBDM, OBDM)
+                )
+        assert np.isclose(E_tot, E_tot2)
+
+        return E_tot
+    
     assert isinstance(phys_system, PhysicalSystem)
     ns = phys_system.ns
     num_particles = phys_system.np
@@ -64,10 +97,10 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=False, max_iter=1
                 H_HF[j,i] = -t_hop - Vint*OBDM[i,j] 
 
         eigvals, U = linalg.eigh(H_HF)
+        OBDM_new = Slater2spOBDM(U[:, 0:num_particles])
         if verbose:
             print(eigvals[0:num_particles+1])
-            print("E_GS_HF=", sum(eigvals[0:num_particles]))
-        OBDM_new = Slater2spOBDM(U[:, 0:num_particles])
+            print("E_GS_HF=", sum(eigvals[0:num_particles]), HF_gs_energy(OBDM_new))
 
         if np.all(np.isclose(OBDM_new, OBDM, rtol=1e-8)) or counter >= max_iter: 
             converged = True
@@ -76,7 +109,7 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=False, max_iter=1
                 print("counter=", counter)
                 print("OBDM_new=", OBDM_new)
                 # interactions are missing here
-                print("many-body HF g.s. energy= %f" % (np.sum(eigvals[0:num_particles])), file=outfile)
+                print("many-body HF g.s. energy= %f" % HF_gs_energy(OBDM_new), file=outfile)
                 fmt_string = "single-particle spectrum = \n" + "%f \n"*ns
                 print(fmt_string % (tuple(eigvals)), file=outfile) 
         else:
