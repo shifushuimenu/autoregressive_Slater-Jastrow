@@ -13,7 +13,7 @@ from slater_determinant import Slater2spOBDM
 from VMC_common import PhysicalSystem  
 
 
-def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=1000, outfile=None):
+def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=1000, mix=0.01, outfile=None):
     """
     Returns single-particle eigenstates of the Hartree-Fock solution of a 
     t-V model on a cubic lattice specified by `phys_system`. 
@@ -84,7 +84,10 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=10
     # BEGIN: Hartree-Fock self-consistency loop 
     converged = False 
     counter = 0
-    OBDM = np.zeros((ns, ns))
+    # some random initialization (we do not care from which random emsemble)
+    q,r = np.linalg.qr(np.random.randn(ns,ns))
+    OBDM = np.zeros((ns,ns)) #np.matmul(q[:,0:num_particles], q[:,0:num_particles].transpose())
+    fh_conv = open("HF_energyconv.dat", "w")
     while not converged: 
         counter += 1 
         H_HF = H_kin.copy() 
@@ -100,7 +103,9 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=10
         OBDM_new = Slater2spOBDM(U[:, 0:num_particles])
         if verbose:
             print(eigvals[0:num_particles+1])
-            print("E_GS_HF=", sum(eigvals[0:num_particles]), HF_gs_energy(OBDM_new))
+            E_GS_HF = HF_gs_energy(OBDM_new)
+            print("E_GS_HF=", E_GS_HF)
+            print("%d %f"%(counter, E_GS_HF), file=fh_conv)
 
         if np.all(np.isclose(OBDM_new, OBDM, rtol=1e-8)) or counter >= max_iter: 
             converged = True
@@ -113,7 +118,7 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=10
                 fmt_string = "single-particle spectrum = \n" + "%f \n"*ns
                 print(fmt_string % (tuple(eigvals)), file=outfile) 
         else:
-            OBDM = OBDM_new
+            OBDM = (1-mix) * OBDM_new + mix * OBDM
     # END: Hartree-Fock 
 
     eigvals, U = linalg.eigh(H_HF)
