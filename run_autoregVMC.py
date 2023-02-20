@@ -138,7 +138,7 @@ phys_system = PhysicalSystem(nx=Lx, ny=Ly, ns=Nsites, num_particles=Nparticles, 
 # Aggregation of MADE neural network as Jastrow factor 
 # and Slater determi
 with open(dirout+"HF_energy_"+paramstr+".dat", "w") as fh:
-    (eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none", outfile=fh, max_iter=20)
+    (eigvals, eigvecs) = HartreeFock_tVmodel(phys_system, potential="none", outfile=fh, max_iter=5000)
 np.savetxt(dirout+"eigvecs"+paramstr+".dat", eigvecs)
 
 Sdet_sampler = SlaterDetSampler_ordered(

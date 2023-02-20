@@ -13,7 +13,7 @@ from slater_determinant import Slater2spOBDM
 from VMC_common import PhysicalSystem  
 
 
-def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=1000, mix=0.01, outfile=None):
+def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=1000, mix=0.1, outfile=None):
     """
     Returns single-particle eigenstates of the Hartree-Fock solution of a 
     t-V model on a cubic lattice specified by `phys_system`. 
@@ -41,7 +41,7 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=10
                 H_int[i,j] = - Vint*OBDM[j,i]
                 H_int[j,i] = - Vint*OBDM[i,j]
         # Hartree-Fock ground state energy: E_tot = Tr(rho H_onebody) + (1/2) Tr(rho H_int)
-        # H_HF = H_onebody + H_int is the Hamiltonian used in the self-consistency loop. 
+        # H_HF = H_onebody + H_int is *not* exactly the Hamiltonian used in the self-consistency loop. 
         E_tot = np.trace(np.matmul(OBDM, H_onebody)) + 0.5 * np.trace(np.matmul(OBDM, H_int))
 
         # adjacency matrix 
@@ -86,7 +86,7 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=10
     counter = 0
     # some random initialization (we do not care from which random emsemble)
     q,r = np.linalg.qr(np.random.randn(ns,ns))
-    OBDM = np.zeros((ns,ns)) #np.matmul(q[:,0:num_particles], q[:,0:num_particles].transpose())
+    OBDM = np.matmul(q[:,0:num_particles], q[:,0:num_particles].transpose())
     fh_conv = open("HF_energyconv.dat", "w")
     while not converged: 
         counter += 1 
