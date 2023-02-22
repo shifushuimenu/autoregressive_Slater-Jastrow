@@ -2,11 +2,13 @@
 Attempt at optimal dampling algorithm. 
 (Not working, i.e. not improving convergence for difficult cases.
 Also the energy is not strictly decreasing.)
+Only level shifting is useful. 
 
 Refs: 
 [1] https://aip.scitation.org/doi/pdf/10.1063/1.1470195
 [2] Cances and Le Bris: Can we outperform the DIIS approach for electronic structure calculations?
 https://doi.org/10.1002/1097-461X(2000)79:2<82::AID-QUA3>3.0.CO;2-I
+[3] https://www.esaim-m2an.org/articles/m2an/pdf/2000/04/m2an899.pdf
 """
 
 import numpy as np
@@ -53,7 +55,7 @@ def line_search(phys_system, OBDM1, OBDM2):
     l_min = 1.0 if c <= -s else 1.0
     return l_min
 
-def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=1000, mix=0.5, level_shift=5.0, outfile=None):
+def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=1000, level_shift=0.1, outfile=None):
     """
     Returns single-particle eigenstates of the Hartree-Fock solution of a 
     t-V model on a cubic lattice specified by `phys_system`. 
@@ -152,9 +154,8 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=10
                 fmt_string = "single-particle spectrum = \n" + "%f \n"*ns
                 print(fmt_string % (tuple(eigvals)), file=outfile) 
         else:
-            mix_opt = line_search(phys_system, OBDM, OBDM_new)
+            mix_opt = 1.0 #line_search(phys_system, OBDM, OBDM_new) # This has no effect since mix_opt=1.0, always. 
 
-            level_shift = 3.0
             Fock_new = get_Fock_operator(phys_system, OBDM_new) - level_shift * OBDM_new
             #Fock1 = get_Fock_operator(phys_system, OBDM)
             F = (1 - mix_opt) * F + mix_opt * Fock_new
@@ -177,4 +178,4 @@ if __name__ == "__main__":
     #_test()
     phys_system = PhysicalSystem(6, 6, 36, 13, dim=2, Vint=10.0) 
     # phys_system = PhysicalSystem(4, 4, 16, 5, dim=2, Vint=4.0) 
-    eigvals, U = HartreeFock_tVmodel(phys_system, outfile=open("HF_test.dat","w"))    
+    eigvals, U = HartreeFock_tVmodel(phys_system, level_shift=0.05, outfile=open("HF_test.dat","w"))    
