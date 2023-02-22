@@ -13,7 +13,7 @@ from slater_determinant import Slater2spOBDM, Slater2rdm1
 from VMC_common import PhysicalSystem  
 
 
-def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=1000, mix=0.1, outfile=None):
+def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=1000, mix=0.0, level_shift=5.0, outfile=None):
     """
     Returns single-particle eigenstates of the Hartree-Fock solution of a 
     t-V model on a cubic lattice specified by `phys_system`. 
@@ -96,6 +96,9 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=10
                 H_HF[i,i] += Vint*OBDM[j,j] 
                 H_HF[i,j] = -t_hop - Vint*OBDM[j,i]
                 H_HF[j,i] = -t_hop - Vint*OBDM[i,j] 
+
+        if level_shift is not None and isinstance(level_shift, np.float):
+            H_HF = H_HF - level_shift * OBDM
 
         eigvals, U = linalg.eigh(H_HF)
         OBDM_new = Slater2spOBDM(U[:, 0:num_particles])
