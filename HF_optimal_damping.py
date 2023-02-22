@@ -1,5 +1,5 @@
 """
-Attempt at optimal dampling algorithm. 
+Attempt at optimal dampling algorithm combined with level shifting. 
 (Not working, i.e. not improving convergence for difficult cases.
 Also the energy is not strictly decreasing.)
 Only level shifting is useful. 
@@ -13,6 +13,7 @@ https://doi.org/10.1002/1097-461X(2000)79:2<82::AID-QUA3>3.0.CO;2-I
 
 import numpy as np
 from scipy import linalg
+import itertools
 
 from slater_determinant import Slater2spOBDM
 from VMC_common import PhysicalSystem  
@@ -154,7 +155,7 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=10
                 fmt_string = "single-particle spectrum = \n" + "%f \n"*ns
                 print(fmt_string % (tuple(eigvals)), file=outfile) 
         else:
-            mix_opt = 1.0 #line_search(phys_system, OBDM, OBDM_new) # This has no effect since mix_opt=1.0, always. 
+            mix_opt = line_search(phys_system, OBDM, OBDM_new) # This has no effect since mix_opt=1.0, always. 
 
             Fock_new = get_Fock_operator(phys_system, OBDM_new) - level_shift * OBDM_new
             #Fock1 = get_Fock_operator(phys_system, OBDM)
@@ -164,10 +165,53 @@ def HartreeFock_tVmodel(phys_system, potential='none', verbose=True, max_iter=10
             print("mix_opt=", mix_opt)
     # END: Hartree-Fock 
 
-    eigvals, U = linalg.eigh(F)
+    HF_energies, HF_orbitals = linalg.eigh(F)
 
-    return (eigvals, U)
+    return (HF_energies, HF_orbitals)
     
+
+def calc_density_corr(phys_system, OBDM):
+
+    def translate(s, n, T_d):
+        """translate set of sites `s` using mapping `T_d` for n times"""
+        for _ in range(n):
+            s = T_d[s]
+        return s
+    ###### setting up user-defined symmetry transformations for 2d lattice ######
+    nx=phys_system.nx
+    ny=phys_system.ny
+    ns=phys_system.ns
+    s = np.arange(ns) # sites [0,1,2,....]
+
+    x = s%nx # x positions for sites
+    y = s//nx # y positions for sites
+    T_x = (x+1)%nx + nx*y # translation along x-direction
+    T_y = x +nx*((y+1)%ny) # translation along y-direction
+    P_x = x + nx*(ny-y-1) # reflection about x-axis
+    P_y = (nx-x-1) + nx*y # reflection about y-axis
+    #
+    nncorr = np.zeros((nx, ny), dtype=np.float64)
+
+    for tx, ty in itertools.product(range(nx), range(ny)):
+        # all pairs of sites (i,j) with distance dist(i,j) = (tx,ty)
+        pair_list = [[i, translate(translate(i, tx, T_x), ty, T_y)] for i in range(ns)]
+        nncorr[tx, ty] = sum([(OBDM[i,i]*OBDM[j,j] - OBDM[j,i]*OBDM[i,j]) for (i,j) in pair_list]) / ns
+
+    return nncorr
+
+# def graph_distance_corr(phys_system, OBDM):
+#     """Correlation function as a funtion of graph distance"""
+#     from graph_distance import graph_distance_L6
+#     assert phys_system.nx == 6 == phys_system.ny
+#     S, num_dist = graph_distance_L6()
+#     av = np.sum(config_2D) / L**2
+#     corr = np.zeros(L+1)
+#     for ix in range(L):
+#         config_2D_shiftx = np.roll(config_2D, shift=-ix, axis=0)
+#         for iy in range(L):
+#             config_2D_shifted = np.roll(config_2D_shiftx, shift=-iy, axis=1)    
+#             for r in (0,1,2,3,4,5,6,):    
+#                 corr[r] += np.sum([(config_2D_shifted[(0, 0)] - av) * (config_2D_shifted[p] - av) for p in S[r]]) / (num_dist[r] * L**2)
 
 
 def _test():
@@ -176,6 +220,15 @@ def _test():
 
 if __name__ == "__main__":
     #_test()
-    phys_system = PhysicalSystem(6, 6, 36, 13, dim=2, Vint=10.0) 
+    L=8
+    num_particles = 32
+    Vint = 4.05
+    phys_system = PhysicalSystem(L, L, L*L, num_particles, dim=2, Vint=Vint) 
     # phys_system = PhysicalSystem(4, 4, 16, 5, dim=2, Vint=4.0) 
-    eigvals, U = HartreeFock_tVmodel(phys_system, level_shift=0.05, outfile=open("HF_test.dat","w"))    
+    energies, U = HartreeFock_tVmodel(phys_system, level_shift=3.0, max_iter=10000, outfile=open("HF_test.dat","w"))    
+
+    C= U[:,0:phys_system.np]
+    OBDM = np.matmul(C, C.conj().transpose())
+    nncorr = calc_density_corr(phys_system, OBDM)
+
+    np.savetxt("nncorr_L%dNp%dVint%f.dat"%(L, num_particles, Vint), nncorr.flatten())
