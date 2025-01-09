@@ -1,4 +1,4 @@
-# Autoregressive Slater-Jastrow ansatz for variational Monte Carlo [arXiv:2210.05871](https://arxiv.org/abs/2210.05871)
+# Autoregressive Slater-Jastrow ansatz for variational Monte Carlo [arXiv:2210.05871](https://arxiv.org/abs/2210.05871) or [SciPostPhys.14.6.171](https://scipost.org/10.21468/SciPostPhys.14.6.171)
 <img align="middle" src="_misc/arSJ_sketch.png" width="650" alt="sketch"/>
 </div>
 
@@ -33,10 +33,15 @@ to limited floating point precision. This could be avoided using mpmath infinite
 
 ## Cite
 ```
-@article{humeniuk2022autoregressive,
-  title={Autoregressive neural Slater-Jastrow ansatz for variational Monte Carlo simulation},
-  author={Humeniuk, Stephan and Wan, Yuan and Wang, Lei},
-  journal={arXiv preprint arXiv:2210.05871},
-  year={2022}
+@Article{10.21468/SciPostPhys.14.6.171,
+	title={{Autoregressive neural Slater-Jastrow ansatz for variational Monte Carlo simulation}},
+	author={Stephan Humeniuk and Yuan Wan and Lei Wang},
+	journal={SciPost Phys.},
+	volume={14},
+	pages={171},
+	year={2023},
+	publisher={SciPost},
+	doi={10.21468/SciPostPhys.14.6.171},
+	url={https://scipost.org/10.21468/SciPostPhys.14.6.171},
 }
 ```
